@@ -25,6 +25,15 @@ const beefwife = new Beefwife(descriptor, {
   direction: { x: 1, y: 0 },
   phase: 0, // gait phase in radians
   random: Math.random,
+  render: {
+    roundVertices: false,
+    kneeProjection: {
+      centerX: 0,
+      centerY: 0,
+      perspective: 0.002,
+      maxOffset: 256,
+    },
+  },
 });
 
 beefwife.step(dt, { throttle: 1, direction }); // dt is seconds
@@ -47,6 +56,14 @@ rejected atomically if any body chunk would leave that supported range. If
 simulation reaches the numeric boundary, the whole beefwife is rebased just
 inside it; current, previous, leg, and ornament positions move together, so
 velocity and secondary motion are preserved.
+
+The optional `render` object is a live rendering policy with exactly two
+fields. `roundVertices` is boolean pixel snapping. `kneeProjection` is `null`
+or an object containing finite `centerX`, `centerY`, and nonnegative
+`perspective`, plus an optional nonnegative `maxOffset`. Projection changes only
+the drawn knee shared by the two segments of each limb; simulated hips and
+planted feet do not move. The object is retained so a host may update its center when
+its viewport changes. Unknown render or projection fields are rejected.
 
 `step` owns fixed simulation substeps but never owns a clock or animation loop.
 `dt` must be finite and nonnegative seconds. Values above

@@ -38,12 +38,13 @@ const {
   chooseName,
   countOf,
   debugOf,
+  imageRenderingOf,
   physicsFpsOf,
   renderFpsOf,
   resolutionScaleOf,
   timeScaleOf,
 } = RuntimeBeefwifeCanvasOptions;
-const { BeefwifeCanvasTargetPolicy, pointOf, targetingOf, wanderDelayOf } =
+const { BeefwifeCanvasTargetPolicy, pointOf, targetModeOf, wanderDelayOf } =
   RuntimeBeefwifeCanvasTargeting;
 
 class BeefwifeCanvasRuntime {
@@ -63,6 +64,7 @@ class BeefwifeCanvasRuntime {
       throw new TypeError("random must be a function");
     this.random = options.random || Math.random;
     this.resolutionScale = resolutionScaleOf(options.resolutionScale ?? 1);
+    this.imageRendering = imageRenderingOf(options.imageRendering ?? "auto");
     this.renderFps = renderFpsOf(options.renderFps);
     this.renderInterval = this.renderFps ? 1000 / this.renderFps : 0;
     this.physicsFps = physicsFpsOf(options.physicsFps);
@@ -75,7 +77,7 @@ class BeefwifeCanvasRuntime {
       (!Number.isFinite(this.maxPixelRatio) || this.maxPixelRatio <= 0)
     )
       throw new RangeError("maxPixelRatio must be positive");
-    this.targeting = targetingOf(options.targeting || "wander");
+    this.targetMode = targetModeOf(options.targetMode || "wander");
     this.wanderDelay = wanderDelayOf(options.wanderDelay ?? 4);
     this.roam = options.roam
       ? { ...BEEFWIFE_CANVAS_ROUTE_DEFAULTS, ...options.roam }
@@ -86,23 +88,23 @@ class BeefwifeCanvasRuntime {
     this.canvas = options.canvas || null;
     this.reusableApplication = options.application || null;
     const ownsProjection =
-      options.perspective !== undefined ||
-      options.maxJointOffset !== undefined ||
-      options.projectionCenter !== undefined;
+      options.kneePerspective !== undefined ||
+      options.maxKneeOffset !== undefined ||
+      options.kneeProjectionCenter !== undefined;
+    this.kneeProjectionCenter = options.kneeProjectionCenter || "canvas";
     this.renderOptions = {
       roundVertices: options.roundVertices === true,
-      projectionCenter: options.projectionCenter || "canvas",
-      projection: ownsProjection
+      kneeProjection: ownsProjection
         ? {
             centerX: 0,
             centerY: 0,
-            perspective: options.perspective ?? 0,
-            maxOffset: options.maxJointOffset ?? 256,
+            perspective: options.kneePerspective ?? 0,
+            maxOffset: options.maxKneeOffset ?? 256,
           }
         : null,
     };
-    if (!["canvas", "viewport"].includes(this.renderOptions.projectionCenter))
-      throw new RangeError("projectionCenter must be canvas or viewport");
+    if (!["canvas", "viewport"].includes(this.kneeProjectionCenter))
+      throw new RangeError("kneeProjectionCenter must be canvas or viewport");
     this.debug = debugOf(options.debug);
 
     this.terrain = new Terrain(
@@ -138,7 +140,10 @@ class BeefwifeCanvasRuntime {
       if (!this.destroyed) this.scheduleRebuild();
     };
     this._onScroll = () => {
-      if (!this.destroyed && this.renderOptions.projectionCenter === "viewport")
+      if (
+        !this.destroyed &&
+        this.kneeProjectionCenter === "viewport"
+      )
         this.scheduleRebuild();
     };
     this._onVisibility = () => {
@@ -294,7 +299,7 @@ class BeefwifeCanvasRuntime {
       name || chooseName(this.cast, this.castWeights, this.random);
     const spec = this.cast[selectedName];
     if (!spec) throw new Error(`no creature named ${name}`);
-    const planner = new BeefwifeCanvasTargetPolicy(this.router, this.targeting, {
+    const planner = new BeefwifeCanvasTargetPolicy(this.router, this.targetMode, {
       random: this.random,
       wanderDelay: this.wanderDelay,
     });
@@ -368,15 +373,15 @@ class BeefwifeCanvasRuntime {
     return this;
   }
 
-  setTargeting(targeting, actor = null) {
+  setTargetMode(targetMode, actor = null) {
     this._assertActive();
-    const mode = targetingOf(targeting);
-    if (!actor) this.targeting = mode;
+    const mode = targetModeOf(targetMode);
+    if (!actor) this.targetMode = mode;
     const targets = actor ? [actor] : this.actors;
     for (const creature of targets) {
       const policy = this.targetPolicies.get(creature);
       if (!policy) throw new Error("actor does not belong to this host");
-      policy.setTargeting(mode);
+      policy.setTargetMode(mode);
       creature.route = newRoute();
     }
     return this;
@@ -485,21 +490,20 @@ class BeefwifeCanvasRuntime {
     this.dpr =
       Math.min(window.devicePixelRatio || 1, this.maxPixelRatio) *
       this.resolutionScale;
-    this.canvas.style.imageRendering =
-      this.resolutionScale < 1 ? "pixelated" : "auto";
-    if (!this.renderOptions.projection) {
+    this.canvas.style.imageRendering = this.imageRendering;
+    if (!this.renderOptions.kneeProjection) {
       this.application.renderer.resolution = this.dpr;
       this.application.renderer.resize(viewport.width, viewport.height);
       return;
     }
-    if (this.renderOptions.projectionCenter === "viewport") {
-      this.renderOptions.projection.centerX =
+    if (this.kneeProjectionCenter === "viewport") {
+      this.renderOptions.kneeProjection.centerX =
         window.innerWidth / 2 - viewport.left;
-      this.renderOptions.projection.centerY =
+      this.renderOptions.kneeProjection.centerY =
         window.innerHeight / 2 - viewport.top;
     } else {
-      this.renderOptions.projection.centerX = viewport.width / 2;
-      this.renderOptions.projection.centerY = viewport.height / 2;
+      this.renderOptions.kneeProjection.centerX = viewport.width / 2;
+      this.renderOptions.kneeProjection.centerY = viewport.height / 2;
     }
     this.application.renderer.resolution = this.dpr;
     this.application.renderer.resize(viewport.width, viewport.height);

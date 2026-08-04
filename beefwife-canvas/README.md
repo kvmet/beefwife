@@ -11,13 +11,15 @@ looks for `data-beefwife-canvas` when auto-mounting.
   data-beefwife-manifest="beefwives/manifest.json"
   data-beefwife-count="8"
   data-beefwife-resolution-scale="0.25"
+  data-beefwife-image-rendering="pixelated"
   data-beefwife-round-vertices="true"
   data-beefwife-antialias="false"
   data-beefwife-simulation-fps="60"
   data-beefwife-draw-fps="24"
-  data-beefwife-targeting="wander"
+  data-beefwife-target-mode="wander"
+  data-beefwife-pointer-input="click"
   data-beefwife-wander-delay="4"
-  data-beefwife-projection-center="canvas"
+  data-beefwife-knee-projection-center="canvas"
 ></canvas>
 ```
 
@@ -37,9 +39,18 @@ declares its file-level names in shared script scope.
 `beefwife-canvas.js` auto-mounts every marked canvas after the DOM is ready.
 Listen for `beefwifecanvasready` or `beefwifecanvaserror`, await the `ready`
 promise on a handle returned by `BeefwifeCanvas.get(canvas)`, or inspect
-`data-beefwife-state`, whose values are `loading`, `ready`, `running`, `stopped`,
-`error`, and `destroyed`. A mount that fails dispatches the error event, cleans
+`data-beefwife-state`, whose values are `loading`, `ready`, `running`, `paused`,
+`stopped`, `error`, and `destroyed`. A paused canvas also exposes
+`data-beefwife-pause-reason` as `hidden`, `offscreen`, or `zero-size`. A mount
+that fails dispatches the error event, cleans
 itself up, and leaves the canvas in the `error` state, ready to mount again.
+The mounted handle exposes the same information through its read-only `state`
+and `pauseReason` getters; `pauseReason` is `null` unless state is `paused`.
+
+`BeefwifeCanvas.scan()` mounts any currently unmounted
+`canvas[data-beefwife-canvas]` elements. The initial document is scanned
+automatically; call `scan()` after adding declarative canvases dynamically.
+Already mounted canvases are left alone.
 
 ```html
 <script src="pixi.min.js"></script>
@@ -60,6 +71,7 @@ itself up, and leaves the canvas in the `error` state, ready to mount again.
 <script src="beefwife-canvas/beefwife-canvas-render.js"></script>
 <script src="beefwife-canvas/beefwife-canvas-runtime.js"></script>
 <script src="beefwife-canvas/beefwife-canvas-cast.js"></script>
+<script src="beefwife-canvas/beefwife-canvas-mount-options.js"></script>
 <script src="beefwife-canvas/beefwife-canvas.js"></script>
 ```
 
@@ -73,6 +85,16 @@ resolved from the manifest URL. Weights affect random spawning, not loading.
 }
 ```
 
+`manifest`, `sources`, and `descriptors` are additive when more than one is
+provided. Programmatic `manifest` may be either a manifest URL or the parsed
+manifest object. `sources` accepts one descriptor URL, one `{ src, weight }`
+entry, or an array of either. `descriptors` likewise accepts one descriptor,
+one `{ descriptor, weight }` entry, or an array. Declarative attributes support
+a manifest URL and a comma-separated source URL list; parsed descriptors are
+JavaScript-only. Every resulting descriptor name must be unique across all
+inputs or the mount fails atomically. When `count` is omitted it defaults to
+the number of unique descriptors, with weighted names sampled with replacement.
+
 JavaScript options override attributes and can supply already-parsed
 descriptors or arbitrary caller-owned Pixi filters. Omit `data-beefwife-canvas`
 when mounting programmatically so auto-mount and programmatic mount do not race.
@@ -82,7 +104,8 @@ const canvas = document.querySelector("#programmatic-beefwives");
 const runtime = await BeefwifeCanvas.mount(canvas, {
   descriptors: [descriptorA, { descriptor: descriptorB, weight: 3 }],
   filters: [new PIXI.NoiseFilter({ noise: 0.08 })],
-  targeting: "manual",
+  targetMode: "manual",
+  pointerInput: "none",
 });
 
 runtime.setTarget({ x: 300, y: 180 });
@@ -96,17 +119,18 @@ so `get(canvas)` then returns `null` and a new mount can begin.
 
 The lifecycle methods are `start()`, `stop()`, `destroy()`, `setCount(count)`,
 `setTimeScale(scale)`, `setTarget(point)`, `clearTarget()`,
-`setTargeting(mode)`, `setDebug(flags)`, `refreshTerrain()`, `respawn()`, and
-`getBeefwives()`.
-Targets and poses use canvas-local CSS pixels. Targeting modes are `wander`,
-`click`, `pointer`, and `manual`. Every supplied target produces one finite
-route. When that route is spent, the beefwife is satisfied and stops; another
-click, pointer movement, or `setTarget()` call supplies the next target.
-`pointer` retains its last destination after leaving the canvas. In `wander`,
-the host waits a random duration from zero through `wanderDelay` seconds after
-arrival before supplying another target. The host chooses goals and Beefwife
-only receives its usual direction and throttle controls. Attribute values are
-read once. Use the methods for live changes.
+`setTargetMode(mode)`, `setPointerInput(input)`, `setDebug(flags)`,
+`refreshTerrain()`, `respawn()`, and `getBeefwives()`.
+Targets and poses use canvas-local CSS pixels. Target policy and DOM input are
+independent. `targetMode` is `wander` or `manual`; `pointerInput` is `none`,
+`click`, or `move`. A click or pointer movement merely supplies a target and
+does not change what happens after arrival. In `manual`, every supplied target
+produces one finite route and the beefwife then stops until another target is
+supplied. In `wander`, the host waits a random duration from zero through
+`wanderDelay` seconds before supplying another target. `move` retains its last
+destination after the pointer leaves the canvas. The host chooses goals and
+Beefwife only receives its usual direction and throttle controls. Attribute
+values are read once. Use the methods for live changes.
 
 `destroy()` removes the scene and runtime listeners but leaves the author's
 canvas in place. One dormant Pixi renderer is retained weakly per canvas so the
@@ -115,13 +139,15 @@ context. The renderer becomes collectible with the canvas. `antialias` is fixed
 for the life of that renderer, so a remount cannot change it.
 
 Performance and appearance options are `resolutionScale`, `roundVertices`,
-`antialias`, `simulationFps`, `drawFps`, `maxPixelRatio`, `perspective`,
-`maxJointOffset`, `projectionCenter`, and programmatic `filters`.
-`projectionCenter` is `canvas` by default; `viewport` makes separate canvases
-share one apparent projection field. `resolutionScale` defaults to 0.25, its
-minimum: quarter resolution costs a sixteenth of the fill work, and upscaled
-with pixelated rendering it is also the intended look. Raising it toward 1
-trades both for smoothness. For color effects, pass a configured
+`antialias`, `simulationFps`, `drawFps`, `maxPixelRatio`, `imageRendering`,
+`kneePerspective`, `maxKneeOffset`, `kneeProjectionCenter`, and programmatic
+`filters`. Knee perspective affects leg-knee rendering only; planted feet and
+the simulated body are unchanged. `kneeProjectionCenter` is
+`canvas` by default; `viewport` makes separate canvases share one apparent
+knee-projection field. `resolutionScale` defaults to 0.25, its minimum, so
+quarter resolution costs a sixteenth of the fill work. `imageRendering`
+independently selects `pixelated` (the default) or `auto`, allowing either
+interpolation style at any resolution. For color effects, pass a configured
 `PIXI.ColorMatrixFilter` in `filters`.
 
 Debug rendering is off by default. The boolean options `debugTargets`,
@@ -141,8 +167,11 @@ Terrain and navigation draw below the beefwives; routes and targets draw above
 them. These layers are diagnostic and do not affect routing or simulation.
 
 Simulation and routing options are `timeScale`, `wanderDelay`, `edgeMargin`,
-`obstaclePadding`, `arrivalRadius`, `throttleEase`, `stuckReplanSeconds`, and
-`escapeReplanSeconds`. `wanderDelay` defaults to 4 seconds and may be zero.
+`obstaclePadding`, `waypointRadius`, `arrivalRadius`, `throttleEase`,
+`stuckReplanSeconds`, and `escapeReplanSeconds`. `waypointRadius` controls how
+closely an intermediate corner must be followed, while `arrivalRadius`
+controls final-target satisfaction; both default to 10 CSS pixels.
+`wanderDelay` defaults to 4 seconds and may be zero.
 `avoid` is a selector for obstacle elements and defaults to
 `.beefwife-avoid`. Call
 `refreshTerrain()` after transform-only obstacle movement because a

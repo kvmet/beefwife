@@ -14,10 +14,11 @@ const vm = require("node:vm");
 global.BeefwifeDescriptor = require("../../beefwife/beefwife-descriptor.js");
 global.Beefwife = require("../../beefwife/beefwife.js");
 global.BEEFWIFE_CANVAS_ROUTE_DEFAULTS = {
-  arrive: 10,
+  arrivalRadius: 10,
   ease: 4,
   patience: 120,
   replan: 7,
+  waypointRadius: 10,
 };
 global.newRoute = () => ({
   path: [],
@@ -52,7 +53,15 @@ const policyRouter = {
   randomPoint: () => ({ x: 300, y: 200 }),
   planTo: (_head, goal) => [{ ...goal }],
 };
-const directed = new BeefwifeCanvasTargetPolicy(policyRouter, "click");
+const directed = new BeefwifeCanvasTargetPolicy(policyRouter, "manual");
+assert.throws(
+  () => directed.setTarget({ x: 1, y: 2, z: 3 }),
+  /target\.z is unknown/,
+);
+assert.throws(
+  () => directed.setTarget(Object.assign([], { x: 1, y: 2 })),
+  /target must be an object/,
+);
 directed.setTarget({ x: 12, y: 14 });
 assert.deepEqual(directed.plan({ x: 0, y: 0 }), [{ x: 12, y: 14 }]);
 directed.satisfy();
@@ -70,7 +79,7 @@ wandering.advance(3.99);
 assert.equal(wandering.readyToPlan, false);
 wandering.advance(0.01);
 assert.equal(wandering.readyToPlan, true);
-checks += 8;
+checks += 10;
 
 let directedPlans = 0;
 const finiteRouter = {
@@ -130,6 +139,26 @@ assert.equal(wanderPlans, 1);
 steerRoute(delayedRoute, delayedPolicy, { x: 20, y: 0 }, 0.01, BEEFWIFE_CANVAS_ROUTE_DEFAULTS);
 assert.equal(wanderPlans, 2);
 checks += 5;
+
+const toleranceRoute = newSteerRoute();
+toleranceRoute.from = { x: 0, y: 0 };
+toleranceRoute.path = [{ x: 10, y: 0 }, { x: 20, y: 0 }];
+const passivePolicy = {
+  readyToPlan: false,
+  terrain: policyRouter.terrain,
+};
+const splitTolerance = {
+  ...BEEFWIFE_CANVAS_ROUTE_DEFAULTS,
+  arrivalRadius: 2,
+  waypointRadius: 2,
+};
+steerRoute(toleranceRoute, passivePolicy, { x: 11, y: 0 }, 0, splitTolerance);
+assert.deepEqual(toleranceRoute.path, [{ x: 20, y: 0 }]);
+steerRoute(toleranceRoute, passivePolicy, { x: 23, y: 0 }, 0, splitTolerance);
+assert.deepEqual(toleranceRoute.path, [{ x: 20, y: 0 }]);
+steerRoute(toleranceRoute, passivePolicy, { x: 21, y: 0 }, 0, splitTolerance);
+assert.equal(toleranceRoute.satisfied, true);
+checks += 3;
 
 const terrain = { x0: 0, y0: 0, x1: 800, y1: 600 };
 const router = { randomPoint: () => ({ x: 90, y: 70 }) };
@@ -370,6 +399,7 @@ const classicBoundary = async () => {
       cast: { [testDescriptor.name]: testDescriptor },
       count: 0,
       debug: { targets: true },
+      imageRendering: "auto",
       timeScale: 0,
       resolutionScale: 0.25,
       renderFps: 24,
@@ -392,6 +422,7 @@ const classicBoundary = async () => {
     /debug\.terrain must be a boolean/,
   );
   browser.layer.start();
+  assert.equal(browser.layer.canvas.style.imageRendering, "auto");
   browser.layer.setCount(1);
   browser.layer._draw();
   assert.equal(browser.layer.dpr, 0.5);
@@ -418,14 +449,16 @@ const classicBoundary = async () => {
       canvas: embeddedCanvas,
       cast: { [testDescriptor.name]: testDescriptor },
       count: 0,
-      perspective: 0.002,
-      projectionCenter: "viewport",
+      imageRendering: "pixelated",
+      kneePerspective: 0.002,
+      kneeProjectionCenter: "viewport",
     })`,
     browser,
   );
   browser.embeddedLayer._resizeCanvas();
-  assert.equal(browser.embeddedLayer.renderOptions.projection.centerX, 220);
-  assert.equal(browser.embeddedLayer.renderOptions.projection.centerY, 140);
+  assert.equal(browser.embeddedLayer.renderOptions.kneeProjection.centerX, 220);
+  assert.equal(browser.embeddedLayer.renderOptions.kneeProjection.centerY, 140);
+  assert.equal(embeddedCanvas.style.imageRendering, "pixelated");
   browser.embeddedLayer.destroy();
   assert.ok(!log.some(([operation]) => operation === "embedded-remove"));
 
@@ -467,7 +500,7 @@ const classicBoundary = async () => {
   browser.layer.destroy();
   assert.ok(log.some(([operation]) => operation === "remove"));
   assert.ok(log.some(([operation]) => operation === "destroy"));
-  return 28;
+  return 30;
 };
 
 (async () => {

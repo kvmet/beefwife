@@ -15,11 +15,11 @@
  */
 
 const BEEFWIFE_CANVAS_ROUTE_DEFAULTS = {
-  // The radius that lets go of a waypoint the creature turned too wide to
-  // pass, so it bounds how far into a widget a cut corner reaches. Must clear
-  // the 1 px that bearingTo calls arrival, or a creature closing head on runs
-  // out of bearing and parks a pixel short of a point it never spends.
-  arrive: 10, // px from a waypoint that counts as reaching it
+  // Corner tolerance may be generous without making final targets imprecise.
+  // Both must clear the 1 px that bearingTo calls arrival, or a creature
+  // closing head on can run out of bearing just short of the point.
+  waypointRadius: 10, // px from an intermediate waypoint that spends it
+  arrivalRadius: 10, // px from the final target that satisfies the route
   ease: 4, // per s that the throttle closes on what the route asks for
   // Both are the same stall: seconds without clearing a waypoint. A creature
   // walking a legal path clears them and neither limit is ever reached.
@@ -102,13 +102,18 @@ const stepRoute = (route, router, head, dt, roam, result) => {
   // how long this creature may stall and which way it leans while it walks.
   const off = router.terrain.at(head.x, head.y, result?.field);
 
-  // Passing spends a waypoint, the goal included: crossing its plane ends the
-  // run, so a chain with momentum flies through instead of circling back. The
-  // `arrive` radius is the fallback for a point turned too wide to cross.
+  // Crossing the incoming plane spends an intermediate waypoint so a chain
+  // with momentum does not circle back. The final target requires proximity;
+  // its independent radius can therefore be precise without tightening turns.
   while (route.path.length) {
     const point = route.path[0];
+    const final = route.path.length === 1;
     const done =
-      near(point, head, roam.arrive) || passed(route.from, point, head);
+      near(
+        point,
+        head,
+        final ? roam.arrivalRadius : roam.waypointRadius,
+      ) || (!final && passed(route.from, point, head));
     if (!done) break;
     route.from = point;
     route.path.shift();

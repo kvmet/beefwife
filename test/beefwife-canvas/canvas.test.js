@@ -47,6 +47,7 @@ class Canvas {
 
 const calls = [];
 const hosts = [];
+let intersectionCallback = null;
 const newHost = (options) => {
   const actor = {
     name: Object.keys(options.cast)[0],
@@ -67,7 +68,7 @@ const newHost = (options) => {
     setCount: (count) => calls.push(["setCount", count]),
     setDebug: (debug) => calls.push(["setDebug", debug]),
     setTarget: (point, one) => calls.push(["setTarget", point, one]),
-    setTargeting: (mode, one) => calls.push(["setTargeting", mode, one]),
+    setTargetMode: (mode, one) => calls.push(["setTargetMode", mode, one]),
     setTimeScale: (scale) => calls.push(["setTimeScale", scale]),
     start() {
       this.running = true;
@@ -84,7 +85,24 @@ const newHost = (options) => {
 
 const document = {
   baseURI: "https://example.test/demo/page.html",
+  hidden: false,
+  listeners: new Map(),
   readyState: "complete",
+  addEventListener(type, listener) {
+    const listeners = this.listeners.get(type) || [];
+    listeners.push(listener);
+    this.listeners.set(type, listeners);
+  },
+  removeEventListener(type, listener) {
+    const listeners = this.listeners.get(type) || [];
+    this.listeners.set(
+      type,
+      listeners.filter((candidate) => candidate !== listener),
+    );
+  },
+  dispatchEvent(event) {
+    for (const listener of this.listeners.get(event.type) || []) listener(event);
+  },
   querySelectorAll: () => [],
 };
 const context = {
@@ -116,7 +134,13 @@ const context = {
     };
     return { ok: true, json: async () => values[url] };
   },
-  IntersectionObserver: undefined,
+  IntersectionObserver: class IntersectionObserver {
+    constructor(callback) {
+      intersectionCallback = callback;
+    }
+    observe() {}
+    disconnect() {}
+  },
   queueMicrotask,
   ResizeObserver: undefined,
   setTimeout,
@@ -134,6 +158,14 @@ vm.runInContext(
 );
 vm.runInContext(
   fs.readFileSync(
+    `${__dirname}/../../beefwife-canvas/beefwife-canvas-mount-options.js`,
+    "utf8",
+  ),
+  context,
+  { filename: "beefwife-canvas-mount-options.js" },
+);
+vm.runInContext(
+  fs.readFileSync(
     `${__dirname}/../../beefwife-canvas/beefwife-canvas.js`,
     "utf8",
   ),
@@ -148,9 +180,10 @@ vm.runInContext(
     "data-beefwife-manifest": "https://example.test/cast/manifest.json",
     "data-beefwife-count": "9",
     "data-beefwife-debug-targets": "true",
-    "data-beefwife-targeting": "click",
+    "data-beefwife-target-mode": "manual",
+    "data-beefwife-pointer-input": "click",
     "data-beefwife-wander-delay": "7",
-    "data-beefwife-projection-center": "viewport",
+    "data-beefwife-knee-projection-center": "viewport",
   });
   let ready = 0;
   canvas.addEventListener("beefwifecanvasready", () => ready++);
@@ -164,40 +197,61 @@ vm.runInContext(
   const created = hosts[0];
   assert.equal(ready, 1);
   assert.equal(canvas.dataset.beefwifeState, "stopped");
+  assert.equal(runtime.state, "stopped");
+  assert.equal(runtime.pauseReason, null);
   assert.equal(created.options.count, 5);
   assert.equal(
     JSON.stringify(created.options.debug),
     '{"navigation":false,"routes":true,"targets":true,"terrain":false}',
   );
-  assert.equal(created.options.targeting, "click");
+  assert.equal(created.options.targetMode, "manual");
+  assert.equal(created.options.imageRendering, "pixelated");
   assert.equal(created.options.wanderDelay, 7);
-  assert.equal(created.options.projectionCenter, "viewport");
+  assert.equal(created.options.kneeProjectionCenter, "viewport");
   assert.equal(created.options.castWeights.a, 1);
   assert.equal(created.options.castWeights.b, 4);
   assert.equal(created.options.filters.length, 1);
   assert.equal(created.options.filters[0], suppliedFilter);
   assert.equal(context.BeefwifeCanvas.get(canvas), runtime);
-  checks += 12;
+  checks += 15;
 
   assert.equal(Object.isFrozen(runtime), true);
   assert.equal(runtime.host, undefined);
   assert.equal(runtime.options, undefined);
   assert.equal(await runtime.ready, runtime);
-  assert.equal("arrive" in created.options.roam, false);
+  assert.equal("arrivalRadius" in created.options.roam, false);
+  assert.equal("waypointRadius" in created.options.roam, false);
   assert.equal(created.options.terrain.avoid, undefined);
-  checks += 6;
+  checks += 7;
 
   canvas.dispatchEvent({ type: "click", clientX: 340, clientY: 250 });
   assert.equal(calls.at(-1)[0], "setTarget");
   assert.equal(JSON.stringify(calls.at(-1)[1]), '{"x":300,"y":180}');
-  runtime.setTargeting("pointer");
+  runtime.setTargetMode("wander");
+  assert.equal(calls.at(-1)[0], "setTargetMode");
+  runtime.setPointerInput("move");
   canvas.dispatchEvent({ type: "pointermove", clientX: 140, clientY: 170 });
   assert.equal(JSON.stringify(calls.at(-1)[1]), '{"x":100,"y":100}');
   const callsBeforeLeave = calls.length;
   canvas.dispatchEvent({ type: "pointerleave" });
   assert.equal(calls.length, callsBeforeLeave);
+  runtime.start();
+  document.hidden = true;
+  document.dispatchEvent({ type: "visibilitychange" });
+  assert.equal(canvas.dataset.beefwifeState, "paused");
+  assert.equal(canvas.dataset.beefwifePauseReason, "hidden");
+  assert.equal(runtime.state, "paused");
+  assert.equal(runtime.pauseReason, "hidden");
+  document.hidden = false;
+  document.dispatchEvent({ type: "visibilitychange" });
+  assert.equal(canvas.dataset.beefwifeState, "running");
+  assert.equal(canvas.dataset.beefwifePauseReason, undefined);
+  intersectionCallback([{ isIntersecting: false }]);
+  assert.equal(canvas.dataset.beefwifeState, "paused");
+  assert.equal(canvas.dataset.beefwifePauseReason, "offscreen");
+  intersectionCallback([{ isIntersecting: true }]);
+  assert.equal(canvas.dataset.beefwifeState, "running");
   runtime
-    .start()
     .stop()
     .setCount(3)
     .setTimeScale(0.5)
@@ -215,14 +269,18 @@ vm.runInContext(
       "refreshTerrain",
     ],
   );
-  checks += 5;
+  checks += 16;
 
   const handle = runtime.getBeefwives()[0];
   assert.equal(handle.name, "a");
   assert.deepEqual(handle.getPose(), { head: { x: 4, y: 5 } });
-  handle.setTarget({ x: 12, y: 14 });
+  assert.equal(handle.setTarget({ x: 12, y: 14 }), handle);
   assert.equal(calls.at(-1)[2], created.host.actors[0]);
-  checks += 3;
+  assert.equal(handle.setTargetMode("manual"), handle);
+  assert.equal(handle.clearTarget(), handle);
+  assert.equal(handle.respawn(), handle);
+  assert.equal(handle.host, undefined);
+  checks += 7;
 
   runtime.destroy();
   assert.equal(created.host.destroyed, true);
@@ -297,6 +355,41 @@ vm.runInContext(
   assert.equal(corrected.getBeefwives()[0].name, "corrected");
   corrected.destroy();
   checks += 7;
+
+  const scannedCanvas = new Canvas({
+    "data-beefwife-canvas": "",
+    "data-beefwife-manifest": "https://example.test/cast/manifest.json",
+  });
+  document.querySelectorAll = () => [scannedCanvas];
+  assert.equal(context.BeefwifeCanvas.scan(), undefined);
+  const scanned = context.BeefwifeCanvas.get(scannedCanvas);
+  assert.ok(scanned);
+  assert.equal(await scanned.ready, scanned);
+  context.BeefwifeCanvas.scan();
+  assert.equal(context.BeefwifeCanvas.get(scannedCanvas), scanned);
+  scanned.destroy();
+  checks += 4;
+
+  const additiveCanvas = new Canvas();
+  const additive = await context.BeefwifeCanvas.mount(additiveCanvas, {
+    autoStart: false,
+    manifest: {
+      schemaVersion: 1,
+      sources: [
+        { src: "https://example.test/cast/a.json", weight: 2 },
+      ],
+    },
+    sources: { src: "https://example.test/cast/b.json", weight: 3 },
+    descriptors: { descriptor: { name: "c" }, weight: 4 },
+  });
+  const additiveOptions = hosts.at(-1).options;
+  assert.deepEqual(Object.keys(additiveOptions.cast), ["c", "a", "b"]);
+  assert.equal(
+    JSON.stringify(additiveOptions.castWeights),
+    '{"c":4,"a":2,"b":3}',
+  );
+  additive.destroy();
+  checks += 2;
 
   console.log(`BeefwifeCanvas: ${checks} public-boundary checks passed`);
 })().catch((error) => {

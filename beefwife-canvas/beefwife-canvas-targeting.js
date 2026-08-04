@@ -2,15 +2,22 @@
 
 const BeefwifeCanvasTargeting = (() => {
   const pointOf = (value, path = "target") => {
-    if (!value || !Number.isFinite(value.x) || !Number.isFinite(value.y))
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      throw new TypeError(`${path} must be an object`);
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null)
+      throw new TypeError(`${path} must be a plain object`);
+    for (const key of Object.keys(value)) {
+      if (key !== "x" && key !== "y")
+        throw new TypeError(`${path}.${key} is unknown`);
+    }
+    if (!Number.isFinite(value.x) || !Number.isFinite(value.y))
       throw new TypeError(`${path} must have finite x and y coordinates`);
     return { x: value.x, y: value.y };
   };
-  const targetingOf = (value) => {
-    if (!["wander", "click", "pointer", "manual"].includes(value))
-      throw new RangeError(
-        "targeting must be wander, click, pointer, or manual",
-      );
+  const targetModeOf = (value) => {
+    if (!["wander", "manual"].includes(value))
+      throw new RangeError("targetMode must be wander or manual");
     return value;
   };
   const wanderDelayOf = (value) => {
@@ -20,10 +27,10 @@ const BeefwifeCanvasTargeting = (() => {
   };
 
   class BeefwifeCanvasTargetPolicy {
-    constructor(router, targeting, options = {}) {
+    constructor(router, targetMode, options = {}) {
       this.router = router;
       this.terrain = router.terrain;
-      this.targeting = targetingOf(targeting);
+      this.targetMode = targetModeOf(targetMode);
       this.random = options.random || Math.random;
       this.wanderDelay = wanderDelayOf(options.wanderDelay ?? 4);
       this.goal = null;
@@ -32,7 +39,7 @@ const BeefwifeCanvasTargeting = (() => {
 
     get readyToPlan() {
       return (
-        Boolean(this.goal) || (this.targeting === "wander" && this.delay <= 0)
+        Boolean(this.goal) || (this.targetMode === "wander" && this.delay <= 0)
       );
     }
 
@@ -41,7 +48,7 @@ const BeefwifeCanvasTargeting = (() => {
     }
 
     plan(head) {
-      if (!this.goal && this.targeting === "wander")
+      if (!this.goal && this.targetMode === "wander")
         this.goal = this.router.randomPoint();
       return this.goal ? this.router.planTo(head, this.goal) : null;
     }
@@ -49,7 +56,7 @@ const BeefwifeCanvasTargeting = (() => {
     satisfy() {
       this.goal = null;
       this.delay =
-        this.targeting === "wander" ? this.random() * this.wanderDelay : 0;
+        this.targetMode === "wander" ? this.random() * this.wanderDelay : 0;
     }
 
     setTarget(target) {
@@ -60,11 +67,11 @@ const BeefwifeCanvasTargeting = (() => {
     clearTarget() {
       this.goal = null;
       this.delay =
-        this.targeting === "wander" ? this.random() * this.wanderDelay : 0;
+        this.targetMode === "wander" ? this.random() * this.wanderDelay : 0;
     }
 
-    setTargeting(targeting) {
-      this.targeting = targetingOf(targeting);
+    setTargetMode(targetMode) {
+      this.targetMode = targetModeOf(targetMode);
       this.goal = null;
       this.delay = 0;
     }
@@ -73,7 +80,7 @@ const BeefwifeCanvasTargeting = (() => {
   return {
     BeefwifeCanvasTargetPolicy,
     pointOf,
-    targetingOf,
+    targetModeOf,
     wanderDelayOf,
   };
 })();

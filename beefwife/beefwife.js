@@ -60,6 +60,13 @@ const Beefwife = (() => {
     "random",
     "render",
   ]);
+  const RENDER_KEYS = new Set(["roundVertices", "kneeProjection"]);
+  const KNEE_PROJECTION_KEYS = new Set([
+    "centerX",
+    "centerY",
+    "perspective",
+    "maxOffset",
+  ]);
   const RESET_KEYS = new Set(["position", "direction", "phase"]);
   const CONTROL_KEYS = new Set(["throttle", "direction"]);
 
@@ -85,6 +92,45 @@ const Beefwife = (() => {
     if (typeof value !== "number" || !Number.isFinite(value))
       throw new TypeError(`${path} must be a finite number`);
     return value;
+  };
+
+  const renderOptionsOf = (value) => {
+    if (value === undefined) return null;
+    const render = optionsOf(value, RENDER_KEYS, "options.render");
+    if (
+      render.roundVertices !== undefined &&
+      typeof render.roundVertices !== "boolean"
+    )
+      throw new TypeError("options.render.roundVertices must be a boolean");
+    const projection = render.kneeProjection;
+    if (projection !== undefined && projection !== null) {
+      optionsOf(
+        projection,
+        KNEE_PROJECTION_KEYS,
+        "options.render.kneeProjection",
+      );
+      finite(projection.centerX, "options.render.kneeProjection.centerX");
+      finite(projection.centerY, "options.render.kneeProjection.centerY");
+      const perspective = finite(
+        projection.perspective,
+        "options.render.kneeProjection.perspective",
+      );
+      if (perspective < 0)
+        throw new RangeError(
+          "options.render.kneeProjection.perspective must be nonnegative",
+        );
+      if (projection.maxOffset !== undefined) {
+        const maxOffset = finite(
+          projection.maxOffset,
+          "options.render.kneeProjection.maxOffset",
+        );
+        if (maxOffset < 0)
+          throw new RangeError(
+            "options.render.kneeProjection.maxOffset must be nonnegative",
+          );
+      }
+    }
+    return render;
   };
 
   const point = (value, fallback, path) => {
@@ -197,11 +243,8 @@ const Beefwife = (() => {
       const phase = finite(options.phase ?? 0, "options.phase");
       if (options.random !== undefined && typeof options.random !== "function")
         throw new TypeError("options.random must be a function");
-      if (options.render !== undefined)
-        plainObject(options.render, "options.render");
-
       this.#random = options.random ?? Math.random;
-      this.#renderOptions = options.render || null;
+      this.#renderOptions = renderOptionsOf(options.render);
       this.#requestedDirection = { ...facing };
       this.#model = Model.compile(descriptor);
       Graphics.prepare(this.#model);

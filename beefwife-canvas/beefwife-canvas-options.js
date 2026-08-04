@@ -51,6 +51,11 @@ const BeefwifeCanvasOptions = (() => {
       throw new RangeError("resolutionScale must be from 0.25 to 1");
     return value;
   };
+  const imageRenderingOf = (value) => {
+    if (!["auto", "pixelated"].includes(value))
+      throw new RangeError("imageRendering must be auto or pixelated");
+    return value;
+  };
   const renderFpsOf = (value) => {
     if (value === undefined || value === 0) return 0;
     if (!Number.isFinite(value) || value < 1 || value > 240)
@@ -87,6 +92,7 @@ const BeefwifeCanvasOptions = (() => {
     config,
     countOf,
     debugOf,
+    imageRenderingOf,
     physicsFpsOf,
     renderFpsOf,
     resolutionScaleOf,

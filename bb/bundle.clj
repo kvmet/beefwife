@@ -23,6 +23,7 @@
    "beefwife-canvas/beefwife-canvas-render.js"
    "beefwife-canvas/beefwife-canvas-runtime.js"
    "beefwife-canvas/beefwife-canvas-cast.js"
+   "beefwife-canvas/beefwife-canvas-mount-options.js"
    "beefwife-canvas/beefwife-canvas.js"])
 
 (def out "dist/beefwife-canvas.js")

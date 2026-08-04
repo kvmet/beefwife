@@ -10,155 +10,18 @@ const BeefwifeCanvas = (() => {
         ? require("./beefwife-canvas-cast.js")
         : null;
   if (!castSupport) throw new Error("BeefwifeCanvasCast must load first");
-  const BOOLEAN = new Set(["true", "false"]);
-  // One row per public option. `attribute: false` marks JavaScript-only
-  // options. A `default` here is a BeefwifeCanvas opinion that differs from
-  // the owning layer; an option without one is forwarded undefined so the
-  // layer that owns the value (BeefwifeCanvasRuntime, Terrain, or steering)
-  // defaults it.
-  const OPTIONS = {
-    antialias: { type: "boolean", default: false },
-    arrivalRadius: { type: "number" },
-    autoStart: { type: "boolean", default: true },
-    avoid: { type: "string" },
-    count: { type: "number" },
-    debugNavigation: { type: "boolean", default: false },
-    debugRoutes: { type: "boolean", default: false },
-    debugTargets: { type: "boolean", default: false },
-    debugTerrain: { type: "boolean", default: false },
-    descriptors: { attribute: false },
-    drawFps: { type: "number", default: 24 },
-    edgeMargin: { type: "number" },
-    escapeReplanSeconds: { type: "number" },
-    filters: { attribute: false },
-    manifest: { type: "string" },
-    maxJointOffset: { type: "number" },
-    maxPixelRatio: { type: "number", default: 2 },
-    obstaclePadding: { type: "number" },
-    pauseHidden: { type: "boolean" },
-    pauseOffscreen: { type: "boolean", default: true },
-    perspective: { type: "number", default: 0.002 },
-    projectionCenter: { type: "string" },
-    random: { attribute: false },
-    resolutionScale: { type: "number", default: 0.25 },
-    roundVertices: { type: "boolean", default: true },
-    simulationFps: { type: "number", default: 60 },
-    sources: { type: "sources" },
-    stuckReplanSeconds: { type: "number" },
-    targeting: { type: "string" },
-    throttleEase: { type: "number" },
-    timeScale: { type: "number" },
-    wanderDelay: { type: "number" },
-  };
-  const kebab = (key) =>
-    key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
-  const ATTRIBUTES = {};
-  const DEFAULTS = {};
-  for (const [key, rule] of Object.entries(OPTIONS)) {
-    if (rule.attribute !== false)
-      ATTRIBUTES[`data-beefwife-${kebab(key)}`] = [key, rule.type];
-    if (rule.default !== undefined) DEFAULTS[key] = rule.default;
-  }
+  const mountOptionSupport =
+    typeof BeefwifeCanvasMountOptions !== "undefined"
+      ? BeefwifeCanvasMountOptions
+      : typeof module !== "undefined" && module.exports
+        ? require("./beefwife-canvas-mount-options.js")
+        : null;
+  if (!mountOptionSupport)
+    throw new Error("BeefwifeCanvasMountOptions must load first");
+  const { optionsOf, roamOf } = mountOptionSupport;
 
   const dispatch = (canvas, type, detail) =>
     canvas.dispatchEvent(new CustomEvent(type, { detail }));
-
-  const parseAttribute = (value, type, name) => {
-    if (type === "string") return value;
-    if (type === "sources")
-      return value
-        .split(",")
-        .map((part) => part.trim())
-        .filter(Boolean);
-    if (type === "boolean") {
-      if (!BOOLEAN.has(value))
-        throw new TypeError(`${name} must be true or false`);
-      return value === "true";
-    }
-    const number = Number(value);
-    if (!Number.isFinite(number))
-      throw new TypeError(`${name} must be a finite number`);
-    return number;
-  };
-
-  const attributesOf = (canvas) => {
-    const options = {};
-    for (const attribute of canvas.attributes) {
-      if (!attribute.name.startsWith("data-beefwife-")) continue;
-      if (
-        attribute.name === "data-beefwife-canvas" ||
-        attribute.name === "data-beefwife-state"
-      )
-        continue;
-      const rule = ATTRIBUTES[attribute.name];
-      if (!rule) throw new TypeError(`${attribute.name} is unknown`);
-      options[rule[0]] = parseAttribute(
-        attribute.value,
-        rule[1],
-        attribute.name,
-      );
-    }
-    return options;
-  };
-
-  const optionsOf = (canvas, supplied) => {
-    if (
-      supplied === null ||
-      typeof supplied !== "object" ||
-      Array.isArray(supplied)
-    )
-      throw new TypeError("options must be an object");
-    for (const key of Object.keys(supplied)) {
-      if (!OPTIONS[key]) throw new TypeError(`options.${key} is unknown`);
-    }
-    const options = { ...DEFAULTS, ...attributesOf(canvas), ...supplied };
-    for (const [key, rule] of Object.entries(OPTIONS)) {
-      const value = options[key];
-      if (value === undefined) continue;
-      if (rule.type === "boolean" && typeof value !== "boolean")
-        throw new TypeError(`${key} must be true or false`);
-      if (rule.type === "number" && !Number.isFinite(value))
-        throw new TypeError(`${key} must be a finite number`);
-      if (key === "avoid" && typeof value !== "string")
-        throw new TypeError("avoid must be a selector string");
-    }
-    if (options.count !== undefined && !Number.isInteger(options.count))
-      throw new TypeError("count must be an integer");
-    if (options.random !== undefined && typeof options.random !== "function")
-      throw new TypeError("random must be a function");
-    if (options.filters !== undefined && !Array.isArray(options.filters))
-      throw new TypeError("filters must be an array");
-    for (const key of [
-      "edgeMargin",
-      "escapeReplanSeconds",
-      "maxJointOffset",
-      "obstaclePadding",
-      "perspective",
-      "stuckReplanSeconds",
-      "wanderDelay",
-    ]) {
-      if (options[key] < 0) throw new RangeError(`${key} must be nonnegative`);
-    }
-    if (options.arrivalRadius !== undefined && options.arrivalRadius <= 1)
-      throw new RangeError("arrivalRadius must be greater than 1");
-    if (options.throttleEase !== undefined && options.throttleEase <= 0)
-      throw new RangeError("throttleEase must be positive");
-    return options;
-  };
-
-  const ROAM_KEYS = {
-    arrivalRadius: "arrive",
-    throttleEase: "ease",
-    stuckReplanSeconds: "patience",
-    escapeReplanSeconds: "replan",
-  };
-  const roamOf = (options) => {
-    const roam = {};
-    for (const [option, key] of Object.entries(ROAM_KEYS)) {
-      if (options[option] !== undefined) roam[key] = options[option];
-    }
-    return roam;
-  };
 
   class Controller {
     constructor(canvas, supplied) {
@@ -176,13 +39,14 @@ const BeefwifeCanvas = (() => {
       this.nextId = 1;
       this.originalImageRendering = canvas.style.imageRendering;
       this._onClick = (event) => {
-        if (this.options?.targeting !== "click" || !this.host) return;
+        if (this.options?.pointerInput !== "click" || !this.host) return;
         this.setTarget(this._pointerPoint(event));
       };
       this._onPointerMove = (event) => {
-        if (this.options?.targeting === "pointer" && this.host)
+        if (this.options?.pointerInput === "move" && this.host)
           this.setTarget(this._pointerPoint(event));
       };
+      this._onVisibilityChange = () => this._syncRunning();
       this.resizeObserver = null;
       this.intersectionObserver = null;
       this._state("loading");
@@ -218,11 +82,13 @@ const BeefwifeCanvas = (() => {
             terrain: this.options.debugTerrain,
           },
           filters,
-          maxJointOffset: this.options.maxJointOffset,
+          imageRendering: this.options.imageRendering,
+          kneePerspective: this.options.kneePerspective,
+          kneeProjectionCenter: this.options.kneeProjectionCenter,
+          maxKneeOffset: this.options.maxKneeOffset,
           maxPixelRatio: this.options.maxPixelRatio,
-          pauseWhenHidden: this.options.pauseHidden,
-          perspective: this.options.perspective,
-          projectionCenter: this.options.projectionCenter,
+          // The controller owns public pause state and stops the host itself.
+          pauseWhenHidden: false,
           physicsFps: this.options.simulationFps,
           random: this.options.random,
           renderFps: this.options.drawFps,
@@ -232,7 +98,7 @@ const BeefwifeCanvas = (() => {
           // shadow the default.
           roam: roamOf(this.options),
           roundVertices: this.options.roundVertices,
-          targeting: this.options.targeting,
+          targetMode: this.options.targetMode,
           terrain: {
             avoid: this.options.avoid,
             edgeMargin: this.options.edgeMargin,
@@ -308,9 +174,16 @@ const BeefwifeCanvas = (() => {
       return this;
     }
 
-    setTargeting(targeting) {
-      this._host().setTargeting(targeting);
-      this.options.targeting = targeting;
+    setTargetMode(targetMode) {
+      this._host().setTargetMode(targetMode);
+      this.options.targetMode = targetMode;
+      return this;
+    }
+
+    setPointerInput(pointerInput) {
+      if (!["none", "click", "move"].includes(pointerInput))
+        throw new RangeError("pointerInput must be none, click, or move");
+      this.options.pointerInput = pointerInput;
       return this;
     }
 
@@ -339,15 +212,26 @@ const BeefwifeCanvas = (() => {
           handle = Object.freeze({
             id,
             name: actor.name,
-            clearTarget: () => this._host().clearTarget(actor),
+            clearTarget: () => {
+              this._host().clearTarget(actor);
+              return handle;
+            },
             getPose: () => {
               this._host();
               return actor.beefwife.getPose();
             },
-            respawn: () => this._host().respawn(actor),
-            setTarget: (target) => this._host().setTarget(target, actor),
-            setTargeting: (targeting) =>
-              this._host().setTargeting(targeting, actor),
+            respawn: () => {
+              this._host().respawn(actor);
+              return handle;
+            },
+            setTarget: (target) => {
+              this._host().setTarget(target, actor);
+              return handle;
+            },
+            setTargetMode: (targetMode) => {
+              this._host().setTargetMode(targetMode, actor);
+              return handle;
+            },
           });
           this.handles.set(actor, handle);
         }
@@ -361,6 +245,10 @@ const BeefwifeCanvas = (() => {
       this.abortController.abort();
       this.canvas.removeEventListener("click", this._onClick);
       this.canvas.removeEventListener("pointermove", this._onPointerMove);
+      document.removeEventListener(
+        "visibilitychange",
+        this._onVisibilityChange,
+      );
       this.resizeObserver?.disconnect();
       this.intersectionObserver?.disconnect();
       this._preserveHost();
@@ -377,6 +265,11 @@ const BeefwifeCanvas = (() => {
     _connectCanvas() {
       this.canvas.addEventListener("click", this._onClick);
       this.canvas.addEventListener("pointermove", this._onPointerMove);
+      if (this.options.pauseHidden)
+        document.addEventListener(
+          "visibilitychange",
+          this._onVisibilityChange,
+        );
       this.resizeObserver =
         typeof ResizeObserver === "undefined"
           ? null
@@ -423,12 +316,21 @@ const BeefwifeCanvas = (() => {
       if (!this.host || this.destroyed) return;
       const rect = this.canvas.getBoundingClientRect();
       const visible = rect.width > 0 && rect.height > 0;
-      if (this.wantsToRun && visible && this.inView) {
+      if (!this.wantsToRun) {
+        this.host.stop();
+        this._state("stopped");
+      } else if (this.options.pauseHidden && document.hidden) {
+        this.host.stop();
+        this._state("paused", "hidden");
+      } else if (!visible) {
+        this.host.stop();
+        this._state("paused", "zero-size");
+      } else if (!this.inView) {
+        this.host.stop();
+        this._state("paused", "offscreen");
+      } else {
         this.host.start();
         this._state("running");
-      } else {
-        this.host.stop();
-        this._state(this.wantsToRun ? "ready" : "stopped");
       }
     }
 
@@ -442,8 +344,11 @@ const BeefwifeCanvas = (() => {
       if (this.destroyed) throw new Error("BeefwifeCanvas has been destroyed");
     }
 
-    _state(state) {
+    _state(state, pauseReason = null) {
       this.canvas.dataset.beefwifeState = state;
+      if (pauseReason)
+        this.canvas.dataset.beefwifePauseReason = pauseReason;
+      else delete this.canvas.dataset.beefwifePauseReason;
     }
   }
 
@@ -452,6 +357,12 @@ const BeefwifeCanvas = (() => {
   const facadeOf = (controller) => {
     const facade = Object.freeze({
       canvas: controller.canvas,
+      get state() {
+        return controller.canvas.dataset.beefwifeState;
+      },
+      get pauseReason() {
+        return controller.canvas.dataset.beefwifePauseReason || null;
+      },
       get ready() {
         return controller.ready;
       },
@@ -486,8 +397,12 @@ const BeefwifeCanvas = (() => {
         controller.clearTarget();
         return facade;
       },
-      setTargeting(targeting) {
-        controller.setTargeting(targeting);
+      setTargetMode(targetMode) {
+        controller.setTargetMode(targetMode);
+        return facade;
+      },
+      setPointerInput(pointerInput) {
+        controller.setPointerInput(pointerInput);
         return facade;
       },
       refreshTerrain() {

@@ -193,7 +193,7 @@ const localProjection = {
 };
 const projectedLegs = new Beefwife(bentLeggedSource, {
   random: () => 0.5,
-  render: { projection: localProjection },
+  render: { kneeProjection: localProjection },
 });
 const projectedPositions = projectedLegs.children.find(
   (child) => child instanceof Mesh,

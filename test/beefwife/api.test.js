@@ -64,6 +64,25 @@ checks += 3;
   () => new Beefwife(example, { position: { x: Number.MAX_VALUE, y: 0 } }),
   () => new Beefwife(example, { phase: Infinity }),
   () => new Beefwife(example, { random: 1 }),
+  () => new Beefwife(example, { render: { unknown: true } }),
+  () => new Beefwife(example, { render: { roundVertices: 1 } }),
+  () =>
+    new Beefwife(example, {
+      render: {
+        kneeProjection: { centerX: 0, centerY: 0, perspective: -1 },
+      },
+    }),
+  () =>
+    new Beefwife(example, {
+      render: {
+        kneeProjection: {
+          centerX: 0,
+          centerY: 0,
+          perspective: 1,
+          extra: true,
+        },
+      },
+    }),
   () => beefwife.step(-1),
   () => beefwife.step(NaN),
   () => beefwife.step(0.01, { throttle: 1.1 }),

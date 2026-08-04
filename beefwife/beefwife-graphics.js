@@ -241,7 +241,8 @@ const BeefwifeGraphics = (() => {
       const positions = this.limbs.dynamicPositions;
       const width = this.model.legs.skin.limbPaint.strokeWidth;
       const stride = state.layout.legStride;
-      const projection = this.options.projection ?? Graphics.kneeProjection;
+      const projection =
+        this.options.kneeProjection ?? Graphics.kneeProjection;
       const roundVertices = this.options.roundVertices === true;
       for (let offset = 0; offset < legs.length; offset += stride) {
         const legIndex = offset / stride;
