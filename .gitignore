@@ -4,3 +4,4 @@
 keys.js
 constants.js
 dist/
+node_modules/

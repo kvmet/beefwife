@@ -1,0 +1,11 @@
+{
+  "name": "@kvmet/terrain",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "rolldown -c rolldown.config.mjs"
+  },
+  "devDependencies": {
+    "rolldown": "1.2.2"
+  }
+}

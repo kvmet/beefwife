@@ -14,6 +14,9 @@ It is a small browser script with no dependencies:
 </script>
 ```
 
+Use `terrain.min.js` instead for the minified production build. Both browser
+files are generated from the ES modules in `src/`; do not edit them directly.
+
 The script creates `window.Terrain` when loaded directly. It also supports
 CommonJS:
 
@@ -95,8 +98,16 @@ polygon or trapezoidal decomposition.
 
 ## Check
 
-Run the deterministic API and geometry test:
+Install the build dependency once, then build both browser artifacts and run the
+ES module, readable-build, and minified-build tests:
 
 ```sh
+npm --prefix terrain install
 bb terrain
 ```
+
+During development, the source is split by responsibility:
+
+- `src/support.mjs` owns contracts and small geometry primitives.
+- `src/mesh.mjs` owns measurement, landing, and free-space construction.
+- `src/terrain.mjs` owns visibility and routing.

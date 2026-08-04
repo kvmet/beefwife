@@ -16,9 +16,17 @@
   {:doc "Check BeefwifeCanvas runtime integration."
    :task (shell "node" "test/beefwife-canvas/runtime.test.js")}
 
+  terrain-build
+  {:doc "Build standalone Terrain browser artifacts."
+   :task (shell "npm" "--prefix" "terrain" "run" "build")}
+
   terrain
-  {:doc "Check terrain routing."
-   :task (shell "node" "test/terrain/terrain.test.js")}
+  {:doc "Build and check the Terrain public API and routing."
+   :depends [terrain-build]
+   :task (do
+           (shell "node" "test/terrain/module.test.mjs")
+           (shell "node" "test/terrain/terrain.test.js")
+           (shell "node" "test/terrain/terrain.test.js" "terrain.min.js"))}
 
   canvas
   {:doc "Check the BeefwifeCanvas public boundary."
@@ -26,6 +34,7 @@
 
   bundle
   {:doc "Build dist/beefwife-canvas.js."
+   :depends [terrain-build]
    :task (load-file "bb/bundle.clj")}
 
   bundle-test

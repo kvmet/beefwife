@@ -18,6 +18,7 @@
 
 (ns kipple
   (:require [babashka.fs :as fs]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [length]
             [taste]
@@ -117,14 +118,21 @@
 
 (defn- failed [results] (filter #(= :fail (:status %)) results))
 
+(defn- generated? [path]
+  (try
+    (with-open [reader (io/reader (str path))]
+      (str/includes? (or (.readLine reader) "") "Generated from"))
+    (catch Exception _ false)))
+
 (let [args           *command-line-args*
       roots          (if (empty? args) ["."] args)
       walked         (map walk roots)
       files          (mapcat first walked)
       skipped        (reduce into #{} (map second walked))
       length-results (keep (fn [f]
-                             (when-let [{:keys [warn fail]} (rule-for f)]
-                               (length/check-file f warn fail)))
+                             (when-not (generated? f)
+                               (when-let [{:keys [warn fail]} (rule-for f)]
+                                 (length/check-file f warn fail))))
                            files)
       taste-results  (taste/check-paths files)
       link-results   (links/check-paths files)

@@ -15,13 +15,14 @@ const vm = require("node:vm");
 
 const WIDTH = 180;
 const HEIGHT = 140;
+const artifact = process.argv[2] || "terrain.js";
 
 const terrainPath = path.join(
   __dirname,
   "..",
   "..",
   "terrain",
-  "terrain.js",
+  artifact,
 );
 const source = fs.readFileSync(terrainPath, "utf8");
 const Terrain = require(terrainPath);
@@ -48,6 +49,16 @@ vm.createContext(collision);
 vm.runInContext("const finite = 1; const point = 2;", collision);
 vm.runInContext(source, collision);
 assert.equal(collision.Terrain.name, "Terrain");
+
+const minPath = path.join(path.dirname(terrainPath), "terrain.min.js");
+const minSource = fs.readFileSync(minPath, "utf8");
+const MinTerrain = require(minPath);
+assert.deepEqual(MinTerrain.DEFAULTS, Terrain.DEFAULTS);
+const minContext = { window: null, document: context.document };
+minContext.window = minContext;
+vm.createContext(minContext);
+vm.runInContext(minSource, minContext);
+assert.equal(minContext.Terrain.name, "Terrain");
 
 const element = (rect, count = null) => ({
   getBoundingClientRect() {
@@ -464,6 +475,6 @@ for (let world = 0; world < 250; world++) {
 }
 
 console.log(
-  `${landings} landings, ${routes} routes, ${direct} direct, ` +
+  `${artifact}: ${landings} landings, ${routes} routes, ${direct} direct, ` +
     `${searches} optimal searches: safe`,
 );
