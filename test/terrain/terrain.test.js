@@ -1,10 +1,11 @@
 /**
- * Question: do landing and routing stay outside every closed keep-out?
- * Control: exact segment-rectangle intersections over targeted cases and
- * deterministic random layouts, with both funnel settings.
- * Fails on a covered landing, an unsafe route, a lost endpoint, a higher-cost
- * corridor than quadratic Dijkstra, a clear-run detour, or a route across a
- * full-height wall.
+ * Questions: is the public lifecycle strict and predictable, and do landing
+ * and routing stay outside every closed keep-out? Controls: boundary-contract
+ * assertions plus exact segment-rectangle intersections over targeted cases
+ * and deterministic random layouts with both funnel settings. Fails on invalid
+ * input acceptance, stale builds, covered landings, unsafe routes, lost
+ * endpoints, non-optimal gate searches, lost subpixel gaps, clear-run
+ * detours, or routes through full-height walls.
  */
 
 const assert = require("node:assert/strict");
@@ -15,35 +16,45 @@ const vm = require("node:vm");
 const WIDTH = 180;
 const HEIGHT = 140;
 
-const source =
-  fs.readFileSync(
-    path.join(__dirname, "..", "..", "terrain", "terrain.js"),
-    "utf8",
-  ) +
-  "\nthis.Terrain = Terrain; this.TERRAIN_CONFIG = TERRAIN_CONFIG;";
+const terrainPath = path.join(
+  __dirname,
+  "..",
+  "..",
+  "terrain",
+  "terrain.js",
+);
+const source = fs.readFileSync(terrainPath, "utf8");
+const Terrain = require(terrainPath);
 const context = {
-  window: { innerWidth: WIDTH, innerHeight: HEIGHT },
+  innerWidth: WIDTH,
+  innerHeight: HEIGHT,
   document: { querySelectorAll: () => [] },
 };
+context.window = context;
 vm.createContext(context);
 vm.runInContext(source, context);
+assert.equal(context.Terrain.name, "Terrain");
+assert.equal(context.window.Terrain, context.Terrain);
+vm.runInContext(
+  "this.browserTerrain = new Terrain({ edgeMargin: 0 }).build()",
+  context,
+);
+assert.equal(context.browserTerrain.ready, true);
 
-const { Terrain, TERRAIN_CONFIG } = context;
-TERRAIN_CONFIG.edgeMargin = 0;
+const element = (rect, count = null) => ({
+  getBoundingClientRect() {
+    if (count) count.calls++;
+    return rect;
+  },
+});
 
-const build = (rects) => {
-  const terrain = new Terrain();
-  Object.assign(terrain, {
-    x0: 0,
-    y0: 0,
-    x1: WIDTH,
-    y1: HEIGHT,
-    rects,
-  });
-  terrain.edges = terrain._border();
-  terrain._buildSlabs();
-  return terrain;
-};
+const build = (rects, options = {}) =>
+  new Terrain({
+    avoid: rects.map((rect) => element(rect)),
+    edgeMargin: 0,
+    viewport: { width: WIDTH, height: HEIGHT },
+    ...options,
+  }).build();
 
 const covered = (terrain, point) =>
   point.x < -1e-9 ||
@@ -65,7 +76,7 @@ const hits = (a, b, rect) => {
     [a.x, b.x - a.x, rect.left, rect.right],
     [a.y, b.y - a.y, rect.top, rect.bottom],
   ]) {
-    if (Math.abs(step) < 1e-12) {
+    if (step === 0) {
       if (start < low || start > high) return false;
       continue;
     }
@@ -156,27 +167,160 @@ const routeCost = (crossings, start, goal) => {
   return cost + Math.hypot(goal.x - point.x, goal.y - point.y);
 };
 
+// Public construction, lifecycle, measurement, and failure contracts.
+assert.equal(Object.isFrozen(Terrain.DEFAULTS), true);
+assert.deepEqual(Terrain.DEFAULTS, {
+  avoid: ".beefwife-avoid",
+  edgeMargin: 25,
+  obstaclePadding: 0,
+  funnel: true,
+});
+for (const options of [
+  null,
+  [],
+  { mystery: true },
+  { edgeMargin: -1 },
+  { obstaclePadding: NaN },
+  { funnel: 1 },
+  { avoid: {} },
+  { root: {} },
+  { viewport: null },
+]) {
+  assert.throws(() => new Terrain(options));
+}
+
+const dormant = new Terrain({
+  avoid: [],
+  viewport: { width: WIDTH, height: HEIGHT },
+});
+assert.equal(dormant.ready, false);
+assert.equal(dormant.at(1, 1), null);
+assert.equal(dormant.route({ x: 1, y: 1 }, { x: 2, y: 2 }), null);
+assert.throws(() => dormant.at(Infinity, 1), TypeError);
+assert.throws(() => dormant.at(1, 1, null), TypeError);
+assert.throws(() => dormant.route({ x: 1 }, { x: 2, y: 2 }), TypeError);
+
+const supplied = {
+  avoid: [],
+  edgeMargin: 4,
+  viewport: { width: WIDTH, height: HEIGHT },
+};
+const snapshot = new Terrain(supplied);
+supplied.edgeMargin = 40;
+assert.equal(Object.isFrozen(snapshot.options), true);
+assert.equal(snapshot.build(), snapshot);
+assert.equal(snapshot.x0, 4);
+const reused = {};
+assert.equal(snapshot.at(20, 20, reused), reused);
+assert.deepEqual(reused, { dx: 0, dy: 0, d: 0 });
+
+const measured = { calls: 0 };
+const keepOut = element(
+  { left: 110, top: 220, right: 130, bottom: 240 },
+  measured,
+);
+let selected = null;
+const offset = new Terrain({
+  avoid: ".blocked",
+  root: {
+    querySelectorAll(selector) {
+      selected = selector;
+      return [keepOut, keepOut];
+    },
+  },
+  edgeMargin: 0,
+  obstaclePadding: 2,
+  viewport: () => ({ left: 100, top: 200, width: 80, height: 60 }),
+}).build();
+assert.equal(selected, ".blocked");
+assert.equal(measured.calls, 1);
+assert.deepEqual(offset.viewport, {
+  left: 100,
+  top: 200,
+  width: 80,
+  height: 60,
+});
+assert.deepEqual(offset.rects, [
+  { left: 8, top: 18, right: 32, bottom: 42 },
+]);
+assert.equal(covered(offset, land(offset, { x: 20, y: 30 })), false);
+assert.equal(offset.avoidElements().length, 2);
+offset.build();
+assert.equal(measured.calls, 2);
+
+const noSpace = new Terrain({
+  avoid: [element({ left: -1, top: -1, right: 11, bottom: 11 })],
+  edgeMargin: 0,
+  viewport: { width: 10, height: 10 },
+}).build();
+assert.equal(noSpace.ready, false);
+assert.equal(noSpace.at(5, 5), null);
+assert.equal(noSpace.route({ x: 1, y: 1 }, { x: 9, y: 9 }), null);
+
+const badRect = { left: 1, top: 1, right: 2, bottom: 2 };
+const transactional = new Terrain({
+  avoid: [element(badRect)],
+  edgeMargin: 0,
+  viewport: { width: 10, height: 10 },
+}).build();
+assert.equal(transactional.ready, true);
+badRect.right = NaN;
+assert.throws(() => transactional.build(), TypeError);
+assert.equal(transactional.ready, false);
+assert.deepEqual(transactional.rects, []);
+
+assert.throws(
+  () =>
+    new Terrain({
+      avoid: () => ".blocked",
+      viewport: { width: 10, height: 10 },
+    }).build(),
+  /must return an iterable/,
+);
+assert.throws(
+  () =>
+    new Terrain({ avoid: [], viewport: () => null }).build(),
+  /must be a rectangle/,
+);
+
 const overlap = build([
   { left: 0, top: 0, right: 10, bottom: 100 },
   { left: 10.4, top: 40, right: 20, bottom: 60 },
 ]);
 assert.equal(covered(overlap, land(overlap, { x: 10.45, y: 50 })), false);
 
-const obstacle = build([{ left: 70, top: 50, right: 110, bottom: 90 }]);
-TERRAIN_CONFIG.funnel = false;
+const obstacle = build([{ left: 70, top: 50, right: 110, bottom: 90 }], {
+  funnel: false,
+});
 assert.equal(obstacle.route({ x: 10, y: 20 }, { x: 160, y: 20 }).length, 2);
+const boundary = obstacle.at(70, 70);
+assert.equal(boundary.d > 0 && boundary.d < 1e-9, true);
+assert.equal(covered(obstacle, land(obstacle, { x: 70, y: 70 })), false);
+assert.equal(
+  obstacle.route({ x: 10, y: 49.75 }, { x: 160, y: 49.75 }).length,
+  2,
+);
 
 const wall = build([{ left: 80, top: -10, right: 100, bottom: 150 }]);
 assert.equal(wall.route({ x: 10, y: 70 }, { x: 170, y: 70 }), null);
 
-const narrow = build([
+const touching = build([{ left: -10, top: 40, right: 0, bottom: 100 }]);
+const touchedEdge = land(touching, { x: 0, y: 70 });
+assert.equal(touchedEdge.x > 0, true);
+assert.equal(covered(touching, touchedEdge), false);
+
+const narrowRects = [
   { left: 20, top: 20, right: 80, bottom: 120 },
-  { left: 80.2, top: 20, right: 160, bottom: 120 },
-]);
+  { left: 80.00000001, top: 20, right: 160, bottom: 120 },
+];
 for (const funnel of [false, true]) {
-  TERRAIN_CONFIG.funnel = funnel;
+  const narrow = build(narrowRects, { funnel });
   const route = narrow.route({ x: 79.8, y: 10 }, { x: 79.8, y: 130 });
-  assert.equal(route === null || safe(narrow, route), true);
+  assert.equal(safe(narrow, route), true);
+  assert.equal(
+    route.some((point) => point.x > 80 && point.x < 80.00000001),
+    true,
+  );
 }
 
 let seed = 0x7319ab2d;
@@ -206,12 +350,14 @@ for (let world = 0; world < 250; world++) {
   for (let i = 0; i < 150; i++) {
     const point = { x: -20 + random() * 220, y: -20 + random() * 180 };
     if (!covered(terrain, point)) continue;
-    assert.equal(covered(terrain, land(terrain, point)), false);
+    const landed = land(terrain, point);
+    assert.equal(covered(terrain, landed), false,
+      JSON.stringify({ point, landed, rects }));
     landings++;
   }
 
   for (const funnel of [false, true]) {
-    TERRAIN_CONFIG.funnel = funnel;
+    const terrain = build(rects, { funnel });
     for (let i = 0; i < 30; i++) {
       const a = { x: random() * WIDTH, y: random() * HEIGHT };
       const b = { x: random() * WIDTH, y: random() * HEIGHT };
