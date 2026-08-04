@@ -33,8 +33,11 @@ global.stepRoute = () => ({
 });
 global.window = { innerWidth: 800, innerHeight: 600 };
 
-const { BeefwifeCanvasActor, BeefwifeCanvasTargetPolicy } = require(
-  "../../beefwife-canvas/beefwife-canvas-runtime.js",
+const BeefwifeCanvasActor = require(
+  "../../beefwife-canvas/beefwife-canvas-actor.js",
+);
+const { BeefwifeCanvasTargetPolicy } = require(
+  "../../beefwife-canvas/beefwife-canvas-targeting.js",
 );
 const {
   newRoute: newSteerRoute,
@@ -318,10 +321,17 @@ const classicBoundary = async () => {
     style: {},
     remove: () => log.push(["remove"]),
   };
+  const obstacle = {
+    getBoundingClientRect: () => ({
+      left: 500,
+      top: 100,
+      right: 520,
+      bottom: 120,
+    }),
+  };
   const browser = {
     console,
     PIXI: pixiStub(log),
-    TERRAIN_CONFIG: { avoid: ".keep-out" },
     window: {
       innerWidth: 640,
       innerHeight: 360,
@@ -333,9 +343,17 @@ const classicBoundary = async () => {
       hidden: true,
       body: { appendChild: () => log.push(["append"]) },
       createElement: () => canvas,
-      querySelectorAll: () => [],
+      querySelectorAll: () => [obstacle, obstacle],
       addEventListener() {},
       removeEventListener() {},
+    },
+    ResizeObserver: class ResizeObserver {
+      disconnect() {
+        log.push(["observer-disconnect"]);
+      }
+      observe(element) {
+        log.push(["observer-observe", element]);
+      }
     },
     requestAnimationFrame: () => 1,
     cancelAnimationFrame() {},
@@ -346,25 +364,8 @@ const classicBoundary = async () => {
     clearTimeout: (callback) => scheduledTimers.delete(callback),
   };
   vm.createContext(browser);
-  vm.runInContext(
-    `globalThis.Terrain = class {
-      constructor() {
-        this.ready = true;
-        this.cells = [{}];
-        this.rects = [];
-        this.gates = [];
-        this.x0 = 0;
-        this.y0 = 0;
-        this.x1 = 640;
-        this.y1 = 360;
-      }
-      build() {}
-      at() { return { d: 0, dx: 0, dy: 0 }; }
-      route(from, to) { return [from, to]; }
-    };`,
-    browser,
-  );
   [
+    "../../terrain/terrain.js",
     "../../beefwife/beefwife-descriptor.js",
     "../../beefwife/beefwife-model.js",
     "../../beefwife/beefwife-drive.js",
@@ -378,7 +379,9 @@ const classicBoundary = async () => {
     "../../beefwife-canvas/beefwife-canvas-actor.js",
     "../../beefwife-canvas/beefwife-canvas-options.js",
     "../../beefwife-canvas/beefwife-canvas-targeting.js",
+    "../../beefwife-canvas/beefwife-canvas-population.js",
     "../../beefwife-canvas/beefwife-canvas-render.js",
+    "../../beefwife-canvas/beefwife-canvas-scene.js",
     "../../beefwife-canvas/beefwife-canvas-runtime.js",
   ].forEach((file) => {
     vm.runInContext(
@@ -407,7 +410,9 @@ const classicBoundary = async () => {
     })`,
     browser,
   );
-  assert.equal(browser.layer.dpr, 1);
+  assert.equal(browser.layer.scene.dpr, 1);
+  assert.equal(browser.layer.terrain.options.edgeMargin, 25);
+  assert.equal(browser.layer.terrain.options.obstaclePadding, 0);
   assert.equal(browser.layer.debug.targets, true);
   assert.equal(browser.layer.debug.routes, false);
   browser.layer.setDebug({ navigation: true, routes: true });
@@ -422,13 +427,22 @@ const classicBoundary = async () => {
     /debug\.terrain must be a boolean/,
   );
   browser.layer.start();
-  assert.equal(browser.layer.canvas.style.imageRendering, "auto");
+  assert.equal(
+    log.filter(([operation]) => operation === "observer-observe").length,
+    1,
+  );
+  browser.layer.refreshTerrain();
+  assert.equal(
+    log.filter(([operation]) => operation === "observer-observe").length,
+    1,
+  );
+  assert.equal(browser.layer.scene.canvas.style.imageRendering, "auto");
   browser.layer.setCount(1);
   browser.layer._draw();
-  assert.equal(browser.layer.dpr, 0.5);
-  assert.equal(browser.layer.application.stage.children.length, 3);
+  assert.equal(browser.layer.scene.dpr, 0.5);
+  assert.equal(browser.layer.scene.application.stage.children.length, 3);
   assert.equal(
-    browser.layer.application.stage.children[1].children[0],
+    browser.layer.scene.application.stage.children[1].children[0],
     browser.layer.actors[0].beefwife,
   );
   assert.ok(log.some(([operation]) => operation === "render"));
@@ -455,10 +469,20 @@ const classicBoundary = async () => {
     })`,
     browser,
   );
-  browser.embeddedLayer._resizeCanvas();
-  assert.equal(browser.embeddedLayer.renderOptions.kneeProjection.centerX, 220);
-  assert.equal(browser.embeddedLayer.renderOptions.kneeProjection.centerY, 140);
+  browser.embeddedLayer.scene.resize();
+  assert.equal(
+    browser.embeddedLayer.scene.renderOptions.kneeProjection.centerX,
+    220,
+  );
+  assert.equal(
+    browser.embeddedLayer.scene.renderOptions.kneeProjection.centerY,
+    140,
+  );
   assert.equal(embeddedCanvas.style.imageRendering, "pixelated");
+  assert.equal(browser.embeddedLayer.terrain.viewport.left, 0);
+  browser.embeddedLayer.refreshTerrain();
+  assert.equal(browser.embeddedLayer.terrain.viewport.left, 100);
+  assert.equal(browser.embeddedLayer.terrain.width, 300);
   browser.embeddedLayer.destroy();
   assert.ok(!log.some(([operation]) => operation === "embedded-remove"));
 
@@ -471,7 +495,8 @@ const classicBoundary = async () => {
        physicsFps: 60,
        renderFps: 24,
      });
-     clock.actors = [{ update: (dt) => physicsSteps.push(dt) }];
+     clock.terrain.build();
+     clock.population.actors = [{ update: (dt) => physicsSteps.push(dt) }];
      clock._draw = () => renderTicks++;
      for (let time = 1000; time <= 1100; time += 5) clock._tick(time);`,
     browser,
@@ -500,7 +525,7 @@ const classicBoundary = async () => {
   browser.layer.destroy();
   assert.ok(log.some(([operation]) => operation === "remove"));
   assert.ok(log.some(([operation]) => operation === "destroy"));
-  return 30;
+  return 38;
 };
 
 (async () => {

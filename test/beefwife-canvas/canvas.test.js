@@ -222,7 +222,8 @@ vm.runInContext(
   assert.equal("arrivalRadius" in created.options.roam, false);
   assert.equal("waypointRadius" in created.options.roam, false);
   assert.equal(created.options.terrain.avoid, undefined);
-  checks += 7;
+  assert.deepEqual(Object.keys(created.options.terrain), []);
+  checks += 8;
 
   canvas.dispatchEvent({ type: "click", clientX: 340, clientY: 250 });
   assert.equal(calls.at(-1)[0], "setTarget");

@@ -157,7 +157,16 @@ const BeefwifeCanvasMountOptions = (() => {
     return roam;
   };
 
-  return { optionsOf, roamOf };
+  const TERRAIN_KEYS = ["avoid", "edgeMargin", "obstaclePadding"];
+  const terrainOf = (options) => {
+    const terrain = {};
+    for (const key of TERRAIN_KEYS) {
+      if (options[key] !== undefined) terrain[key] = options[key];
+    }
+    return terrain;
+  };
+
+  return { optionsOf, roamOf, terrainOf };
 })();
 
 if (typeof module !== "undefined" && module.exports) {

@@ -18,7 +18,7 @@ const BeefwifeCanvas = (() => {
         : null;
   if (!mountOptionSupport)
     throw new Error("BeefwifeCanvasMountOptions must load first");
-  const { optionsOf, roamOf } = mountOptionSupport;
+  const { optionsOf, roamOf, terrainOf } = mountOptionSupport;
 
   const dispatch = (canvas, type, detail) =>
     canvas.dispatchEvent(new CustomEvent(type, { detail }));
@@ -87,8 +87,6 @@ const BeefwifeCanvas = (() => {
           kneeProjectionCenter: this.options.kneeProjectionCenter,
           maxKneeOffset: this.options.maxKneeOffset,
           maxPixelRatio: this.options.maxPixelRatio,
-          // The controller owns public pause state and stops the host itself.
-          pauseWhenHidden: false,
           physicsFps: this.options.simulationFps,
           random: this.options.random,
           renderFps: this.options.drawFps,
@@ -99,11 +97,9 @@ const BeefwifeCanvas = (() => {
           roam: roamOf(this.options),
           roundVertices: this.options.roundVertices,
           targetMode: this.options.targetMode,
-          terrain: {
-            avoid: this.options.avoid,
-            edgeMargin: this.options.edgeMargin,
-            obstaclePadding: this.options.obstaclePadding,
-          },
+          // Terrain treats an explicitly undefined value as invalid, so only
+          // forward the options this public boundary actually received.
+          terrain: terrainOf(this.options),
           timeScale: this.options.timeScale,
           wanderDelay: this.options.wanderDelay,
         });

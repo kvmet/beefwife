@@ -1,17 +1,6 @@
 /** Pixi scene synchronization and optional route debugging for BeefwifeCanvasRuntime. */
 
 const BeefwifeCanvasRender = (() => {
-  const syncStage = (host) => {
-    const current = host.actors.map((actor) => actor.beefwife);
-    const currentSet = new Set(current);
-    for (const beefwife of host.displayed) {
-      if (!currentSet.has(beefwife) && !beefwife.destroyed) beefwife.destroy();
-    }
-    for (let index = 0; index < current.length; index++)
-      host.world.addChildAt(current[index], index);
-    host.displayed = current;
-  };
-
   const drawTerrain = (graphics, terrain) => {
     for (const rectangle of terrain.rects)
       graphics.rect(
@@ -74,19 +63,20 @@ const BeefwifeCanvasRender = (() => {
   };
 
   const draw = (host) => {
-    syncStage(host);
-    host.debugUnderlay.clear();
-    host.debugOverlay.clear();
-    if (host.debug.terrain) drawTerrain(host.debugUnderlay, host.terrain);
+    const scene = host.scene;
+    scene.syncActors(host.actors);
+    scene.debugUnderlay.clear();
+    scene.debugOverlay.clear();
+    if (host.debug.terrain) drawTerrain(scene.debugUnderlay, host.terrain);
     if (host.debug.navigation)
-      drawNavigation(host.debugUnderlay, host.terrain);
+      drawNavigation(scene.debugUnderlay, host.terrain);
     if (host.debug.routes)
       for (const actor of host.actors)
-        drawRoute(host.debugOverlay, actor);
+        drawRoute(scene.debugOverlay, actor);
     if (host.debug.targets)
       for (const actor of host.actors)
-        drawTarget(host.debugOverlay, actor);
-    host.application.render();
+        drawTarget(scene.debugOverlay, actor);
+    scene.render();
   };
 
   return { draw };

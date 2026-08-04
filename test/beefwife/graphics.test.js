@@ -241,18 +241,20 @@ assert.ok(
     Array.from(mesh.dynamicPositions).every(Number.isInteger),
   ),
 );
-assert.equal(BeefwifeGraphics.kneeProjection, null);
-checks += 2;
+checks++;
 roundedLegs.destroy();
 
-BeefwifeGraphics.kneeProjection = {
-  centerX: baselineKnee.x,
-  centerY: baselineKnee.y,
-  maxOffset: 12,
-  perspective: 1,
-};
-const centeredLegs = new Beefwife(bentLeggedSource, { random: () => 0.5 });
-BeefwifeGraphics.kneeProjection = null;
+const centeredLegs = new Beefwife(bentLeggedSource, {
+  random: () => 0.5,
+  render: {
+    kneeProjection: {
+      centerX: baselineKnee.x,
+      centerY: baselineKnee.y,
+      maxOffset: 12,
+      perspective: 1,
+    },
+  },
+});
 const centeredPositions = centeredLegs.children.find(
   (child) => child instanceof Mesh,
 ).dynamicPositions;
@@ -262,14 +264,17 @@ assert.ok(near(centeredKnee.y, baselineKnee.y));
 checks += 2;
 centeredLegs.destroy();
 
-BeefwifeGraphics.kneeProjection = {
-  centerX: baselineKnee.x - 1,
-  centerY: baselineKnee.y,
-  maxOffset: 12,
-  perspective: 100,
-};
-const cappedLegs = new Beefwife(bentLeggedSource, { random: () => 0.5 });
-BeefwifeGraphics.kneeProjection = null;
+const cappedLegs = new Beefwife(bentLeggedSource, {
+  random: () => 0.5,
+  render: {
+    kneeProjection: {
+      centerX: baselineKnee.x - 1,
+      centerY: baselineKnee.y,
+      maxOffset: 12,
+      perspective: 100,
+    },
+  },
+});
 const cappedPositions = cappedLegs.children.find(
   (child) => child instanceof Mesh,
 ).dynamicPositions;

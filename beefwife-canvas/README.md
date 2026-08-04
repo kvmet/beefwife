@@ -68,7 +68,9 @@ Already mounted canvases are left alone.
 <script src="beefwife-canvas/beefwife-canvas-actor.js"></script>
 <script src="beefwife-canvas/beefwife-canvas-options.js"></script>
 <script src="beefwife-canvas/beefwife-canvas-targeting.js"></script>
+<script src="beefwife-canvas/beefwife-canvas-population.js"></script>
 <script src="beefwife-canvas/beefwife-canvas-render.js"></script>
+<script src="beefwife-canvas/beefwife-canvas-scene.js"></script>
 <script src="beefwife-canvas/beefwife-canvas-runtime.js"></script>
 <script src="beefwife-canvas/beefwife-canvas-cast.js"></script>
 <script src="beefwife-canvas/beefwife-canvas-mount-options.js"></script>

@@ -152,8 +152,6 @@ const BeefwifeGraphics = (() => {
 
   class Graphics {
     static available = true;
-    static kneeProjection = null;
-
     static prepare(model) {
       for (const [id, shape] of Object.entries(
         model.descriptor.definitions.shapes,
@@ -241,8 +239,7 @@ const BeefwifeGraphics = (() => {
       const positions = this.limbs.dynamicPositions;
       const width = this.model.legs.skin.limbPaint.strokeWidth;
       const stride = state.layout.legStride;
-      const projection =
-        this.options.kneeProjection ?? Graphics.kneeProjection;
+      const projection = this.options.kneeProjection ?? null;
       const roundVertices = this.options.roundVertices === true;
       for (let offset = 0; offset < legs.length; offset += stride) {
         const legIndex = offset / stride;

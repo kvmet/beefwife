@@ -25,11 +25,13 @@ const actor = {
 };
 const host = {
   actors: [actor],
-  application: { render() {} },
   debug: { navigation: false, routes: false, targets: false, terrain: false },
-  debugOverlay: overlay,
-  debugUnderlay: underlay,
-  displayed: [],
+  scene: {
+    debugOverlay: overlay,
+    debugUnderlay: underlay,
+    render() {},
+    syncActors() {},
+  },
   terrain: {
     cells: [{ left: 20, lo: 21, right: 30, hi: 31 }],
     gates: [{ x: 25, lo: 22, hi: 29 }],
@@ -39,7 +41,6 @@ const host = {
     y0: 0,
     y1: 80,
   },
-  world: { addChildAt() {} },
 };
 
 const draw = (layer) => {
