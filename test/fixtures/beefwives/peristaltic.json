@@ -1,0 +1,260 @@
+{
+  "schemaVersion": 1,
+  "name": "peristaltic",
+  "appearance": {
+    "scale": 2.1
+  },
+  "definitions": {
+    "materials": {
+      "body": {
+        "velocityRetention": 0.98,
+        "jointCorrection": 0.179,
+        "linkCorrection": 0.6,
+        "grip": {
+          "forward": 0.055,
+          "backward": 0.635,
+          "lateral": 0.589
+        }
+      }
+    },
+    "shapes": {
+      "foot": {
+        "path": "M -1.2 -0.65 L 0.65 -0.9 L 1.2 -0.35 L 1.2 0.35 L 0.65 0.9 L -1.2 0.65 Z"
+      },
+      "ornament-1": {
+        "path": "M -2 -2 L 0 -3 L 2.5 -2 L 2.5 0.5 L 0 1.5 L -2.5 0 Z"
+      },
+      "plate-1": {
+        "path": "M -5.5 -2 L 2 -2 L 3.5 -1 L 3.5 1 L 2 2 L -5.5 2 Z"
+      },
+      "plate-2": {
+        "path": "M -4 -4 L 0 -5.5 L 4.5 -4 L 6 0 L 4.5 4 L 0 5 L -4 3.5 L -5.5 0 Z"
+      }
+    },
+    "paints": {
+      "foot": {
+        "fill": "#39424e",
+        "stroke": "#ff0000",
+        "strokeWidth": 3.1
+      },
+      "leg": {
+        "fill": null,
+        "stroke": "#39424e",
+        "strokeWidth": 2.4
+      },
+      "ornament-1": {
+        "fill": "#050505",
+        "stroke": "#ffffff",
+        "strokeWidth": 3.1
+      },
+      "ribbon": {
+        "fill": "#7a1414",
+        "stroke": "#ff0000",
+        "strokeWidth": 0
+      },
+      "shell": {
+        "fill": "#ff0000",
+        "stroke": "#ff0000",
+        "strokeWidth": 3.1
+      }
+    }
+  },
+  "gait": {
+    "cyclesPerSecond": 1.63,
+    "phaseLagRadiansPerPixel": 0.034166666666666665,
+    "bend": {
+      "amplitude": 0.15,
+      "harmonic": 1,
+      "phaseOffset": 0
+    },
+    "thrust": {
+      "acceleration": 0,
+      "harmonic": 1,
+      "phaseOffset": -1.21,
+      "dutyCycle": 0.5
+    },
+    "gather": {
+      "amplitude": 0.64,
+      "harmonic": 2,
+      "phaseOffset": 0
+    },
+    "contact": {
+      "lift": 0.43,
+      "harmonic": 1,
+      "phaseOffset": -1.21,
+      "dutyCycle": 0.5
+    }
+  },
+  "chain": {
+    "physics": {
+      "autoLift": {
+        "amount": 0,
+        "share": 0.231,
+        "rate": 12
+      },
+      "steering": {
+        "gain": 0.6,
+        "limit": 0.5,
+        "rate": 6
+      }
+    },
+    "breathing": 0,
+    "sections": {
+      "head": {
+        "chunks": 1,
+        "spacing": 12,
+        "material": "body",
+        "motionScale": {
+          "bend": 0,
+          "thrust": 1,
+          "gather": 1,
+          "contact": 1
+        },
+        "profile": {
+          "ribbonWidth": {
+            "start": 2.5,
+            "end": 4.5
+          },
+          "plateScale": {
+            "start": 1,
+            "end": 1
+          }
+        }
+      },
+      "trunk": {
+        "chunks": 17,
+        "spacing": 12,
+        "material": "body",
+        "motionScale": {
+          "bend": 1,
+          "thrust": 1,
+          "gather": 1,
+          "contact": 1
+        },
+        "profile": {
+          "ribbonWidth": {
+            "start": 4.5,
+            "end": 4.5
+          },
+          "plateScale": {
+            "start": 1,
+            "end": 1
+          }
+        }
+      },
+      "tail": {
+        "chunks": 3,
+        "spacing": 12,
+        "material": "body",
+        "motionScale": {
+          "bend": 1,
+          "thrust": 1,
+          "gather": 1,
+          "contact": 1
+        },
+        "profile": {
+          "ribbonWidth": {
+            "start": 4.5,
+            "end": 0
+          },
+          "plateScale": {
+            "start": 1,
+            "end": 0.55
+          }
+        }
+      }
+    },
+    "skin": {
+      "loadScale": 0.35,
+      "ribbon": {
+        "paint": "ribbon"
+      },
+      "plates": [
+        {
+          "id": "plate-1-1",
+          "shape": "plate-1",
+          "paint": "shell",
+          "at": {
+            "scope": "chain",
+            "section": null,
+            "from": "head",
+            "offset": 0
+          },
+          "repeat": {
+            "count": 1,
+            "step": 1
+          },
+          "scale": 1
+        },
+        {
+          "id": "plate-2-2",
+          "shape": "plate-2",
+          "paint": "shell",
+          "at": {
+            "scope": "chain",
+            "section": null,
+            "from": "head",
+            "offset": 1
+          },
+          "repeat": {
+            "count": 20,
+            "step": 1
+          },
+          "scale": 1
+        }
+      ],
+      "ornaments": [
+        {
+          "id": "ornament-1",
+          "shape": "ornament-1",
+          "paint": "ornament-1",
+          "at": {
+            "scope": "chain",
+            "section": null,
+            "from": "head",
+            "offset": 1
+          },
+          "repeat": {
+            "count": 1,
+            "step": 1
+          },
+          "side": "both",
+          "layer": "over",
+          "offset": {
+            "forward": 0,
+            "outward": 8
+          },
+          "angleDegrees": 52,
+          "scale": 1,
+          "length": 20,
+          "sweep": 1.5,
+          "snapRate": 22,
+          "dampingRate": 11.907056323430298
+        }
+      ]
+    }
+  },
+  "legs": {
+    "section": "trunk",
+    "pairs": 0,
+    "reach": 17,
+    "spread": 13.26,
+    "lead": 0.5,
+    "fold": 0.5,
+    "jointLean": 0,
+    "sidePhase": 1,
+    "liftThreshold": 0.45,
+    "swingSeconds": 0.16,
+    "swingArc": 5.1,
+    "jitter": 0.3,
+    "skin": {
+      "limbPaint": "leg",
+      "foot": {
+        "shape": "foot",
+        "paint": "foot",
+        "scale": 3,
+        "plantedScale": 1.35
+      }
+    }
+  }
+}

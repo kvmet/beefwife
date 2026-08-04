@@ -1,0 +1,47 @@
+{:paths ["bb"]
+ :tasks
+ {descriptor
+  {:doc "Check the Beefwife descriptor schema."
+   :task (shell "node" "test/beefwife/descriptor.test.js")}
+
+  beefwife-model
+  {:doc "Check descriptor compilation and model contracts."
+   :task (shell "node" "test/beefwife/model.test.js")}
+
+  beefwife-api
+  {:doc "Check the public Beefwife lifecycle."
+   :task (shell "node" "test/beefwife/api.test.js")}
+
+  canvas-runtime
+  {:doc "Check BeefwifeCanvas runtime integration."
+   :task (shell "node" "test/beefwife-canvas/runtime.test.js")}
+
+  terrain
+  {:doc "Check terrain routing."
+   :task (shell "node" "test/terrain/terrain.test.js")}
+
+  canvas
+  {:doc "Check the BeefwifeCanvas public boundary."
+   :task (shell "node" "test/beefwife-canvas/canvas.test.js")}
+
+  bundle
+  {:doc "Build dist/beefwife-canvas.js."
+   :task (load-file "bb/bundle.clj")}
+
+  bundle-test
+  {:doc "Build and check the browser bundle."
+   :depends [bundle]
+   :task (shell "node" "test/beefwife-canvas/bundle.test.js")}
+
+  test
+  {:doc "Run the complete headless library test suite."
+   :depends [bundle-test]
+   :task (shell "node" "test/run.js")}
+
+  test-lab
+  {:doc "Check and build Beefwife Lab."
+   :task (shell "npm" "--prefix" "beefwife-lab" "run" "check")}
+
+  kipple
+  {:doc "Run repository hygiene checks."
+   :task (load-file "bb/kipple.clj")}}}

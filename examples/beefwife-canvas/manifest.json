@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    { "src": "../../test/fixtures/beefwives/slow-guy.json", "weight": 3 },
+    "../../test/fixtures/beefwives/long-girl.json",
+    "../../test/fixtures/beefwives/bounding.json"
+  ]
+}

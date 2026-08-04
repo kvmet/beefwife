@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BeefwifeCanvas example</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font:
+          14px/1.4 system-ui,
+          sans-serif;
+      }
+      body {
+        margin: 0;
+        background: #101214;
+        color: #d9ddd8;
+      }
+      main {
+        position: relative;
+        width: min(900px, calc(100vw - 48px));
+        height: min(620px, calc(100vh - 120px));
+        margin: 72px auto 24px;
+        border: 1px solid #394139;
+      }
+      canvas {
+        width: 100%;
+        height: 100%;
+        background: #171a18;
+      }
+      .demo-obstacle {
+        position: absolute;
+        display: grid;
+        place-items: center;
+        border: 1px solid #465249;
+        color: #8d9a90;
+        font-size: 12px;
+        pointer-events: none;
+      }
+      .occluder {
+        background: #202722;
+      }
+      .avoid-outline {
+        border-style: dashed;
+        background: transparent;
+      }
+      .one {
+        top: 13%;
+        left: 10%;
+        width: 30%;
+        height: 22%;
+      }
+      .two {
+        right: 9%;
+        bottom: 12%;
+        width: 36%;
+        height: 27%;
+      }
+      .three {
+        top: 10%;
+        right: 12%;
+        width: 24%;
+        height: 16%;
+      }
+      output {
+        position: fixed;
+        top: 18px;
+        left: 24px;
+      }
+      nav {
+        position: fixed;
+        top: 16px;
+        right: 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <output id="status">loading</output>
+    <nav>
+      <button id="start" type="button">start</button>
+      <button id="stop" type="button">stop</button>
+      <button id="respawn" type="button">respawn</button>
+      <button id="remount" type="button">destroy + remount</button>
+    </nav>
+    <main>
+      <canvas
+        data-beefwife-canvas
+        data-beefwife-manifest="manifest.json"
+        data-beefwife-count="8"
+        data-beefwife-resolution-scale="0.25"
+        data-beefwife-round-vertices="true"
+        data-beefwife-antialias="false"
+        data-beefwife-simulation-fps="60"
+        data-beefwife-draw-fps="24"
+        data-beefwife-targeting="click"
+        data-beefwife-projection-center="canvas"
+        data-beefwife-avoid=".beefwife-avoid"
+      ></canvas>
+      <div class="demo-obstacle occluder beefwife-avoid one">both</div>
+      <div class="demo-obstacle occluder two">occlusion only</div>
+      <div class="demo-obstacle avoid-outline beefwife-avoid three">
+        avoidance only
+      </div>
+    </main>
+    <script>
+      const canvas = document.querySelector("canvas");
+      const status = document.getElementById("status");
+      let runtime = null;
+      canvas.addEventListener("beefwifecanvasready", (event) => {
+        runtime = event.detail.controller;
+        status.value = "ready: click anywhere in the canvas";
+      });
+      canvas.addEventListener("beefwifecanvaserror", (event) => {
+        status.value = event.detail.error.stack || String(event.detail.error);
+      });
+      document
+        .getElementById("start")
+        .addEventListener("click", () => runtime?.start());
+      document
+        .getElementById("stop")
+        .addEventListener("click", () => runtime?.stop());
+      document
+        .getElementById("respawn")
+        .addEventListener("click", () => runtime?.respawn());
+      document.getElementById("remount").addEventListener("click", () => {
+        runtime?.destroy();
+        runtime = null;
+        status.value = "remounting";
+        BeefwifeCanvas.mount(canvas).catch((error) => {
+          status.value = error.stack || String(error);
+        });
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.19.0/dist/pixi.min.js"></script>
+    <script src="../../terrain/terrain.js"></script>
+    <script src="../../beefwife/beefwife-descriptor.js"></script>
+    <script src="../../beefwife/beefwife-model.js"></script>
+    <script src="../../beefwife/beefwife-drive.js"></script>
+    <script src="../../beefwife/beefwife-body.js"></script>
+    <script src="../../beefwife/beefwife-legs.js"></script>
+    <script src="../../beefwife/beefwife-skin.js"></script>
+    <script src="../../beefwife/beefwife-graphics.js"></script>
+    <script src="../../beefwife/beefwife.js"></script>
+    <script src="../../beefwife-canvas/beefwife-canvas-path.js"></script>
+    <script src="../../beefwife-canvas/beefwife-canvas-steering.js"></script>
+    <script src="../../beefwife-canvas/beefwife-canvas-actor.js"></script>
+    <script src="../../beefwife-canvas/beefwife-canvas-options.js"></script>
+    <script src="../../beefwife-canvas/beefwife-canvas-targeting.js"></script>
+    <script src="../../beefwife-canvas/beefwife-canvas-render.js"></script>
+    <script src="../../beefwife-canvas/beefwife-canvas-runtime.js"></script>
+    <script src="../../beefwife-canvas/beefwife-canvas-cast.js"></script>
+    <script src="../../beefwife-canvas/beefwife-canvas.js"></script>
+  </body>
+</html>
