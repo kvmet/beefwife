@@ -1,9 +1,20 @@
-// A few representable steps keep generated geometry off closed DOMRect edges.
-const meshGuard = (value) =>
-  Math.max(1, Math.abs(value)) * Number.EPSILON * 16;
-const below = (value) => value - meshGuard(value);
-const above = (value) => value + meshGuard(value);
-
+var Terrain = (() => {
+const NEXT_BUFFER = new ArrayBuffer(8);
+const NEXT_VIEW = new DataView(NEXT_BUFFER);
+const nextFloat = (value, up) => {
+  if (value === 0) return up ? Number.MIN_VALUE : -Number.MIN_VALUE;
+  NEXT_VIEW.setFloat64(0, value);
+  let bits = NEXT_VIEW.getBigUint64(0);
+  bits += (value > 0) === up ? 1n : -1n;
+  NEXT_VIEW.setBigUint64(0, bits);
+  return NEXT_VIEW.getFloat64(0);
+};
+const outside = (value, up) => {
+  for (let i = 0; i < 2; i++) value = nextFloat(value, up);
+  return value;
+};
+const below = (value) => outside(value, false);
+const above = (value) => outside(value, true);
 // Defaults for any option the constructor's options object leaves unset.
 const TERRAIN_CONFIG = Object.freeze({
   avoid: ".beefwife-avoid", // elements that are out of bounds
@@ -11,35 +22,26 @@ const TERRAIN_CONFIG = Object.freeze({
   obstaclePadding: 0, // px grown around each keep-out rect
   funnel: true, // pull a route taut, instead of a point at every gate crossed
 });
-
 const TERRAIN_OPTIONS = new Set(
   ["avoid", "edgeMargin", "funnel", "obstaclePadding", "root", "viewport"],
 );
-
 const finite = (value, path) => {
   if (typeof value !== "number" || !Number.isFinite(value))
     throw new TypeError(`${path} must be a finite number`);
   return value;
 };
-
 const point = (value, path) => {
   if (!value || typeof value !== "object")
     throw new TypeError(`${path} must contain finite x and y coordinates`);
   return { x: finite(value.x, `${path}.x`), y: finite(value.y, `${path}.y`) };
 };
-
 const optionsOf = (supplied) => {
-  if (
-    supplied === null ||
-    typeof supplied !== "object" ||
-    Array.isArray(supplied)
-  )
+  if (supplied === null || typeof supplied !== "object" || Array.isArray(supplied))
     throw new TypeError("options must be an object");
   for (const key of Object.keys(supplied)) {
     if (!TERRAIN_OPTIONS.has(key))
       throw new TypeError(`options.${key} is unknown`);
   }
-
   const options = { ...TERRAIN_CONFIG, ...supplied };
   for (const key of ["edgeMargin", "obstaclePadding"]) {
     finite(options[key], `options.${key}`);
@@ -54,9 +56,7 @@ const optionsOf = (supplied) => {
     avoidType !== "function" &&
     !options.avoid?.[Symbol.iterator]
   )
-    throw new TypeError(
-      "options.avoid must be a selector, iterable, or function",
-    );
+    throw new TypeError("options.avoid must be a selector, iterable, or function");
   if (
     options.root !== undefined &&
     typeof options.root?.querySelectorAll !== "function"
@@ -71,11 +71,9 @@ const optionsOf = (supplied) => {
     throw new TypeError("options.viewport must be a rectangle or function");
   return Object.freeze(options);
 };
-
 /** Twice the signed area of a triangle. Sign says which side of ab c is on. */
 const cross2 = (a, b, c) =>
   (c.x - a.x) * (b.y - a.y) - (b.x - a.x) * (c.y - a.y);
-
 const minHeapPush = (nodes, scores, node, score) => {
   let i = nodes.length;
   nodes.push(node);
@@ -90,7 +88,6 @@ const minHeapPush = (nodes, scores, node, score) => {
   nodes[i] = node;
   scores[i] = score;
 };
-
 const minHeapPop = (nodes, scores) => {
   const root = nodes[0];
   const node = nodes.pop();
@@ -112,23 +109,15 @@ const minHeapPop = (nodes, scores) => {
   scores[i] = score;
   return root;
 };
-
-var Terrain = class Terrain {
+class Terrain {
   constructor(options = {}) {
     this.options = optionsOf(options);
-    this._built = false;
-    this.rects = [];
-    this.x0 = this.y0 = this.x1 = this.y1 = 0;
-    this.cells = [];
-    this.gates = [];
-    this.width = this.height = 0;
-    this.viewport = { left: 0, top: 0, width: 0, height: 0 };
+    this._reset();
   }
 
   get ready() {
     return this._built && this.cells.length > 0;
   }
-
   build() {
     this._reset();
     const viewport = this._viewport();
@@ -145,7 +134,6 @@ var Terrain = class Terrain {
     this._built = true;
     return this;
   }
-
   avoidElements() {
     let source = this.options.avoid;
     const supplied = typeof source === "function";
@@ -161,7 +149,6 @@ var Terrain = class Terrain {
       throw new TypeError("options.avoid() must return an iterable");
     return Array.from(source);
   }
-
   _viewport() {
     const configured = this.options.viewport;
     if (configured !== undefined) {
@@ -191,17 +178,16 @@ var Terrain = class Terrain {
       throw new RangeError("viewport width and height must be nonnegative");
     return viewport;
   }
-
   _reset() {
     this._built = false;
     this.rects = [];
     this.cells = [];
+    this.slabs = [];
     this.gates = [];
     this.x0 = this.y0 = this.x1 = this.y1 = 0;
     this.width = this.height = 0;
     this.viewport = { left: 0, top: 0, width: 0, height: 0 };
   }
-
   /** Snapshot DOMRects so at() and route() never trigger layout. */
   _measure() {
     const out = [];
@@ -216,13 +202,16 @@ var Terrain = class Terrain {
         throw new TypeError(`avoid[${index}] returned an invalid rectangle`);
       for (const side of ["left", "top", "right", "bottom"])
         finite(r[side], `avoid[${index}].${side}`);
-      if (r.right <= r.left || r.bottom <= r.top) return;
+      if (r.right < r.left || r.bottom < r.top)
+        throw new RangeError(`avoid[${index}] rectangle is inverted`);
       const rect = {
         left: r.left - viewport.left - padding,
         top: r.top - viewport.top - padding,
         right: r.right - viewport.left + padding,
         bottom: r.bottom - viewport.top + padding,
       };
+      for (const side of ["left", "top", "right", "bottom"])
+        finite(rect[side], `avoid[${index}].expanded.${side}`);
       if (
         rect.right < 0 ||
         rect.bottom < 0 ||
@@ -234,7 +223,6 @@ var Terrain = class Terrain {
     });
     return out;
   }
-
   _covered(x, y) {
     const list = this.rects;
     for (let i = 0; i < list.length; i++) {
@@ -245,15 +233,15 @@ var Terrain = class Terrain {
     }
     return false;
   }
-
   /** Open y spans on a line through the guarded obstacle mesh. */
   _open(c, out) {
     if (c < this.x0 || c > this.x1) return;
     let open = this.y0;
     const end = this.y1;
+    if (open >= end) return;
     const blocked = [];
     for (const r of this.rects) {
-      if (c >= below(r.left) && c <= above(r.right))
+      if (c > below(r.left) && c < above(r.right))
         blocked.push([below(r.top), above(r.bottom)]);
     }
     blocked.sort((a, b) => a[0] - b[0]);
@@ -265,7 +253,6 @@ var Terrain = class Terrain {
     }
     out.push({ lo: open, hi: end });
   }
-
   at(x, y, result = {}) {
     finite(x, "x");
     finite(y, "y");
@@ -284,27 +271,40 @@ var Terrain = class Terrain {
       result.d = 0;
       return result;
     }
-    let nearD2 = Infinity;
+    let nearD = Infinity;
     let nearX = 0;
     let nearY = 0;
-    for (const cell of this.cells) {
-      const toX = Math.max(cell.left, Math.min(cell.right, x)) - x;
-      const toY = Math.max(cell.lo, Math.min(cell.hi, y)) - y;
-      const d2 = toX * toX + toY * toY;
-      if (d2 < nearD2) {
-        nearD2 = d2;
-        nearX = toX;
-        nearY = toY;
+    for (const slab of this.slabs) {
+      const cells = slab.cells;
+      if (!cells.length) continue;
+      const toX = Math.max(slab.left, Math.min(slab.right, x)) - x;
+      if (Math.abs(toX) >= nearD) continue;
+      let lo = 0;
+      let hi = cells.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (cells[mid].hi < y) lo = mid + 1;
+        else hi = mid;
+      }
+      const first = Math.max(0, lo - 1);
+      const last = Math.min(cells.length - 1, lo);
+      for (let index = first; index <= last; index++) {
+        const cell = cells[index];
+        const toY = Math.max(cell.lo, Math.min(cell.hi, y)) - y;
+        const d = Math.hypot(toX, toY);
+        if (d < nearD) {
+          nearD = d;
+          nearX = toX;
+          nearY = toY;
+        }
       }
     }
-    if (nearD2 === Infinity || nearD2 === 0) return null;
-    const d = Math.sqrt(nearD2);
-    result.dx = nearX / d;
-    result.dy = nearY / d;
-    result.d = d;
+    if (nearD === Infinity || nearD === 0) return null;
+    result.dx = nearX / nearD;
+    result.dy = nearY / nearD;
+    result.d = above(nearD);
     return result;
   }
-
   /**
    * Cuts just outside every x edge make occupancy constant within each slab.
    * The small floating-point guard keeps closed obstacle edges out of cells.
@@ -318,6 +318,7 @@ var Terrain = class Terrain {
     }
     cuts.sort((a, b) => a - b);
     this.cells = [];
+    this.slabs = [];
     this.gates = [];
     let behind = [];
     for (let i = 0; i < cuts.length - 1; i++) {
@@ -325,18 +326,29 @@ var Terrain = class Terrain {
       const right = cuts[i + 1];
       if (right <= left) continue;
       const spans = [];
-      this._open((left + right) / 2, spans);
+      this._open(left / 2 + right / 2, spans);
       const slab = [];
       for (const s of spans) {
         const cell = { left, right, lo: s.lo, hi: s.hi, gates: [] };
         this.cells.push(cell);
         slab.push(cell);
       }
-      behind.forEach((a) => slab.forEach((b) => this._gate(a, b)));
+      this.slabs.push({ left, right, cells: slab });
+      this._connect(behind, slab);
       behind = slab;
     }
   }
-
+  _connect(left, right) {
+    let i = 0;
+    let j = 0;
+    while (i < left.length && j < right.length) {
+      const a = left[i];
+      const b = right[j];
+      this._gate(a, b);
+      if (a.hi <= b.hi) i++;
+      if (b.hi <= a.hi) j++;
+    }
+  }
   _gate(a, b) {
     const lo = Math.max(a.lo, b.lo);
     const hi = Math.min(a.hi, b.hi);
@@ -349,67 +361,84 @@ var Terrain = class Terrain {
       hi,
       low: { x, y: lo },
       high: { x, y: hi },
-      mid: { x, y: (lo + hi) / 2 },
+      mid: { x, y: lo / 2 + hi / 2 },
       a, b,
     };
     a.gates.push(gate);
     b.gates.push(gate);
     this.gates.push(gate);
   }
-
   _land(p) {
     const f = this.at(p.x, p.y);
     if (!f) return null;
     if (f.d === 0) return { x: p.x, y: p.y };
     return { x: p.x + f.dx * f.d, y: p.y + f.dy * f.d };
   }
-
-  /** Nearest mesh cell reachable without crossing a keep-out. */
   _seat(p) {
+    for (const slab of this.slabs) {
+      if (p.x < slab.left || p.x > slab.right) continue;
+      let lo = 0;
+      let hi = slab.cells.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (slab.cells[mid].hi < p.y) lo = mid + 1;
+        else hi = mid;
+      }
+      const cell = slab.cells[lo];
+      if (cell && p.y >= cell.lo)
+        return { cell, point: { x: p.x, y: p.y } };
+    }
     let best = null;
     let bestD = Infinity;
     for (const cell of this.cells) {
-      const point = {
-        x: Math.max(cell.left, Math.min(cell.right, p.x)),
-        y: Math.max(cell.lo, Math.min(cell.hi, p.y)),
-      };
-      const d = (point.x - p.x) ** 2 + (point.y - p.y) ** 2;
+      const x = Math.max(cell.left, Math.min(cell.right, p.x));
+      const y = Math.max(cell.lo, Math.min(cell.hi, p.y));
+      const d = (x - p.x) ** 2 + (y - p.y) ** 2;
       if (d === 0) return { cell, point: { x: p.x, y: p.y } };
-      if (d < bestD && this._visible(p, point)) {
+      if (d >= bestD) continue;
+      const point = { x, y };
+      if (this._visible(p, point)) {
         bestD = d;
         best = { cell, point };
       }
     }
     return best;
   }
-
   _visible(a, b) {
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     for (const r of this.rects) {
+      if (
+        Math.max(a.x, b.x) < r.left ||
+        Math.min(a.x, b.x) > r.right ||
+        Math.max(a.y, b.y) < r.top ||
+        Math.min(a.y, b.y) > r.bottom
+      )
+        continue;
       let enter = 0;
       let leave = 1;
-      const sides = [
-        [-dx, a.x - r.left],
-        [dx, r.right - a.x],
-        [-dy, a.y - r.top],
-        [dy, r.bottom - a.y],
-      ];
-      let misses = false;
-      for (const [step, room] of sides) {
-        if (step === 0) {
-          if (room < 0) misses = true;
-          continue;
-        }
-        const at = room / step;
-        if (step < 0) enter = Math.max(enter, at);
-        else leave = Math.min(leave, at);
+      if (dx === 0) {
+        if (a.x < r.left || a.x > r.right) continue;
+      } else {
+        const left = (r.left - a.x) / dx;
+        const right = (r.right - a.x) / dx;
+        enter = Math.max(enter, Math.min(left, right));
+        leave = Math.min(leave, Math.max(left, right));
+        if (enter > leave) continue;
       }
-      if (!misses && enter <= leave) return false;
+      if (dy === 0) {
+        if (a.y < r.top || a.y > r.bottom) continue;
+      } else {
+        const top = (r.top - a.y) / dy;
+        const bottom = (r.bottom - a.y) / dy;
+        enter = Math.max(enter, Math.min(top, bottom));
+        leave = Math.min(leave, Math.max(top, bottom));
+        if (enter > leave) continue;
+      }
+      return false;
     }
     return true;
   }
-
   /**
    * A* over directed gate crossings. 2 * id enters a; 2 * id + 1 enters b.
    * Costs and the Euclidean goal heuristic use gate centers; the funnel only
@@ -437,7 +466,6 @@ var Terrain = class Terrain {
       const k = minHeapPop(heapNodes, heapScores);
       if (done[k]) continue;
       done[k] = 1;
-
       const gate = this.gates[k >> 1];
       const cell = k & 1 ? gate.b : gate.a;
       if (cell === to) {
@@ -468,8 +496,6 @@ var Terrain = class Terrain {
     }
     return null;
   }
-
-  /** Shortest path through the gates; reverse crossings swap portal sides. */
   _taut(start, crossings, goal) {
     const out = [start];
     let apex = start;
@@ -490,7 +516,6 @@ var Terrain = class Terrain {
           ? crossing.gate.low
           : crossing.gate.high
         : goal;
-
       if (cross2(apex, right, gateRight) <= 0) {
         if (right === apex || cross2(apex, left, gateRight) > 0) {
           right = gateRight;
@@ -527,7 +552,6 @@ var Terrain = class Terrain {
     out.push(goal);
     return out;
   }
-
   /**
    * A route between landed endpoints, seated into the free-space mesh when
    * needed. `funnel` keeps only turns; disabling it keeps gate centers.
@@ -535,7 +559,7 @@ var Terrain = class Terrain {
   route(a, b) {
     const inputStart = point(a, "a");
     const inputGoal = point(b, "b");
-    if (!this.ready || !this.cells.length) return null;
+    if (!this.ready) return null;
     const landedStart = this._land(inputStart);
     const landedGoal = this._land(inputGoal);
     if (!landedStart || !landedGoal) return null;
@@ -565,10 +589,11 @@ var Terrain = class Terrain {
         p.y !== route[i - 1].y,
     );
   }
-};
-
-Object.defineProperties(Terrain, {
-  DEFAULTS: { value: TERRAIN_CONFIG, enumerable: true },
+}
+Object.defineProperty(Terrain, "DEFAULTS", {
+  value: TERRAIN_CONFIG,
+  enumerable: true,
 });
-
+return Terrain;
+})();
 if (typeof module !== "undefined" && module.exports) module.exports = Terrain;

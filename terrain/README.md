@@ -83,14 +83,15 @@ It lands both inputs, then returns an array containing the landed endpoints and
 any necessary waypoints. It returns `null` when no route exists.
 
 Routing uses a rectangular slab graph cut just outside the left and right edges
-of each keep-out. Generated geometry is moved a few representable floating-point
-steps outward so it cannot lie on, and therefore occlude itself against, a
-closed DOMRect edge. This numerical guard is not a visible offset or a
+of each keep-out. Generated geometry is moved two adjacent floating-point values
+outward so it cannot lie on, and therefore occlude itself against, a closed
+DOMRect edge. This numerical guard is not a visible offset or a
 minimum-clearance policy: an input point or unobstructed direct segment is legal
 anywhere outside the closed rectangles, and gaps larger than floating-point
 roundoff remain in the mesh. Use `obstaclePadding` when real geometric clearance
-is required. Overlapping rectangles are supported. This is an axis-aligned
-DOMRect router, not a general polygon or trapezoidal decomposition.
+is required. Overlapping rectangles and zero-width or zero-height lines and
+points are supported. This is an axis-aligned DOMRect router, not a general
+polygon or trapezoidal decomposition.
 
 ## Check
 

@@ -35,11 +35,19 @@ vm.createContext(context);
 vm.runInContext(source, context);
 assert.equal(context.Terrain.name, "Terrain");
 assert.equal(context.window.Terrain, context.Terrain);
+vm.runInContext(source, context);
+assert.equal(context.Terrain.name, "Terrain");
 vm.runInContext(
   "this.browserTerrain = new Terrain({ edgeMargin: 0 }).build()",
   context,
 );
 assert.equal(context.browserTerrain.ready, true);
+const collision = { window: null, document: context.document };
+collision.window = collision;
+vm.createContext(collision);
+vm.runInContext("const finite = 1; const point = 2;", collision);
+vm.runInContext(source, collision);
+assert.equal(collision.Terrain.name, "Terrain");
 
 const element = (rect, count = null) => ({
   getBoundingClientRect() {
@@ -70,6 +78,13 @@ const covered = (terrain, point) =>
   );
 
 const hits = (a, b, rect) => {
+  if (
+    Math.max(a.x, b.x) < rect.left ||
+    Math.min(a.x, b.x) > rect.right ||
+    Math.max(a.y, b.y) < rect.top ||
+    Math.min(a.y, b.y) > rect.bottom
+  )
+    return false;
   let enter = 0;
   let leave = 1;
   for (const [start, step, low, high] of [
@@ -257,6 +272,21 @@ assert.equal(noSpace.ready, false);
 assert.equal(noSpace.at(5, 5), null);
 assert.equal(noSpace.route({ x: 1, y: 1 }, { x: 9, y: 9 }), null);
 
+for (const viewport of [
+  { width: 0, height: 10 },
+  { width: 10, height: 0 },
+  { width: 20, height: 10, edgeMargin: 5 },
+]) {
+  const { edgeMargin = 0, ...bounds } = viewport;
+  const collapsed = new Terrain({
+    avoid: [],
+    edgeMargin,
+    viewport: bounds,
+  }).build();
+  assert.equal(collapsed.ready, false);
+  assert.equal(collapsed.at(0, 0), null);
+}
+
 const badRect = { left: 1, top: 1, right: 2, bottom: 2 };
 const transactional = new Terrain({
   avoid: [element(badRect)],
@@ -282,6 +312,10 @@ assert.throws(
     new Terrain({ avoid: [], viewport: () => null }).build(),
   /must be a rectangle/,
 );
+assert.throws(
+  () => build([{ left: 2, top: 1, right: 1, bottom: 2 }]),
+  /rectangle is inverted/,
+);
 
 const overlap = build([
   { left: 0, top: 0, right: 10, bottom: 100 },
@@ -304,21 +338,47 @@ assert.equal(
 const wall = build([{ left: 80, top: -10, right: 100, bottom: 150 }]);
 assert.equal(wall.route({ x: 10, y: 70 }, { x: 170, y: 70 }), null);
 
+const verticalLine = build([
+  { left: 90, top: -10, right: 90, bottom: 150 },
+]);
+assert.equal(verticalLine.route({ x: 10, y: 70 }, { x: 170, y: 70 }), null);
+const horizontalLine = build([
+  { left: -10, top: 70, right: 190, bottom: 70 },
+]);
+assert.equal(horizontalLine.route({ x: 90, y: 10 }, { x: 90, y: 130 }), null);
+const pointObstacle = build([
+  { left: 90, top: 70, right: 90, bottom: 70 },
+]);
+const aroundPoint = pointObstacle.route(
+  { x: 10, y: 70 },
+  { x: 170, y: 70 },
+);
+assert.equal(safe(pointObstacle, aroundPoint), true);
+assert.equal(aroundPoint.length > 2, true);
+
 const touching = build([{ left: -10, top: 40, right: 0, bottom: 100 }]);
 const touchedEdge = land(touching, { x: 0, y: 70 });
 assert.equal(touchedEdge.x > 0, true);
 assert.equal(covered(touching, touchedEdge), false);
 
+const floatBuffer = new ArrayBuffer(8);
+const floatView = new DataView(floatBuffer);
+const nextUp = (value) => {
+  floatView.setFloat64(0, value);
+  floatView.setBigUint64(0, floatView.getBigUint64(0) + 1n);
+  return floatView.getFloat64(0);
+};
+const narrowRight = nextUp(nextUp(nextUp(nextUp(nextUp(80)))));
 const narrowRects = [
   { left: 20, top: 20, right: 80, bottom: 120 },
-  { left: 80.00000001, top: 20, right: 160, bottom: 120 },
+  { left: narrowRight, top: 20, right: 160, bottom: 120 },
 ];
 for (const funnel of [false, true]) {
   const narrow = build(narrowRects, { funnel });
   const route = narrow.route({ x: 79.8, y: 10 }, { x: 79.8, y: 130 });
   assert.equal(safe(narrow, route), true);
   assert.equal(
-    route.some((point) => point.x > 80 && point.x < 80.00000001),
+    route.some((point) => point.x > 80 && point.x < narrowRight),
     true,
   );
 }
@@ -391,7 +451,7 @@ for (let world = 0; world < 250; world++) {
 
       const route = terrain.route(a, b);
       if (!route) continue;
-      assert.equal(safe(terrain, route), true);
+      assert.equal(safe(terrain, route), true, JSON.stringify({ a, b, route, rects }));
       assert.equal(same(route[0], start), true);
       assert.equal(same(route[route.length - 1], goal), true);
       if (clear(terrain, start, goal)) {
