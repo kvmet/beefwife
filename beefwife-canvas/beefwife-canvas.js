@@ -76,7 +76,6 @@ const BeefwifeCanvas = (() => {
           castWeights,
           count,
           debug: {
-            navigation: this.options.debugNavigation,
             routes: this.options.debugRoutes,
             targets: this.options.debugTargets,
             terrain: this.options.debugTerrain,
@@ -193,7 +192,7 @@ const BeefwifeCanvas = (() => {
       return this;
     }
 
-    getBeefwives() {
+    getActors() {
       const host = this._host();
       const active = new Set(host.actors);
       for (const actor of this.handles.keys()) {
@@ -409,8 +408,8 @@ const BeefwifeCanvas = (() => {
         controller.respawn();
         return facade;
       },
-      getBeefwives() {
-        return controller.getBeefwives();
+      getActors() {
+        return controller.getActors();
       },
     });
     return facade;

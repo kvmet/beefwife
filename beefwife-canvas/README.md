@@ -111,7 +111,7 @@ const runtime = await BeefwifeCanvas.mount(canvas, {
 });
 
 runtime.setTarget({ x: 300, y: 180 });
-runtime.getBeefwives()[0].setTarget({ x: 80, y: 120 });
+runtime.getActors()[0].setTarget({ x: 80, y: 120 });
 ```
 
 `mount` resolves a frozen runtime handle. `BeefwifeCanvas.get(canvas)` and the
@@ -122,7 +122,10 @@ so `get(canvas)` then returns `null` and a new mount can begin.
 The lifecycle methods are `start()`, `stop()`, `destroy()`, `setCount(count)`,
 `setTimeScale(scale)`, `setTarget(point)`, `clearTarget()`,
 `setTargetMode(mode)`, `setPointerInput(input)`, `setDebug(flags)`,
-`refreshTerrain()`, `respawn()`, and `getBeefwives()`.
+`refreshTerrain()`, `respawn()`, and `getActors()`.
+`getActors()` returns frozen Canvas control handles with stable `id` and `name`
+fields plus `getPose()`, target, mode, and respawn methods; it does not expose
+the host's mutable actor or route objects.
 Targets and poses use canvas-local CSS pixels. Target policy and DOM input are
 independent. `targetMode` is `wander` or `manual`; `pointerInput` is `none`,
 `click`, or `move`. A click or pointer movement merely supplies a target and
@@ -146,27 +149,26 @@ Performance and appearance options are `resolutionScale`, `roundVertices`,
 `filters`. Knee perspective affects leg-knee rendering only; planted feet and
 the simulated body are unchanged. `kneeProjectionCenter` is
 `canvas` by default; `viewport` makes separate canvases share one apparent
-knee-projection field. `resolutionScale` defaults to 0.25, its minimum, so
-quarter resolution costs a sixteenth of the fill work. `imageRendering`
-independently selects `pixelated` (the default) or `auto`, allowing either
-interpolation style at any resolution. For color effects, pass a configured
-`PIXI.ColorMatrixFilter` in `filters`.
+knee-projection field. `resolutionScale` accepts 0.125 through 1 and defaults
+to 0.25, where quarter resolution costs a sixteenth of the fill work.
+`imageRendering` independently selects `pixelated` (the default) or `auto`,
+allowing either interpolation style at any resolution. For color effects, pass
+a configured `PIXI.ColorMatrixFilter` in `filters`.
 
 Debug rendering is off by default. The boolean options `debugTargets`,
-`debugRoutes`, `debugTerrain`, and `debugNavigation` show destination
-crosshairs, waypoint paths, avoidance bounds, and navigation cells and gates,
-respectively. Their declarative forms are
+`debugRoutes`, and `debugTerrain` show destination crosshairs, waypoint paths,
+and avoidance bounds, respectively. Their declarative forms are
 `data-beefwife-debug-targets`, `data-beefwife-debug-routes`,
-`data-beefwife-debug-terrain`, and `data-beefwife-debug-navigation`. Toggle
-layers after mounting with a partial update:
+and `data-beefwife-debug-terrain`. Toggle layers after mounting with a partial
+update:
 
 ```js
 runtime.setDebug({ targets: true, routes: true });
-runtime.setDebug({ routes: false, terrain: true, navigation: true });
+runtime.setDebug({ routes: false, terrain: true });
 ```
 
-Terrain and navigation draw below the beefwives; routes and targets draw above
-them. These layers are diagnostic and do not affect routing or simulation.
+Terrain draws below the beefwives; routes and targets draw above them. These
+layers are diagnostic and do not affect routing or simulation.
 
 Simulation and routing options are `timeScale`, `wanderDelay`, `edgeMargin`,
 `obstaclePadding`, `waypointRadius`, `arrivalRadius`, `throttleEase`,
@@ -174,8 +176,8 @@ Simulation and routing options are `timeScale`, `wanderDelay`, `edgeMargin`,
 closely an intermediate corner must be followed, while `arrivalRadius`
 controls final-target satisfaction; both default to 10 CSS pixels.
 `wanderDelay` defaults to 4 seconds and may be zero.
-`avoid` is a selector for obstacle elements and defaults to
-`.beefwife-avoid`. Call
+`avoid` defaults to `.beefwife-avoid`, `edgeMargin` defaults to 25, and
+`obstaclePadding` defaults to zero CSS pixels. Call
 `refreshTerrain()` after transform-only obstacle movement because a
 `ResizeObserver` cannot see it. `pauseHidden` and `pauseOffscreen` default to
 true.

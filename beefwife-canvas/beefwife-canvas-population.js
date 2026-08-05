@@ -39,6 +39,7 @@ const BeefwifeCanvasPopulation = (() => {
       this.targetMode = targetModeOf(options.targetMode || "wander");
       this.wanderDelay = wanderDelayOf(options.wanderDelay ?? 4);
       this.actors = [];
+      this.renderSnapshots = [];
       this.targetPolicies = new Map();
       const count = options.count === undefined ? 3 : countOf(options.count);
       this.pending = Array(count).fill(null);
@@ -148,6 +149,13 @@ const BeefwifeCanvasPopulation = (() => {
     update(dt, timeScale) {
       for (let index = 0; index < this.actors.length; index++)
         this.actors[index].update(dt, timeScale);
+    }
+
+    renderState() {
+      this.renderSnapshots.length = this.actors.length;
+      for (let index = 0; index < this.actors.length; index++)
+        this.renderSnapshots[index] = this.actors[index].renderState();
+      return this.renderSnapshots;
     }
 
     destroy() {

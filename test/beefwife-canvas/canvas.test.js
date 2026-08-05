@@ -202,7 +202,7 @@ vm.runInContext(
   assert.equal(created.options.count, 5);
   assert.equal(
     JSON.stringify(created.options.debug),
-    '{"navigation":false,"routes":true,"targets":true,"terrain":false}',
+    '{"routes":true,"targets":true,"terrain":false}',
   );
   assert.equal(created.options.targetMode, "manual");
   assert.equal(created.options.imageRendering, "pixelated");
@@ -221,9 +221,15 @@ vm.runInContext(
   assert.equal(await runtime.ready, runtime);
   assert.equal("arrivalRadius" in created.options.roam, false);
   assert.equal("waypointRadius" in created.options.roam, false);
-  assert.equal(created.options.terrain.avoid, undefined);
-  assert.deepEqual(Object.keys(created.options.terrain), []);
-  checks += 8;
+  assert.equal(created.options.terrain.avoid, ".beefwife-avoid");
+  assert.equal(created.options.terrain.edgeMargin, 25);
+  assert.equal(created.options.terrain.obstaclePadding, 0);
+  assert.deepEqual(Object.keys(created.options.terrain), [
+    "avoid",
+    "edgeMargin",
+    "obstaclePadding",
+  ]);
+  checks += 10;
 
   canvas.dispatchEvent({ type: "click", clientX: 340, clientY: 250 });
   assert.equal(calls.at(-1)[0], "setTarget");
@@ -256,7 +262,7 @@ vm.runInContext(
     .stop()
     .setCount(3)
     .setTimeScale(0.5)
-    .setDebug({ navigation: true })
+    .setDebug({ routes: false })
     .refreshTerrain();
   assert.equal(canvas.dataset.beefwifeState, "stopped");
   assert.deepEqual(
@@ -272,7 +278,8 @@ vm.runInContext(
   );
   checks += 16;
 
-  const handle = runtime.getBeefwives()[0];
+  const handle = runtime.getActors()[0];
+  assert.equal(runtime.getBeefwives, undefined);
   assert.equal(handle.name, "a");
   assert.deepEqual(handle.getPose(), { head: { x: 4, y: 5 } });
   assert.equal(handle.setTarget({ x: 12, y: 14 }), handle);
@@ -281,7 +288,7 @@ vm.runInContext(
   assert.equal(handle.clearTarget(), handle);
   assert.equal(handle.respawn(), handle);
   assert.equal(handle.host, undefined);
-  checks += 7;
+  checks += 8;
 
   runtime.destroy();
   assert.equal(created.host.destroyed, true);
@@ -295,7 +302,7 @@ vm.runInContext(
     autoStart: false,
     descriptors: [{ name: "again" }],
   });
-  assert.equal(remounted.getBeefwives()[0].name, "again");
+  assert.equal(remounted.getActors()[0].name, "again");
   remounted.destroy();
   checks++;
 
@@ -322,7 +329,7 @@ vm.runInContext(
     autoStart: false,
     descriptors: [{ name: "ok" }],
   });
-  assert.equal(recovered.getBeefwives()[0].name, "ok");
+  assert.equal(recovered.getActors()[0].name, "ok");
   recovered.destroy();
   checks += 7;
 
@@ -353,7 +360,7 @@ vm.runInContext(
     autoStart: false,
     descriptors: [{ name: "corrected" }],
   });
-  assert.equal(corrected.getBeefwives()[0].name, "corrected");
+  assert.equal(corrected.getActors()[0].name, "corrected");
   corrected.destroy();
   checks += 7;
 

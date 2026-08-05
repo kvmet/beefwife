@@ -164,7 +164,10 @@ assert.equal(toleranceRoute.satisfied, true);
 checks += 3;
 
 const terrain = { x0: 0, y0: 0, x1: 800, y1: 600 };
-const router = { randomPoint: () => ({ x: 90, y: 70 }) };
+const router = {
+  randomPoint: () => ({ x: 90, y: 70 }),
+  viewport: () => ({ width: 800, height: 600 }),
+};
 const actor = new BeefwifeCanvasActor(terrain, router, descriptor);
 assert.ok(actor.beefwife instanceof Beefwife);
 const firstBeefwife = actor.beefwife;
@@ -411,16 +414,22 @@ const classicBoundary = async () => {
     browser,
   );
   assert.equal(browser.layer.scene.dpr, 1);
-  assert.equal(browser.layer.terrain.options.edgeMargin, 25);
+  assert.equal(
+    browser.layer.terrain.options.edgeMargin,
+    browser.Terrain.DEFAULTS.edgeMargin,
+  );
   assert.equal(browser.layer.terrain.options.obstaclePadding, 0);
   assert.equal(browser.layer.debug.targets, true);
   assert.equal(browser.layer.debug.routes, false);
-  browser.layer.setDebug({ navigation: true, routes: true });
-  assert.equal(browser.layer.debug.navigation, true);
+  browser.layer.setDebug({ routes: true });
   assert.equal(browser.layer.debug.routes, true);
   assert.throws(
     () => browser.layer.setDebug({ unknown: true }),
     /debug\.unknown is unknown/,
+  );
+  assert.throws(
+    () => browser.layer.setDebug({ navigation: true }),
+    /debug\.navigation is unknown/,
   );
   assert.throws(
     () => browser.layer.setDebug({ terrain: 1 }),
@@ -436,6 +445,9 @@ const classicBoundary = async () => {
     log.filter(([operation]) => operation === "observer-observe").length,
     1,
   );
+  browser.layer.setDebug({ terrain: true });
+  assert.equal(browser.layer.terrainView.rectangles.length, 1);
+  assert.equal(browser.layer.terrainView.bounds.right, 640);
   assert.equal(browser.layer.scene.canvas.style.imageRendering, "auto");
   browser.layer.setCount(1);
   browser.layer._draw();
@@ -479,10 +491,9 @@ const classicBoundary = async () => {
     140,
   );
   assert.equal(embeddedCanvas.style.imageRendering, "pixelated");
-  assert.equal(browser.embeddedLayer.terrain.viewport.left, 0);
   browser.embeddedLayer.refreshTerrain();
-  assert.equal(browser.embeddedLayer.terrain.viewport.left, 100);
-  assert.equal(browser.embeddedLayer.terrain.width, 300);
+  assert.equal(browser.embeddedLayer.router.viewport().width, 300);
+  assert.equal(browser.embeddedLayer.router.viewport().height, 200);
   browser.embeddedLayer.destroy();
   assert.ok(!log.some(([operation]) => operation === "embedded-remove"));
 
@@ -507,6 +518,15 @@ const classicBoundary = async () => {
   );
   assert.equal(browser.renderTicks, 3);
 
+  [0.125, 0.2, 1].forEach((resolutionScale) => {
+    browser.goodValue = resolutionScale;
+    assert.doesNotThrow(() =>
+      vm.runInContext(
+        "new BeefwifeCanvasRuntime({ resolutionScale: goodValue })",
+        browser,
+      ),
+    );
+  });
   [0.1, 1.1, Infinity].forEach((resolutionScale) => {
     browser.badValue = resolutionScale;
     assert.throws(
@@ -525,7 +545,7 @@ const classicBoundary = async () => {
   browser.layer.destroy();
   assert.ok(log.some(([operation]) => operation === "remove"));
   assert.ok(log.some(([operation]) => operation === "destroy"));
-  return 38;
+  return 42;
 };
 
 (async () => {

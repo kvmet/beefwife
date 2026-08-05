@@ -38,6 +38,12 @@ class BeefwifeCanvasActor {
     this.route = newRoute();
     this.planner = options.planner || router;
     this.throttle = 1;
+    this.renderSnapshot = {
+      display: null,
+      head: null,
+      route: null,
+      target: null,
+    };
     this.spawn();
   }
 
@@ -47,11 +53,11 @@ class BeefwifeCanvasActor {
    * and ornaments start settled.
    */
   spawn(at, heading) {
-    const terrain = this.terrain;
+    const viewport = this.router.viewport();
     const where = at ||
       this.router.randomPoint() || {
-        x: (terrain.x0 + terrain.x1) / 2,
-        y: (terrain.y0 + terrain.y1) / 2,
+        x: viewport.width / 2,
+        y: viewport.height / 2,
       };
     const angle = actorRandomBetween(this.random, 0, Math.PI * 2);
     const bearing = heading || { x: Math.cos(angle), y: Math.sin(angle) };
@@ -73,8 +79,7 @@ class BeefwifeCanvasActor {
 
   /** A carried-off creature returns just inside a random viewport edge. */
   _reentry() {
-    const width = this.terrain.width;
-    const height = this.terrain.height;
+    const { width, height } = this.router.viewport();
     const back = 24;
     const side = Math.floor(actorRandomBetween(this.random, 0, 4));
     if (side === 0)
@@ -105,13 +110,22 @@ class BeefwifeCanvasActor {
   }
 
   _lost(center) {
+    const { width, height } = this.router.viewport();
     const margin = BEEFWIFE_CANVAS_ACTOR_LOST_MARGIN;
     return (
       center.x < -margin ||
       center.y < -margin ||
-      center.x > this.terrain.width + margin ||
-      center.y > this.terrain.height + margin
+      center.x > width + margin ||
+      center.y > height + margin
     );
+  }
+
+  renderState() {
+    this.renderSnapshot.display = this.beefwife;
+    this.renderSnapshot.head = this.beefwife.getPose().head;
+    this.renderSnapshot.route = this.route.path;
+    this.renderSnapshot.target = this.planner?.goal || null;
+    return this.renderSnapshot;
   }
 
   update(dt, timeScale) {

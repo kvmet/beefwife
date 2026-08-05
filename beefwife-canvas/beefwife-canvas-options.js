@@ -9,12 +9,7 @@ const ActorClass =
 if (!ActorClass) throw new Error("BeefwifeCanvasActor must load first");
 
 const BeefwifeCanvasOptions = (() => {
-  const DEBUG_KEYS = new Set([
-    "navigation",
-    "routes",
-    "targets",
-    "terrain",
-  ]);
+  const DEBUG_KEYS = new Set(["routes", "targets", "terrain"]);
   // Step bounds are owned by BeefwifeCanvasActor; the host only re-exposes them.
   const config = {
     MAX_DT: ActorClass.MAX_DT,
@@ -34,7 +29,7 @@ const BeefwifeCanvasOptions = (() => {
   const debugOf = (value, current) => {
     const result = current
       ? { ...current }
-      : { navigation: false, routes: false, targets: false, terrain: false };
+      : { routes: false, targets: false, terrain: false };
     if (value === undefined) return result;
     if (!value || typeof value !== "object" || Array.isArray(value))
       throw new TypeError("debug must be an object");
@@ -47,8 +42,8 @@ const BeefwifeCanvasOptions = (() => {
     return result;
   };
   const resolutionScaleOf = (value) => {
-    if (!Number.isFinite(value) || value < 0.25 || value > 1)
-      throw new RangeError("resolutionScale must be from 0.25 to 1");
+    if (!Number.isFinite(value) || value < 0.125 || value > 1)
+      throw new RangeError("resolutionScale must be from 0.125 to 1");
     return value;
   };
   const imageRenderingOf = (value) => {

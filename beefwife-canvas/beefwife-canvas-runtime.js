@@ -107,9 +107,26 @@ class BeefwifeCanvasRuntime {
     }
     // Terrain and the actors must share canvas-local coordinates for both
     // embedded and viewport-sized scenes.
-    terrainOptions.viewport = () => this.scene.viewportRect();
+    terrainOptions.viewport = () => this.scene.viewport;
     this.terrain = new Terrain(terrainOptions);
-    this.router = new BeefwifeCanvasRouter(this.terrain, random);
+    this.terrainDebugOptions = {
+      edgeMargin:
+        terrainOptions.edgeMargin ?? Terrain.DEFAULTS.edgeMargin,
+      obstaclePadding:
+        terrainOptions.obstaclePadding ?? Terrain.DEFAULTS.obstaclePadding,
+    };
+    this.terrainView = {
+      bounds: { left: 0, top: 0, right: 0, bottom: 0 },
+      rectangles: [],
+    };
+    this.router = new BeefwifeCanvasRouter(
+      this.terrain,
+      () => this.scene.viewport,
+      {
+        edgeMargin: this.terrainDebugOptions.edgeMargin,
+        random,
+      },
+    );
     this.population = new RuntimeBeefwifeCanvasPopulation(
       this.terrain,
       this.router,
@@ -247,7 +264,12 @@ class BeefwifeCanvasRuntime {
 
   setDebug(flags) {
     this._assertActive();
+    const terrainWasVisible = this.debug.terrain;
     this.debug = debugOf(flags, this.debug);
+    if (!terrainWasVisible && this.debug.terrain && this.terrain.ready)
+      this._snapshotTerrain(
+        [...new Set(this.terrain.avoidElements())],
+      );
     if (this.scene.application) this._draw();
     return this;
   }
@@ -282,6 +304,7 @@ class BeefwifeCanvasRuntime {
     // Terrain exposes the measured source for observers. De-duplicate it just
     // as Terrain does so repeated elements do not cause endless reconnects.
     const elements = [...new Set(this.terrain.avoidElements())];
+    if (this.debug.terrain) this._snapshotTerrain(elements);
 
     // Re-observing feeds ResizeObserver's initial callback straight back into
     // scheduleRebuild, so a steady DOM only settles to zero rebuilds if the
@@ -303,6 +326,29 @@ class BeefwifeCanvasRuntime {
   _elementsChanged(elements) {
     if (elements.length !== this.observed.size) return true;
     return elements.some((el) => !this.observed.has(el));
+  }
+
+  _snapshotTerrain(elements) {
+    const viewport = this.scene.viewport;
+    const margin = this.terrainDebugOptions.edgeMargin;
+    const padding = this.terrainDebugOptions.obstaclePadding;
+    const x0 = Math.min(margin, viewport.width / 2);
+    const y0 = Math.min(margin, viewport.height / 2);
+    this.terrainView.bounds = {
+      left: x0,
+      top: y0,
+      right: viewport.width - x0,
+      bottom: viewport.height - y0,
+    };
+    this.terrainView.rectangles = elements.map((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        left: rect.left - viewport.left - padding,
+        top: rect.top - viewport.top - padding,
+        right: rect.right - viewport.left + padding,
+        bottom: rect.bottom - viewport.top + padding,
+      };
+    });
   }
 
   _assertActive() {
@@ -363,7 +409,13 @@ class BeefwifeCanvasRuntime {
     }
   };
 
-  _draw = () => RuntimeBeefwifeCanvasRender.draw(this);
+  _draw = () =>
+    RuntimeBeefwifeCanvasRender.draw({
+      actors: this.population.renderState(),
+      debug: this.debug,
+      scene: this.scene,
+      terrainView: this.terrainView,
+    });
 }
 
 if (typeof module !== "undefined" && module.exports) {

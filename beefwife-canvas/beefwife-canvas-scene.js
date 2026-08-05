@@ -19,6 +19,7 @@ class BeefwifeCanvasScene {
     this.world = null;
     this.displayed = [];
     this.dpr = 1;
+    this.viewport = this.viewportRect(this.canvas);
   }
 
   async initialize() {
@@ -44,6 +45,7 @@ class BeefwifeCanvasScene {
       });
     }
     const viewport = this.viewportRect(canvas);
+    this.viewport = viewport;
     const application = new PIXI.Application();
     await application.init({
       canvas,
@@ -101,6 +103,7 @@ class BeefwifeCanvasScene {
   resize() {
     if (!this.application) return;
     const viewport = this.viewportRect();
+    this.viewport = viewport;
     this.dpr =
       Math.min(window.devicePixelRatio || 1, this.maxPixelRatio) *
       this.resolutionScale;
@@ -119,15 +122,14 @@ class BeefwifeCanvasScene {
     this.application.renderer.resize(viewport.width, viewport.height);
   }
 
-  syncActors(actors) {
-    const current = actors.map((actor) => actor.beefwife);
-    const currentSet = new Set(current);
+  syncDisplays(displays) {
+    const currentSet = new Set(displays);
     for (const beefwife of this.displayed) {
       if (!currentSet.has(beefwife) && !beefwife.destroyed) beefwife.destroy();
     }
-    for (let index = 0; index < current.length; index++)
-      this.world.addChildAt(current[index], index);
-    this.displayed = current;
+    for (let index = 0; index < displays.length; index++)
+      this.world.addChildAt(displays[index], index);
+    this.displayed = displays.slice();
   }
 
   render() {

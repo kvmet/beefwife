@@ -1,8 +1,8 @@
 /** Pixi scene synchronization and optional route debugging for BeefwifeCanvasRuntime. */
 
 const BeefwifeCanvasRender = (() => {
-  const drawTerrain = (graphics, terrain) => {
-    for (const rectangle of terrain.rects)
+  const drawTerrain = (graphics, terrainView) => {
+    for (const rectangle of terrainView.rectangles)
       graphics.rect(
         rectangle.left,
         rectangle.top,
@@ -10,33 +10,19 @@ const BeefwifeCanvasRender = (() => {
         rectangle.bottom - rectangle.top,
       );
     graphics.stroke({ color: 0x50dca0, alpha: 0.55, width: 1 });
+    const bounds = terrainView.bounds;
     graphics
       .rect(
-        terrain.x0,
-        terrain.y0,
-        terrain.x1 - terrain.x0,
-        terrain.y1 - terrain.y0,
+        bounds.left,
+        bounds.top,
+        bounds.right - bounds.left,
+        bounds.bottom - bounds.top,
       )
       .stroke({ color: 0x50dca0, alpha: 0.3, width: 1 });
   };
 
-  const drawNavigation = (graphics, terrain) => {
-    for (const cell of terrain.cells)
-      graphics.rect(
-        cell.left,
-        cell.lo,
-        cell.right - cell.left,
-        cell.hi - cell.lo,
-      );
-    graphics.stroke({ color: 0x78a0dc, alpha: 0.35, width: 1 });
-    for (const gate of terrain.gates)
-      graphics.moveTo(gate.x, gate.lo).lineTo(gate.x, gate.hi);
-    graphics.stroke({ color: 0xf0c85a, alpha: 0.8, width: 2 });
-  };
-
   const drawRoute = (graphics, actor) => {
-    const head = actor.beefwife.getPose().head;
-    const path = actor.route.path;
+    const { head, route: path } = actor;
     if (!path.length) return;
     graphics.moveTo(head.x, head.y);
     path.forEach((point) => graphics.lineTo(point.x, point.y));
@@ -49,7 +35,7 @@ const BeefwifeCanvasRender = (() => {
   };
 
   const drawTarget = (graphics, actor) => {
-    const target = actor.planner?.goal;
+    const target = actor.target;
     if (!target) return;
     graphics
       .circle(target.x, target.y, 5)
@@ -62,19 +48,16 @@ const BeefwifeCanvasRender = (() => {
       .stroke({ color: 0xf06c9b, alpha: 0.75, width: 1 });
   };
 
-  const draw = (host) => {
-    const scene = host.scene;
-    scene.syncActors(host.actors);
+  const draw = ({ actors, debug, scene, terrainView }) => {
+    scene.syncDisplays(actors.map((actor) => actor.display));
     scene.debugUnderlay.clear();
     scene.debugOverlay.clear();
-    if (host.debug.terrain) drawTerrain(scene.debugUnderlay, host.terrain);
-    if (host.debug.navigation)
-      drawNavigation(scene.debugUnderlay, host.terrain);
-    if (host.debug.routes)
-      for (const actor of host.actors)
+    if (debug.terrain) drawTerrain(scene.debugUnderlay, terrainView);
+    if (debug.routes)
+      for (const actor of actors)
         drawRoute(scene.debugOverlay, actor);
-    if (host.debug.targets)
-      for (const actor of host.actors)
+    if (debug.targets)
+      for (const actor of actors)
         drawTarget(scene.debugOverlay, actor);
     scene.render();
   };

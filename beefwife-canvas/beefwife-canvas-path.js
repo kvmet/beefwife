@@ -5,19 +5,41 @@
  * moved to the nearest legal point. The run to it is terrain's, which already
  * holds the rectangles and the free space between them.
  *
- *   const router = new BeefwifeCanvasRouter(terrain);
+ *   const router = new BeefwifeCanvasRouter(terrain, viewportOf, options);
  *   router.plan(head);  // [{x, y}, ...], last one the goal, or null
  *   router.planTo(head, target);
  */
 
 class BeefwifeCanvasRouter {
-  constructor(terrain, random = Math.random) {
+  constructor(terrain, viewportOf, options = {}) {
+    if (typeof viewportOf !== "function")
+      throw new TypeError("viewportOf must be a function");
+    const edgeMargin = options.edgeMargin ?? 0;
+    if (!Number.isFinite(edgeMargin) || edgeMargin < 0)
+      throw new RangeError("edgeMargin must be nonnegative");
+    if (options.random !== undefined && typeof options.random !== "function")
+      throw new TypeError("random must be a function");
     this.terrain = terrain;
-    this.random = random;
+    this.viewportOf = viewportOf;
+    this.edgeMargin = edgeMargin;
+    this.random = options.random || Math.random;
   }
 
   get ready() {
-    return this.terrain.ready && this.terrain.cells.length > 0;
+    return this.terrain.ready;
+  }
+
+  viewport() {
+    const viewport = this.viewportOf();
+    if (
+      !viewport ||
+      !Number.isFinite(viewport.width) ||
+      !Number.isFinite(viewport.height) ||
+      viewport.width < 0 ||
+      viewport.height < 0
+    )
+      throw new TypeError("viewport must have nonnegative finite dimensions");
+    return viewport;
   }
 
   /** Somewhere legal to stand, for a creature being put on the page. */
@@ -49,10 +71,13 @@ class BeefwifeCanvasRouter {
   }
 
   _somewhere() {
-    const t = this.terrain;
-    const x = t.x0 + this.random() * (t.x1 - t.x0);
-    const y = t.y0 + this.random() * (t.y1 - t.y0);
-    const at = t.at(x, y);
+    const { width, height } = this.viewport();
+    const x0 = Math.min(this.edgeMargin, width / 2);
+    const y0 = Math.min(this.edgeMargin, height / 2);
+    const x = x0 + this.random() * (width - 2 * x0);
+    const y = y0 + this.random() * (height - 2 * y0);
+    const at = this.terrain.at(x, y);
+    if (!at) return null;
     return at.d === 0 ? { x, y } : { x: x + at.dx * at.d, y: y + at.dy * at.d };
   }
 }

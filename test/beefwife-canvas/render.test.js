@@ -17,36 +17,31 @@ const graphics = () => {
 
 const underlay = graphics();
 const overlay = graphics();
-const beefwife = { destroyed: false, getPose: () => ({ head: { x: 1, y: 2 } }) };
 const actor = {
-  beefwife,
-  planner: { goal: { x: 12, y: 14 } },
-  route: { path: [{ x: 5, y: 6 }, { x: 9, y: 10 }] },
+  display: { destroyed: false },
+  head: { x: 1, y: 2 },
+  target: { x: 12, y: 14 },
+  route: [{ x: 5, y: 6 }, { x: 9, y: 10 }],
 };
 const host = {
   actors: [actor],
-  debug: { navigation: false, routes: false, targets: false, terrain: false },
+  debug: { routes: false, targets: false, terrain: false },
   scene: {
     debugOverlay: overlay,
     debugUnderlay: underlay,
     render() {},
-    syncActors() {},
+    syncDisplays() {},
   },
-  terrain: {
-    cells: [{ left: 20, lo: 21, right: 30, hi: 31 }],
-    gates: [{ x: 25, lo: 22, hi: 29 }],
-    rects: [{ left: 2, top: 3, right: 8, bottom: 9 }],
-    x0: 0,
-    x1: 100,
-    y0: 0,
-    y1: 80,
+  terrainView: {
+    bounds: { left: 0, top: 0, right: 100, bottom: 80 },
+    rectangles: [{ left: 2, top: 3, right: 8, bottom: 9 }],
   },
 };
 
 const draw = (layer) => {
   underlay.calls.length = 0;
   overlay.calls.length = 0;
-  host.debug = { navigation: false, routes: false, targets: false, terrain: false };
+  host.debug = { routes: false, targets: false, terrain: false };
   host.debug[layer] = true;
   BeefwifeCanvasRender.draw(host);
 };
@@ -65,8 +60,4 @@ assert.equal(overlay.calls.some((call) => call[0] === "circle" && call[3] === 5)
 draw("terrain");
 assert.equal(underlay.calls.filter((call) => call[0] === "rect").length, 2);
 
-draw("navigation");
-assert.equal(underlay.calls.filter((call) => call[0] === "rect").length, 1);
-assert.ok(underlay.calls.some((call) => call[0] === "moveTo"));
-
-console.log("BeefwifeCanvas debug rendering: 7 layer checks passed");
+console.log("BeefwifeCanvas debug rendering: 5 layer checks passed");
