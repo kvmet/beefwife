@@ -64,7 +64,6 @@
         place-items: center;
         border: 2px solid #25241f;
         background: #ffb554;
-        box-shadow: 6px 6px 0 #25241f;
         font-weight: 700;
       }
       .one { top: 18%; left: 42%; width: 18%; height: 32%; }
@@ -107,7 +106,8 @@
       </header>
       <section id="profile">
         <button type="button">Profile cached queries</button>
-        <output>build and query counts\nfor this browser</output>
+        <output>build and query counts
+for this browser</output>
       </section>
       <div class="one" data-terrain-avoid>avoid</div>
       <div class="two" data-terrain-avoid>avoid</div>
@@ -132,7 +132,6 @@
       const terrain = new Terrain({
         viewport: () => stage.getBoundingClientRect(),
         edgeMargin,
-        obstaclePadding: 8,
       });
       let start = { x: 48, y: 0 };
       let goal = { x: 0, y: 0 };
@@ -169,7 +168,7 @@
         context.arc(goal.x, goal.y, 8, 0, 2 * Math.PI);
         context.stroke();
 
-        const landed = route.at(-1);
+        const landed = route[route.length - 1];
         actor.style.transform = `translate(${landed.x}px, ${landed.y}px)`;
       };
 
@@ -177,7 +176,8 @@
         if (!frame) frame = requestAnimationFrame(draw);
       };
 
-      const profileAt = (points, milliseconds) => {
+      const profileQuery = (method, points, milliseconds) => {
+        const query = terrain[method].bind(terrain);
         const result = {};
         const started = performance.now();
         let count = 0;
@@ -186,7 +186,7 @@
         do {
           for (let batch = 0; batch < 256; batch++) {
             const point = points[count & 4095];
-            checksum += terrain.at(point.x, point.y, result)?.d || 0;
+            checksum += query(point.x, point.y, result)?.distance || 0;
             count++;
           }
           elapsed = performance.now() - started;
@@ -233,16 +233,23 @@
           const y = (random / 0x100000000) * stage.clientHeight;
           return { x, y };
         });
-        const at = profileAt(points, 120);
+        const nearest = profileQuery("nearest", points, 120);
+        await new Promise(requestAnimationFrame);
+        const offset = profileQuery("offset", points, 120);
         await new Promise(requestAnimationFrame);
         const route = profileRoute(points, 120);
         const rate = ({ count, elapsed }) =>
           Math.round((1000 * count) / elapsed).toLocaleString("en-US");
-        if (!Number.isFinite(at.checksum + route.checksum))
+        if (
+          !Number.isFinite(
+            nearest.checksum + offset.checksum + route.checksum,
+          )
+        )
           throw new Error("profile produced invalid output");
         profileOutput.textContent =
           `build()  ${buildMs.toFixed(3)} ms  (${obstacles} obstacles)\n` +
-          `at()     ${rate(at)} calls/s  (${at.count.toLocaleString("en-US")})\n` +
+          `nearest() ${rate(nearest)} calls/s  (${nearest.count.toLocaleString("en-US")})\n` +
+          `offset()  ${rate(offset)} calls/s  (${offset.count.toLocaleString("en-US")})\n` +
           `route()  ${rate(route)} calls/s  (${route.count.toLocaleString("en-US")})`;
         profileButton.disabled = false;
       });

@@ -1,4 +1,4 @@
-/* Terrain v0.1.1. Generated from terrain/src; do not edit. */
+/* Terrain v0.2.0. Generated from terrain/src; do not edit. */
 var Terrain = (function() {
 
 //#region \0rolldown/runtime.js
@@ -145,15 +145,26 @@ var Terrain = (function() {
 			if (!source?.[Symbol.iterator]) throw new TypeError("options.avoid() must return an iterable");
 			return Array.from(source);
 		}
-		at(x, y, result = {}) {
+		nearest(x, y, result = {}) {
+			return this._nearest(x, y, result, true);
+		}
+		offset(x, y, result = {}) {
+			return this._nearest(x, y, result, false);
+		}
+		_nearest(x, y, result, absolute, includeDistance = true) {
 			finite(x, "x");
 			finite(y, "y");
 			if (!result || typeof result !== "object") throw new TypeError("result must be an object");
 			if (!this.ready) return null;
 			if (x >= this.x0 && x <= this.x1 && y >= this.y0 && y <= this.y1 && !this._covered(x, y)) {
-				result.dx = 0;
-				result.dy = 0;
-				result.d = 0;
+				if (absolute) {
+					result.x = x;
+					result.y = y;
+				} else {
+					result.dx = 0;
+					result.dy = 0;
+				}
+				if (includeDistance) result.distance = 0;
 				return result;
 			}
 			let nearD = Infinity;
@@ -185,9 +196,18 @@ var Terrain = (function() {
 				}
 			}
 			if (nearD === Infinity || nearD === 0) return null;
-			result.dx = nearX / nearD;
-			result.dy = nearY / nearD;
-			result.d = above(nearD);
+			const distance = above(nearD);
+			const scale = distance / nearD;
+			const dx = nearX * scale;
+			const dy = nearY * scale;
+			if (absolute) {
+				result.x = x + dx;
+				result.y = y + dy;
+			} else {
+				result.dx = dx;
+				result.dy = dy;
+			}
+			if (includeDistance) result.distance = distance;
 			return result;
 		}
 		_viewport() {
@@ -234,7 +254,7 @@ var Terrain = (function() {
 				height: 0
 			};
 		}
-		/** Snapshot DOMRects so at() and route() never trigger layout. */
+		/** Snapshot DOMRects so queries never trigger layout. */
 		_measure() {
 			const out = [];
 			const padding = this.options.obstaclePadding;
@@ -376,16 +396,7 @@ var Terrain = (function() {
 //#region src/terrain.mjs
 	var Terrain = class extends TerrainMesh {
 		_land(p) {
-			const field = this.at(p.x, p.y);
-			if (!field) return null;
-			if (field.d === 0) return {
-				x: p.x,
-				y: p.y
-			};
-			return {
-				x: p.x + field.dx * field.d,
-				y: p.y + field.dy * field.d
-			};
+			return this._nearest(p.x, p.y, p, true, false);
 		}
 		_seat(p) {
 			for (const slab of this.slabs) {
@@ -522,7 +533,10 @@ var Terrain = (function() {
 					right = gateRight;
 					rightAt = i;
 				} else {
-					out.push(left);
+					out.push({
+						x: left.x,
+						y: left.y
+					});
 					apex = left;
 					apexAt = leftAt;
 					left = apex;
@@ -536,7 +550,10 @@ var Terrain = (function() {
 					left = gateLeft;
 					leftAt = i;
 				} else {
-					out.push(right);
+					out.push({
+						x: right.x,
+						y: right.y
+					});
 					apex = right;
 					apexAt = rightAt;
 					left = apex;
@@ -550,14 +567,30 @@ var Terrain = (function() {
 			out.push(goal);
 			return out;
 		}
+		_route(points, moved) {
+			let length = 0;
+			for (const point of points) {
+				const previous = points[length - 1];
+				if (previous && point.x === previous.x && point.y === previous.y) continue;
+				points[length++] = point;
+			}
+			points.length = length;
+			points.moved = moved;
+			return points;
+		}
 		route(a, b) {
 			const inputStart = point(a, "a");
 			const inputGoal = point(b, "b");
 			if (!this.ready) return null;
+			const startX = inputStart.x;
+			const startY = inputStart.y;
+			const goalX = inputGoal.x;
+			const goalY = inputGoal.y;
 			const landedStart = this._land(inputStart);
 			const landedGoal = this._land(inputGoal);
 			if (!landedStart || !landedGoal) return null;
-			if (this._visible(landedStart, landedGoal)) return [landedStart, landedGoal];
+			const moved = landedStart.x !== startX || landedStart.y !== startY || landedGoal.x !== goalX || landedGoal.y !== goalY;
+			if (this._visible(landedStart, landedGoal)) return this._route([landedStart, landedGoal], moved);
 			const from = this._seat(landedStart);
 			const to = this._seat(landedGoal);
 			if (!from || !to) return null;
@@ -574,12 +607,11 @@ var Terrain = (function() {
 					goal
 				];
 			}
-			const route = [
+			return this._route([
 				landedStart,
 				...points,
 				landedGoal
-			];
-			return route.filter((p, i) => i === 0 || p.x !== route[i - 1].x || p.y !== route[i - 1].y);
+			], moved);
 		}
 	};
 	Object.defineProperty(Terrain, "DEFAULTS", {

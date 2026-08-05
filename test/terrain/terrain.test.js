@@ -126,11 +126,7 @@ const safe = (terrain, route) => {
 };
 
 const land = (terrain, point) => {
-  const offset = terrain.at(point.x, point.y);
-  return {
-    x: point.x + offset.dx * offset.d,
-    y: point.y + offset.dy * offset.d,
-  };
+  return terrain.nearest(point.x, point.y);
 };
 
 const same = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) < 1e-7;
@@ -220,10 +216,11 @@ const dormant = new Terrain({
   viewport: { width: WIDTH, height: HEIGHT },
 });
 assert.equal(dormant.ready, false);
-assert.equal(dormant.at(1, 1), null);
+assert.equal(dormant.nearest(1, 1), null);
+assert.equal(dormant.offset(1, 1), null);
 assert.equal(dormant.route({ x: 1, y: 1 }, { x: 2, y: 2 }), null);
-assert.throws(() => dormant.at(Infinity, 1), TypeError);
-assert.throws(() => dormant.at(1, 1, null), TypeError);
+assert.throws(() => dormant.nearest(Infinity, 1), TypeError);
+assert.throws(() => dormant.offset(1, 1, null), TypeError);
 assert.throws(() => dormant.route({ x: 1 }, { x: 2, y: 2 }), TypeError);
 
 const supplied = {
@@ -237,8 +234,17 @@ assert.equal(Object.isFrozen(snapshot.options), true);
 assert.equal(snapshot.build(), snapshot);
 assert.equal(snapshot.x0, 4);
 const reused = {};
-assert.equal(snapshot.at(20, 20, reused), reused);
-assert.deepEqual(reused, { dx: 0, dy: 0, d: 0 });
+assert.equal(snapshot.nearest(20, 20, reused), reused);
+assert.deepEqual(reused, { x: 20, y: 20, distance: 0 });
+const reusedOffset = {};
+assert.equal(snapshot.offset(20, 20, reusedOffset), reusedOffset);
+assert.deepEqual(reusedOffset, { dx: 0, dy: 0, distance: 0 });
+const outside = { x: -3, y: -4 };
+const nearestOutside = snapshot.nearest(outside.x, outside.y);
+const offsetOutside = snapshot.offset(outside.x, outside.y);
+assert.equal(nearestOutside.x, outside.x + offsetOutside.dx);
+assert.equal(nearestOutside.y, outside.y + offsetOutside.dy);
+assert.equal(nearestOutside.distance, offsetOutside.distance);
 
 const measured = { calls: 0 };
 const keepOut = element(
@@ -280,7 +286,8 @@ const noSpace = new Terrain({
   viewport: { width: 10, height: 10 },
 }).build();
 assert.equal(noSpace.ready, false);
-assert.equal(noSpace.at(5, 5), null);
+assert.equal(noSpace.nearest(5, 5), null);
+assert.equal(noSpace.offset(5, 5), null);
 assert.equal(noSpace.route({ x: 1, y: 1 }, { x: 9, y: 9 }), null);
 
 for (const viewport of [
@@ -295,7 +302,8 @@ for (const viewport of [
     viewport: bounds,
   }).build();
   assert.equal(collapsed.ready, false);
-  assert.equal(collapsed.at(0, 0), null);
+  assert.equal(collapsed.nearest(0, 0), null);
+  assert.equal(collapsed.offset(0, 0), null);
 }
 
 const badRect = { left: 1, top: 1, right: 2, bottom: 2 };
@@ -337,13 +345,38 @@ assert.equal(covered(overlap, land(overlap, { x: 10.45, y: 50 })), false);
 const obstacle = build([{ left: 70, top: 50, right: 110, bottom: 90 }], {
   funnel: false,
 });
-assert.equal(obstacle.route({ x: 10, y: 20 }, { x: 160, y: 20 }).length, 2);
-const boundary = obstacle.at(70, 70);
-assert.equal(boundary.d > 0 && boundary.d < 1e-9, true);
+const directRoute = obstacle.route({ x: 10, y: 20 }, { x: 160, y: 20 });
+assert.equal(directRoute.length, 2);
+assert.equal(directRoute.moved, false);
+const boundary = obstacle.offset(70, 70);
+assert.equal(boundary.distance > 0 && boundary.distance < 1e-9, true);
+assert.equal(Math.hypot(boundary.dx, boundary.dy), boundary.distance);
 assert.equal(covered(obstacle, land(obstacle, { x: 70, y: 70 })), false);
 assert.equal(
   obstacle.route({ x: 10, y: 49.75 }, { x: 160, y: 49.75 }).length,
   2,
+);
+const moved = obstacle.route({ x: 80, y: 70 }, { x: 160, y: 20 });
+assert.equal(moved.moved, true);
+assert.equal(same(moved[0], obstacle.nearest(80, 70)), true);
+const stationary = obstacle.route({ x: 10, y: 20 }, { x: 10, y: 20 });
+assert.deepEqual([...stationary], [{ x: 10, y: 20 }]);
+assert.equal(stationary.moved, false);
+
+const protectedMesh = build([
+  { left: 70, top: 50, right: 110, bottom: 90 },
+]);
+const protectedRoute = protectedMesh.route(
+  { x: 10, y: 70 },
+  { x: 160, y: 70 },
+);
+assert.equal(protectedRoute.length > 2, true);
+const protectedCopy = protectedRoute.map((point) => ({ ...point }));
+protectedRoute[1].x = -1000;
+protectedRoute[1].y = -1000;
+assert.deepEqual(
+  [...protectedMesh.route({ x: 10, y: 70 }, { x: 160, y: 70 })],
+  protectedCopy,
 );
 
 const wall = build([{ left: 80, top: -10, right: 100, bottom: 150 }]);
@@ -463,10 +496,20 @@ for (let world = 0; world < 250; world++) {
       const route = terrain.route(a, b);
       if (!route) continue;
       assert.equal(safe(terrain, route), true, JSON.stringify({ a, b, route, rects }));
+      assert.equal(
+        route.moved,
+        start.x !== a.x ||
+          start.y !== a.y ||
+          goal.x !== b.x ||
+          goal.y !== b.y,
+      );
       assert.equal(same(route[0], start), true);
       assert.equal(same(route[route.length - 1], goal), true);
       if (clear(terrain, start, goal)) {
-        assert.equal(route.length, 2);
+        assert.equal(
+          route.length,
+          start.x === goal.x && start.y === goal.y ? 1 : 2,
+        );
         direct++;
       }
       routes++;

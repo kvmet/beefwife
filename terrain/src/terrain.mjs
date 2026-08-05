@@ -9,13 +9,7 @@ import {
 
 class Terrain extends TerrainMesh {
   _land(p) {
-    const field = this.at(p.x, p.y);
-    if (!field) return null;
-    if (field.d === 0) return { x: p.x, y: p.y };
-    return {
-      x: p.x + field.dx * field.d,
-      y: p.y + field.dy * field.d,
-    };
+    return this._nearest(p.x, p.y, p, true, false);
   }
 
   _seat(p) {
@@ -172,7 +166,7 @@ class Terrain extends TerrainMesh {
           right = gateRight;
           rightAt = i;
         } else {
-          out.push(left);
+          out.push({ x: left.x, y: left.y });
           apex = left;
           apexAt = leftAt;
           left = apex;
@@ -189,7 +183,7 @@ class Terrain extends TerrainMesh {
           left = gateLeft;
           leftAt = i;
         } else {
-          out.push(right);
+          out.push({ x: right.x, y: right.y });
           apex = right;
           apexAt = rightAt;
           left = apex;
@@ -206,15 +200,41 @@ class Terrain extends TerrainMesh {
     return out;
   }
 
+  _route(points, moved) {
+    let length = 0;
+    for (const point of points) {
+      const previous = points[length - 1];
+      if (
+        previous &&
+        point.x === previous.x &&
+        point.y === previous.y
+      )
+        continue;
+      points[length++] = point;
+    }
+    points.length = length;
+    points.moved = moved;
+    return points;
+  }
+
   route(a, b) {
     const inputStart = point(a, "a");
     const inputGoal = point(b, "b");
     if (!this.ready) return null;
+    const startX = inputStart.x;
+    const startY = inputStart.y;
+    const goalX = inputGoal.x;
+    const goalY = inputGoal.y;
     const landedStart = this._land(inputStart);
     const landedGoal = this._land(inputGoal);
     if (!landedStart || !landedGoal) return null;
+    const moved =
+      landedStart.x !== startX ||
+      landedStart.y !== startY ||
+      landedGoal.x !== goalX ||
+      landedGoal.y !== goalY;
     if (this._visible(landedStart, landedGoal)) {
-      return [landedStart, landedGoal];
+      return this._route([landedStart, landedGoal], moved);
     }
 
     const from = this._seat(landedStart);
@@ -233,13 +253,7 @@ class Terrain extends TerrainMesh {
         : [start, ...crossings.map((c) => ({ ...c.gate.mid })), goal];
     }
 
-    const route = [landedStart, ...points, landedGoal];
-    return route.filter(
-      (p, i) =>
-        i === 0 ||
-        p.x !== route[i - 1].x ||
-        p.y !== route[i - 1].y,
-    );
+    return this._route([landedStart, ...points, landedGoal], moved);
   }
 }
 

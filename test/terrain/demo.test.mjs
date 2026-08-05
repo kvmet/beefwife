@@ -10,6 +10,11 @@ const scripts = Array.from(
 assert.equal(scripts.length, 2);
 assert.match(html, /<script src="\.\/terrain\.min\.js"><\/script>/);
 assert.match(html, /Profile cached queries/);
+assert.doesNotMatch(html, /query counts\\nfor this browser/);
+assert.match(html, /profileQuery\("nearest"/);
+assert.match(html, /profileQuery\("offset"/);
+assert.doesNotMatch(html, /box-shadow: 6px 6px 0/);
+assert.doesNotMatch(html, /obstaclePadding/);
 for (const script of scripts) Function(script);
 
 console.log("Terrain demo: safe");

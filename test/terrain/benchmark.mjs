@@ -36,7 +36,7 @@ const points = Array.from({ length: 8192 }, () => {
   return { x, y };
 });
 
-const profileAt = (terrain, milliseconds) => {
+const profileNearest = (terrain, milliseconds) => {
   const result = {};
   const started = performance.now();
   let count = 0;
@@ -45,7 +45,7 @@ const profileAt = (terrain, milliseconds) => {
   do {
     for (let batch = 0; batch < 256; batch++) {
       const point = points[count & 8191];
-      checksum += terrain.at(point.x, point.y, result)?.d || 0;
+      checksum += terrain.nearest(point.x, point.y, result)?.distance || 0;
       count++;
     }
     elapsed = performance.now() - started;
@@ -87,17 +87,17 @@ for (const obstacleCount of [0, 3, 6, 12, 24, 48, 96]) {
   for (let i = 0; i < builds; i++) terrain.build();
   const buildMs = (performance.now() - buildStarted) / builds;
 
-  profileAt(terrain, 15);
+  profileNearest(terrain, 15);
   profileRoute(terrain, 15);
-  const at = profileAt(terrain, 100);
+  const nearest = profileNearest(terrain, 100);
   const route = profileRoute(terrain, 100);
-  checksum += at.checksum + route.checksum;
+  checksum += nearest.checksum + route.checksum;
   rows.push({
     obstacles: obstacleCount,
     cells: terrain.cells.length,
     gates: terrain.gates.length,
     build: buildMs.toFixed(3),
-    at: integer(at.rate),
+    nearest: integer(nearest.rate),
     route: integer(route.rate),
   });
 }
@@ -107,14 +107,14 @@ const columns = [
   ["cells", 7],
   ["gates", 7],
   ["build ms", 10],
-  ["at()/s", 14],
+  ["nearest()/s", 14],
   ["route()/s", 12],
 ];
 console.log(`Terrain scaling benchmark on ${process.version}`);
 console.log(columns.map(([label, size]) => label.padStart(size)).join(""));
 for (const row of rows) {
   console.log(
-    [row.obstacles, row.cells, row.gates, row.build, row.at, row.route]
+    [row.obstacles, row.cells, row.gates, row.build, row.nearest, row.route]
       .map((value, index) => String(value).padStart(columns[index][1]))
       .join(""),
   );

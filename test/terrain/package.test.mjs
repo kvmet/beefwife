@@ -82,7 +82,14 @@ const terrain = new Terrain({
   edgeMargin: 0,
   viewport: { width: 100, height: 80 },
 }).build();
-if (!terrain.ready || terrain.route({ x: 1, y: 2 }, { x: 3, y: 4 }).length !== 2)
+const route = terrain.route({ x: 1, y: 2 }, { x: 3, y: 4 });
+if (
+  !terrain.ready ||
+  terrain.nearest(1, 2).distance !== 0 ||
+  terrain.offset(1, 2).distance !== 0 ||
+  route.length !== 2 ||
+  route.moved
+)
   throw new Error("packed Terrain failed");
 `;
   writeFileSync(

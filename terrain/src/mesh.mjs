@@ -44,7 +44,15 @@ export class TerrainMesh {
     return Array.from(source);
   }
 
-  at(x, y, result = {}) {
+  nearest(x, y, result = {}) {
+    return this._nearest(x, y, result, true);
+  }
+
+  offset(x, y, result = {}) {
+    return this._nearest(x, y, result, false);
+  }
+
+  _nearest(x, y, result, absolute, includeDistance = true) {
     finite(x, "x");
     finite(y, "y");
     if (!result || typeof result !== "object")
@@ -57,9 +65,14 @@ export class TerrainMesh {
       y <= this.y1 &&
       !this._covered(x, y)
     ) {
-      result.dx = 0;
-      result.dy = 0;
-      result.d = 0;
+      if (absolute) {
+        result.x = x;
+        result.y = y;
+      } else {
+        result.dx = 0;
+        result.dy = 0;
+      }
+      if (includeDistance) result.distance = 0;
       return result;
     }
 
@@ -92,9 +105,18 @@ export class TerrainMesh {
       }
     }
     if (nearD === Infinity || nearD === 0) return null;
-    result.dx = nearX / nearD;
-    result.dy = nearY / nearD;
-    result.d = above(nearD);
+    const distance = above(nearD);
+    const scale = distance / nearD;
+    const dx = nearX * scale;
+    const dy = nearY * scale;
+    if (absolute) {
+      result.x = x + dx;
+      result.y = y + dy;
+    } else {
+      result.dx = dx;
+      result.dy = dy;
+    }
+    if (includeDistance) result.distance = distance;
     return result;
   }
 
@@ -140,7 +162,7 @@ export class TerrainMesh {
     this.viewport = { left: 0, top: 0, width: 0, height: 0 };
   }
 
-  /** Snapshot DOMRects so at() and route() never trigger layout. */
+  /** Snapshot DOMRects so queries never trigger layout. */
   _measure() {
     const out = [];
     const padding = this.options.obstaclePadding;
