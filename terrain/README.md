@@ -1,113 +1,134 @@
 # Terrain
 
-Terrain caches a CSS-pixel viewport and axis-aligned keep-out rectangles. After
-one layout-reading build, it can land points and route between them without
-reading the DOM again.
+Terrain is a tiny, dependency-free browser utility for finding legal points and
+collision-free paths around DOM elements. `build()` reads layout once; repeated
+`at()` and `route()` calls use only cached geometry.
 
-It is a small browser script with no dependencies:
+```js
+const terrain = new Terrain({ avoid: ".avoid" }).build();
+
+const field = terrain.at(x, y);       // nearest legal point
+const points = terrain.route(a, b);   // collision-free waypoints
+```
+
+Terrain handles one viewport and axis-aligned DOM rectangles. It is not a
+diagram framework, renderer, physics engine, or polygon navigator.
+
+## Install
+
+Load the standalone production build:
 
 ```html
-<script src="terrain/terrain.js"></script>
+<div data-terrain-avoid>Terrain routes around me.</div>
+<script src="https://cdn.jsdelivr.net/npm/@kvmet/terrain@0.1.0/terrain.min.js"></script>
 <script>
-  const terrain = new Terrain();
-  terrain.build();
+  const terrain = new Terrain().build();
 </script>
 ```
 
-Use `terrain.min.js` instead for the minified production build. Both browser
-files are generated from the ES modules in `src/`; do not edit them directly.
+`terrain.js` is the readable build and creates the same `window.Terrain` global.
 
-The script creates `window.Terrain` when loaded directly. It also supports
-CommonJS:
+With npm:
 
-```js
-const Terrain = require("./terrain/terrain.js");
+```sh
+npm install @kvmet/terrain
 ```
 
-## Constructor
+```js
+import Terrain from "@kvmet/terrain";
+// const Terrain = require("@kvmet/terrain");
+```
 
-`new Terrain(options)` snapshots and freezes these options:
+[Open the dependency-free demo](https://cdn.jsdelivr.net/npm/@kvmet/terrain@0.1.0/demo.html)
+or run `demo.html` directly.
 
-| Option | Default | Meaning |
-| --- | --- | --- |
-| `avoid` | `".beefwife-avoid"` | A selector, an iterable of elements, or a function returning an iterable. |
-| `root` | `document` | The `querySelectorAll()` root used when `avoid` is a selector. |
-| `viewport` | Browser viewport | `{ left, top, width, height }`, or a function returning one. `left` and `top` default to zero. |
-| `edgeMargin` | `25` | Nonnegative inset from every viewport edge. |
-| `obstaclePadding` | `0` | Nonnegative amount added around every obstacle. |
-| `funnel` | `true` | Keep only taut route turns. `false` retains each selected gate center. |
+## API
 
-Functions are evaluated on every `build()`, which supports moving viewports and
-changing element sets. Unknown options and invalid values throw. Defaults are
-available as the frozen `Terrain.DEFAULTS` object.
+Call `build()` after page load and whenever relevant layout changes. It measures
+each distinct avoided element once, replaces the prior snapshot, and returns the
+Terrain instance. `terrain.ready` reports whether that snapshot contains
+navigable space. A failed build leaves Terrain not ready.
 
-`terrain.avoidElements()` resolves the current `avoid` source and returns an
-array without measuring its elements. This is useful when the caller observes
-the same elements that terrain will measure on its next build.
+### `at(x, y, result = {})`
 
-Viewport-local coordinates are used throughout. For a viewport at
-`{ left: 100, top: 200 }`, an element whose DOMRect begins at `(110, 220)` begins
-at terrain coordinate `(10, 20)`.
-
-## Lifecycle
-
-Call `build()` after the page loads and whenever relevant layout changes. It
-returns the terrain instance. A build measures each distinct selected element
-once and replaces the complete prior snapshot. If measurement fails, the old
-snapshot is discarded and the terrain remains not ready.
-
-`terrain.ready` is `true` when the latest successful build contains somewhere
-to land. It is `false` before the first build and when the viewport has no
-navigable area. Queries return `null` while it is false.
-
-## Landing
-
-`terrain.at(x, y, result = {})` leaves a legal point in place or returns a field
-toward the nearest landing represented by the free-space mesh:
+Leaves a legal point in place or returns a unit direction and distance to the
+nearest landing represented by the mesh:
 
 ```js
 const field = terrain.at(x, y);
 if (field) {
-  const landed = {
-    x: x + field.dx * field.d,
-    y: y + field.dy * field.d,
-  };
+  x += field.dx * field.d;
+  y += field.dy * field.d;
 }
 ```
 
-`dx` and `dy` are a unit direction and `d` is the distance. All three are zero
-when `(x, y)` is already legal. The optional `result` object is written in place
-to avoid an allocation. Coordinates must be finite numbers.
+`dx`, `dy`, and `d` are zero when the point is already legal. Reuse the optional
+`result` object to avoid allocations in hot loops. Returns `null` when Terrain
+is not ready.
 
-## Routing
+### `route(a, b)`
 
-`terrain.route(a, b)` accepts point-like objects with finite `x` and `y` values.
-It lands both inputs, then returns an array containing the landed endpoints and
-any necessary waypoints. It returns `null` when no route exists.
+Lands both endpoints when necessary, then returns the landed endpoints and any
+required waypoints. Returns `null` when Terrain is not ready or no route exists.
+Points must have finite `x` and `y` coordinates.
 
-Routing uses a rectangular slab graph cut just outside the left and right edges
-of each keep-out. Generated geometry is moved two adjacent floating-point values
-outward so it cannot lie on, and therefore occlude itself against, a closed
-DOMRect edge. This numerical guard is not a visible offset or a
-minimum-clearance policy: an input point or unobstructed direct segment is legal
-anywhere outside the closed rectangles, and gaps larger than floating-point
-roundoff remain in the mesh. Use `obstaclePadding` when real geometric clearance
-is required. Overlapping rectangles and zero-width or zero-height lines and
-points are supported. This is an axis-aligned DOMRect router, not a general
-polygon or trapezoidal decomposition.
+## Options
 
-## Check
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `avoid` | `"[data-terrain-avoid]"` | Selector, iterable of elements, or function returning an iterable. |
+| `root` | `document` | The selector's `querySelectorAll()` root. |
+| `viewport` | Browser viewport | `{ left, top, width, height }`, or a function returning one. |
+| `edgeMargin` | `0` | Nonnegative inset from each viewport edge. |
+| `obstaclePadding` | `0` | Nonnegative clearance around obstacles. |
+| `funnel` | `true` | Keep only taut turns; false retains gate centers. |
 
-Install the build dependency once, then build both browser artifacts and run the
-ES module, readable-build, and minified-build tests:
+Options are validated, snapshotted, and frozen. Functions are evaluated on every
+`build()`. Defaults are exposed as `Terrain.DEFAULTS`.
+
+`terrain.avoidElements()` resolves `avoid` without measuring it, which is useful
+for observing the elements that the next build will read. Coordinates are local
+to the configured viewport.
+
+## Geometry
+
+Obstacles are closed DOMRects. Overlapping rectangles and zero-width or
+zero-height lines and points are supported. Generated mesh geometry sits two
+adjacent floating-point values outside obstacle edges as a numerical guard
+so it cannot occlude itself.
+
+If you want visible clearance around obstacles use `obstaclePadding`.
+
+Rotated rectangles, polygons, connector pins, crossing avoidance, and
+incremental mutation are out of scope. Rebuild after layout changes.
+
+## Performance
+
+The production build is under 10 kB minified with no runtime dependencies. Only
+elements resolved by `avoid` affect Terrain; the rest of the DOM is irrelevant.
+
+If `m` elements are selected and `n` intersect the viewport, `build()` reads `m`
+DOMRects and constructs its mesh from `n` rectangles. Legal `at()` calls and
+direct routes are roughly `O(n)`. Blocked routes also search the mesh, so they
+scale with its cells and gates. Mesh construction is `O(n^2 log n)` in the worst
+case; cells and gates can be `O(n^2)`. Terrain is designed for many queries per
+build.
+
+The demo includes an opt-in browser profiler. Run the deterministic 0 to 96
+obstacle scaling benchmark with:
 
 ```sh
 npm --prefix terrain install
+bb terrain-benchmark
+```
+
+## Development
+
+`terrain.js` and `terrain.min.js` are generated from `src/`; do not edit them
+directly. Build and run the source, browser-artifact, and packed-consumer checks:
+
+```sh
 bb terrain
 ```
 
-During development, the source is split by responsibility:
-
-- `src/support.mjs` owns contracts and small geometry primitives.
-- `src/mesh.mjs` owns measurement, landing, and free-space construction.
-- `src/terrain.mjs` owns visibility and routing.
+Terrain is released under the [MIT License](./LICENSE).

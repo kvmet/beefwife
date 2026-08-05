@@ -26,8 +26,8 @@ var Terrain = (function() {
 	var below = (value) => outside(value, false);
 	var above = (value) => outside(value, true);
 	var TERRAIN_CONFIG = Object.freeze({
-		avoid: ".beefwife-avoid",
-		edgeMargin: 25,
+		avoid: "[data-terrain-avoid]",
+		edgeMargin: 0,
 		obstaclePadding: 0,
 		funnel: true
 	});

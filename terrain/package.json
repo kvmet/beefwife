@@ -1,9 +1,56 @@
 {
   "name": "@kvmet/terrain",
   "version": "0.1.0",
-  "private": true,
+  "description": "Tiny DOM-aware free-space queries and obstacle-avoiding routes.",
+  "license": "MIT",
+  "author": "Kristen Metcalfe",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvmet/beefwife.git",
+    "directory": "terrain"
+  },
+  "homepage": "https://github.com/kvmet/beefwife/tree/main/terrain#readme",
+  "bugs": "https://github.com/kvmet/beefwife/issues",
+  "keywords": [
+    "browser",
+    "dom",
+    "geometry",
+    "obstacle-avoidance",
+    "pathfinding",
+    "routing"
+  ],
+  "main": "./terrain.js",
+  "module": "./src/terrain.mjs",
+  "browser": "./terrain.js",
+  "unpkg": "./terrain.min.js",
+  "jsdelivr": "./terrain.min.js",
+  "exports": {
+    ".": {
+      "import": "./src/terrain.mjs",
+      "require": "./terrain.js",
+      "default": "./terrain.js"
+    },
+    "./terrain.js": "./terrain.js",
+    "./terrain.min.js": "./terrain.min.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "LICENSE",
+    "README.md",
+    "demo.html",
+    "src",
+    "terrain.js",
+    "terrain.min.js"
+  ],
+  "sideEffects": false,
   "scripts": {
-    "build": "rolldown -c rolldown.config.mjs"
+    "benchmark": "node ../test/terrain/benchmark.mjs",
+    "build": "rolldown -c rolldown.config.mjs",
+    "prepack": "npm run build && npm test",
+    "test": "node ../test/terrain/run.mjs"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "devDependencies": {
     "rolldown": "1.2.2"

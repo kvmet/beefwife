@@ -19,8 +19,8 @@ export const below = (value) => outside(value, false);
 export const above = (value) => outside(value, true);
 
 export const TERRAIN_CONFIG = Object.freeze({
-  avoid: ".beefwife-avoid",
-  edgeMargin: 25,
+  avoid: "[data-terrain-avoid]",
+  edgeMargin: 0,
   obstaclePadding: 0,
   funnel: true,
 });

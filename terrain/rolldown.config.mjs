@@ -1,6 +1,11 @@
 import { defineConfig } from "rolldown";
+import { readFileSync } from "node:fs";
 
-const banner = "/* Terrain v0.1.0. Generated from terrain/src; do not edit. */";
+const { version } = JSON.parse(
+  readFileSync(new URL("./package.json", import.meta.url), "utf8"),
+);
+const banner =
+  `/* Terrain v${version}. Generated from terrain/src; do not edit. */`;
 const footer =
   'if (typeof module !== "undefined" && module.exports) module.exports = Terrain;';
 const output = (file, minify) => ({

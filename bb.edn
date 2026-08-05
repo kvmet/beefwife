@@ -24,9 +24,13 @@
   {:doc "Build and check the Terrain public API and routing."
    :depends [terrain-build]
    :task (do
-           (shell "node" "test/terrain/module.test.mjs")
-           (shell "node" "test/terrain/terrain.test.js")
-           (shell "node" "test/terrain/terrain.test.js" "terrain.min.js"))}
+           (shell "npm" "--prefix" "terrain" "test")
+           (shell "node" "test/terrain/package.test.mjs"))}
+
+  terrain-benchmark
+  {:doc "Benchmark Terrain's cached query operations."
+   :depends [terrain-build]
+   :task (shell "npm" "--prefix" "terrain" "run" "benchmark")}
 
   canvas
   {:doc "Check the BeefwifeCanvas public boundary."

@@ -196,8 +196,8 @@ const routeCost = (crossings, start, goal) => {
 // Public construction, lifecycle, measurement, and failure contracts.
 assert.equal(Object.isFrozen(Terrain.DEFAULTS), true);
 assert.deepEqual(Terrain.DEFAULTS, {
-  avoid: ".beefwife-avoid",
-  edgeMargin: 25,
+  avoid: "[data-terrain-avoid]",
+  edgeMargin: 0,
   obstaclePadding: 0,
   funnel: true,
 });
