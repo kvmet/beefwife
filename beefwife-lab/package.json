@@ -1,0 +1,26 @@
+{
+  "name": "beefwife-lab",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "check": "svelte-check && vite build",
+    "format": "prettier --write .",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@fontsource/b612": "^5.3.0",
+    "@fontsource/b612-mono": "^5.3.0",
+    "@sveltejs/vite-plugin-svelte": "^7.2.0",
+    "prettier": "^3.9.6",
+    "prettier-plugin-svelte": "^4.1.1",
+    "svelte": "^5.0.0",
+    "svelte-check": "^4.7.4",
+    "vite": "^8.0.0"
+  },
+  "dependencies": {
+    "pixi.js": "^8.19.0"
+  }
+}
