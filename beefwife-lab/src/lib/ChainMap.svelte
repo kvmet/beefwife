@@ -181,12 +181,12 @@
     display: grid;
     min-height: 0;
     overflow: hidden;
-    border-top: 6px solid var(--chassis-deep);
-    background: var(--chassis-deep);
+    border-top: 8px solid var(--bg);
+    background: var(--bg);
     box-shadow:
       inset 0 1px 0 var(--chassis-line-high),
       0 -1px 0 var(--bevel-shadow);
-    grid-template-rows: 52px minmax(0, 1fr) 34px;
+    grid-template-rows: 52px minmax(0, 1fr) 36px;
   }
 
   .height-handle {
@@ -236,21 +236,21 @@
   .track-label {
     padding: 10px 12px 8px 16px;
     border-right: 1px solid var(--chassis-line);
-    background: var(--label-paper);
-    box-shadow: inset -1px 0 0 var(--bevel-shadow);
+    background: var(--chassis);
+    box-shadow: inset -2px 0 0 var(--bevel-shadow);
   }
   .track-label strong,
   .track-label span {
     display: block;
   }
   .track-label strong {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 650;
   }
   .track-label span {
     margin-top: 2px;
     color: var(--faint);
-    font-size: 9px;
+    font-size: 10px;
   }
   .timeline {
     position: relative;
@@ -280,7 +280,9 @@
   .group-heading {
     display: flex;
     align-items: center;
-    height: 31px;
+    height: 33px;
+    padding: 0 8px;
+    gap: 8px;
     border-top: 1px solid var(--bevel-light);
     border-bottom: 1px solid var(--chassis-line-high);
     background: var(--chassis);
@@ -290,14 +292,11 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    min-width: var(--track-label);
-    height: 100%;
-    padding: 0 16px;
-    border: 0;
-    background: transparent;
-    color: var(--text-dim);
-    cursor: pointer;
-    font-size: 10px;
+    min-width: 124px;
+    height: 23px;
+    padding: 0 8px;
+    color: var(--text);
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.07em;
     text-transform: uppercase;
@@ -336,23 +335,15 @@
 
   .plate-track button {
     min-width: 0;
-    border: 1px solid var(--plate-chip-line);
-    border-radius: var(--radius-screen);
-    background: linear-gradient(var(--plate-chip), var(--plate-chip-deep));
-    box-shadow:
-      inset 0 1px 0 #ffffff0a,
-      0 1px 1px #0005;
-    color: var(--plate-chip-text);
-    cursor: pointer;
+    background: #4a262c;
+    outline-color: #7d5b60;
+    color: #d9b6b8;
   }
 
   .plate-track button:hover,
   .plate-track button.active {
-    border-color: var(--screen-select);
-  }
-  .plate-track button:active {
-    transform: translateY(1px);
-    box-shadow: inset 0 1px 2px #0008;
+    background: #5e3138;
+    color: #f0d2d4;
   }
   .plate-track span,
   .plate-track small {
@@ -364,7 +355,7 @@
     font-size: 10px;
   }
   .plate-track small {
-    color: var(--plate-chip-faint);
+    color: #936f74;
     font-size: 8px;
   }
 
@@ -373,10 +364,14 @@
     top: 10px;
     width: 24px;
     height: 24px;
-    border: 1px solid var(--limb-chip-line);
-    border-radius: 50%;
-    background: var(--limb-chip);
-    color: var(--limb);
+    background: #1e242c;
+    outline-color: var(--bevel-face-screen);
+    color: #8993a2;
+  }
+
+  .limb-track button:hover {
+    background: #2b333e;
+    color: var(--screen-text);
   }
 
   .wave-track i {
@@ -385,28 +380,23 @@
     right: 15px;
     left: 15px;
     height: 1px;
-    background: linear-gradient(
-      90deg,
-      var(--limb),
-      var(--ornament),
-      var(--limb)
-    );
+    background: #8993a2;
   }
 
   .chain-map footer {
-    min-height: 34px;
+    min-height: 36px;
     padding: 0 16px;
     border-top: 1px solid var(--chassis-line-high);
-    background: var(--chassis-deep);
-    box-shadow: inset 0 1px 0 var(--bevel-light);
+    background: var(--bg);
+    box-shadow: inset 0 2px 0 var(--bevel-light);
     color: var(--faint);
-    font-size: 9px;
+    font-size: 10px;
   }
 
   .chain-map footer p {
     margin: 0;
     font-family: var(--font-text);
-    font-size: 10px;
+    font-size: 11px;
   }
   kbd {
     padding: 1px 4px;

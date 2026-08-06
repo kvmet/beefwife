@@ -162,8 +162,8 @@
   .track-label {
     padding: 10px 12px 8px 16px;
     border-right: 1px solid var(--chassis-line);
-    background: var(--label-paper);
-    box-shadow: inset -1px 0 0 var(--bevel-shadow);
+    background: var(--chassis);
+    box-shadow: inset -2px 0 0 var(--bevel-shadow);
     color: var(--muted);
     font: var(--label-font);
     letter-spacing: 0.06em;
@@ -179,7 +179,7 @@
     display: grid;
     place-items: center;
     border-right: 1px solid var(--screen-grid-major);
-    background: var(--screen-high);
+    background: color-mix(in oklch, var(--screen) 88%, var(--screen-text));
     color: var(--screen-text);
   }
 
@@ -215,15 +215,12 @@
     z-index: 4;
     top: 6px;
     right: -4px;
+    /* An 8px-wide grip cannot spend 3px a side on bevel. */
+    --bevel-width: 2px;
     width: 8px;
     height: 24px;
     padding: 0;
-    border: 1px solid var(--chassis-line-high);
-    border-radius: var(--radius-screen);
-    background: var(--control-face);
-    box-shadow:
-      inset 0 1px 0 var(--bevel-light),
-      0 1px 1px #0005;
+    background: var(--chassis);
     cursor: col-resize;
     touch-action: none;
   }
@@ -231,7 +228,10 @@
   .handle:hover,
   .handle:focus-visible,
   .handle.dragging {
-    border-color: var(--select);
     background: var(--select-dim);
+  }
+
+  .handle.dragging {
+    outline-style: inset;
   }
 </style>

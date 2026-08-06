@@ -51,7 +51,7 @@
     <em>/ 256</em>
   </label>
   <nav aria-label="Chain map tools">
-    <button class="active">Select</button>
+    <button class="active" aria-pressed="true">Select</button>
     <button>Add plate</button>
     <button>Add ornament</button>
     <i></i>
@@ -66,14 +66,12 @@
     align-items: center;
     padding: 0 16px;
     border-bottom: 1px solid var(--chassis-line-high);
-    background: var(--chassis-deep);
-    box-shadow: inset 0 1px 0 var(--bevel-light);
+    background: var(--bg);
+    box-shadow: inset 0 2px 0 var(--bevel-light);
   }
   .panel-name {
-    padding: 6px 10px;
-    border: 1px solid var(--chassis-line);
-    background: var(--label-paper);
-    box-shadow: inset 0 1px 1px var(--bevel-shadow);
+    padding: 6px 0;
+    color: var(--muted);
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.09em;
@@ -84,9 +82,8 @@
   .tally {
     display: flex;
     margin: 0 0 0 18px;
-    border: 1px solid var(--chassis-line-high);
     background: var(--chassis);
-    box-shadow: inset 0 1px 2px var(--bevel-shadow);
+    outline: var(--bevel-width) inset var(--bevel-face);
   }
 
   .tally > div {
@@ -129,15 +126,8 @@
     width: 54px;
     height: 28px;
     padding: 0 5px;
-    border: 1px solid var(--chassis-line-high);
-    border-radius: var(--radius-screen);
-    outline: 0;
-    background: var(--screen);
-    color: var(--screen-text);
+    outline-color: var(--bevel-face-screen);
     text-align: right;
-  }
-  input:focus {
-    border-color: var(--screen-select);
   }
   em {
     color: var(--faint);
@@ -158,23 +148,14 @@
     background: var(--chassis-line);
   }
   button {
-    padding: 6px 9px;
-    border: 0;
-    border-radius: var(--radius-control);
-    border: 1px solid transparent;
-    background: transparent;
-    font-size: 10px;
+    padding: 4px 8px;
+    font-size: 11px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     white-space: nowrap;
-    color: var(--muted);
-    cursor: pointer;
   }
-  button:hover,
   button.active {
-    border-color: var(--chassis-line-high);
-    background: var(--chassis-high);
-    color: var(--text);
-    box-shadow: inset 0 1px 0 var(--bevel-light);
+    background: var(--select-dim);
+    color: var(--select-text);
   }
 </style>

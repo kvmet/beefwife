@@ -1,125 +1,73 @@
 :root {
   color-scheme: light;
-  /* Mono is the chassis voice: every label, value, button and readout.
-     The proportional face is reserved for the few strings that are prose. */
   --font-mono: "B612 Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-text: "B612", ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-family: var(--font-mono);
   font-synthesis: none;
   font-variant-numeric: tabular-nums;
 
-  /* Screens are cut square; only controls meant to feel physical are rounded. */
-  --radius-screen: 2px;
-  --radius-control: 5px;
-  /* Chassis is the enclosure: topbar, sidebar, track labels, footer, controls.
-     Screen is a recessed display: stage, timeline tracks, text fields.
-     A theme repaints the chassis; screens stay dark in every theme. */
-  --bg: #aaa08f;
+  /* outset = pressable. inset = a value, a field, or a pressed control.
+     No outline = flat: chassis, panels, ornament. */
+  --bevel-width: 3px;
+  --radius-screen: 0;
+  --radius-control: 0;
+  --track-label: 112px;
+  --label-font: 10px/1.2 var(--font-mono);
+
+  /* Seeds: a theme repaints these; everything else derives. */
+  --bg: #c0b8a7;
   --chassis: #d3ccbd;
-  --chassis-deep: #c6bdab;
-  --chassis-high: #e4ded1;
+  --text: #1b1e22;
+  --ink: oklch(0.25 0.05 255);
   --chassis-line: #a89a85;
   --chassis-line-high: #817560;
-  --control-face: #b6ab99;
-  --control-veil: #d3ccbdf2;
-  --bevel-light: #ffffff80;
-  --bevel-shadow: #4b40302e;
-  --screw: #6d6354;
-  --label-paper: #c1b7a3;
-  --label-ink: #302c25;
+  --select: #2f6f66;
+  --measure: #a8501f;
+  --danger: #8c2f2f;
+  --bevel-face: #efe9dd;
+  --bevel-face-screen: #59636f;
+  --bevel-light: #ffffffa0;
+  --bevel-shadow: #4b403048;
 
+  --chassis-high: color-mix(in oklch, var(--chassis) 60%, white);
+  --chassis-low: color-mix(in oklab, var(--chassis) 85%, var(--bg));
+  --edge-light: var(--bevel-face);
+  --edge-shadow: color-mix(in oklab, var(--chassis) 52%, #000);
+  --muted: color-mix(in oklab, var(--ink) 72%, var(--chassis));
+  --faint: color-mix(in oklab, var(--ink) 40%, var(--chassis));
+  --select-dim: color-mix(in oklch, var(--select) 15%, var(--chassis));
+  --select-line: color-mix(in oklch, var(--select) 50%, var(--chassis));
+  --select-text: color-mix(in oklch, var(--select) 75%, var(--text));
+  --danger-dim: color-mix(in oklch, var(--danger) 15%, var(--chassis));
+
+  /* Screen: the recessed display surface, invariant across themes. */
   --screen: #101318;
-  --screen-high: #192027;
+  --screen-text: #c7d0da;
+  --screen-muted: color-mix(in oklch, var(--screen-text) 55%, var(--screen));
+  --screen-faint: color-mix(in oklch, var(--screen-text) 30%, var(--screen));
   --screen-grid: #ffffff08;
   --screen-grid-major: #ffffff14;
   --screen-axis: #ffffff1f;
   --screen-line-major: #56606d80;
-  --screen-text: #c7d0da;
-  --screen-muted: #8993a2;
-  --screen-faint: #596270;
   --screen-select: #76d6bc;
   --screen-measure-line: #e1b86c99;
-
-  /* Text splits the same way its surface does. Anything printed on a screen
-     reads from the screen-* steps and survives a chassis repaint unchanged. */
-  --text: #1b1e22;
-  --text-dim: #33383f;
-  --muted: #5a5346;
-  --faint: #7b7364;
-
-  /* Legend: select marks the current object, measure marks a live value. */
-  --select: #2f6f66;
-  --select-dim: #bcd2cb;
-  --select-line: #4d8378;
-  --select-text: #17403a;
-  --measure: #a8501f;
-  --danger: #e6cbc7;
-  --danger-text: #8c2f2f;
-
-  /* Content: the creature and the chips that stand for it in the tracks.
-     These always sit on a screen surface, so a theme leaves them alone. */
-  --rust: #a8444a;
-  --rust-light: #d6575d;
-  --rust-dark: #9f343b;
-  --rust-edge: #da7175;
-  --rust-limb: #8d2b32;
-  --rust-antenna: #8a3036;
-  --eye: #f2d58f;
-  --eye-glow: #f0bd5018;
-  --glow-material: #e1b86c;
-  --glow-material-halo: #e1b86c1f;
-  --ink: #17191d;
-  --swatch-line: #ffffff22;
-  --plate-chip: #542b31;
-  --plate-chip-deep: #392027;
-  --plate-chip-line: #554047;
-  --plate-chip-text: #d9b6b8;
-  --plate-chip-faint: #936f74;
-  /* Track chips are told apart by shape, not hue: plates are rectangles,
-     ornaments capsules, limbs circles. Only plates keep a colour, because
-     the plate colour is the creature's own. */
-  --limb: #8993a2;
-  --limb-chip: #1e242c;
-  --limb-chip-line: #3b4451;
-  --ornament: #8993a2;
-  --ornament-chip: #1e242c;
-  --ornament-chip-line: #3b4451;
-  --ornament-chip-text: #c8cdd5;
-
-  --track-label: 112px;
-  --label-font: 9px/1.2 var(--font-mono);
 }
 
-/* A theme repaints the enclosure only. Screens, and everything printed on
-   them, are identical in both: hardware does not invert its displays. */
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0d0f12;
-  --chassis: #15181d;
-  --chassis-deep: #111318;
-  --chassis-high: #1b1f25;
-  --chassis-line: #2a3039;
-  --chassis-line-high: #3b4451;
-  --control-face: #303843;
-  --control-veil: #11151acc;
-  --bevel-light: #ffffff0b;
-  --bevel-shadow: #00000055;
-  --screw: #596270;
-  --label-paper: #242a32;
-  --label-ink: #c8cdd5;
-
+  --bg: #1a1e24;
+  --chassis: #2b3138;
   --text: #e5e8ed;
-  --text-dim: #c8cdd5;
-  --muted: #8993a2;
-  --faint: #596270;
-
+  --ink: var(--text);
+  --chassis-line: #4a5260;
+  --chassis-line-high: #596270;
   --select: #76d6bc;
-  --select-dim: #294e46;
-  --select-line: #4d796e;
-  --select-text: #c9f3e8;
   --measure: #e1b86c;
-  --danger: #3d2024;
-  --danger-text: #e68b90;
+  --danger: #e68b90;
+  --bevel-face: #676f7b;
+  --bevel-face-screen: #59636f;
+  --bevel-light: #ffffff28;
+  --bevel-shadow: #00000068;
 }
 
 * {
@@ -149,14 +97,104 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
-button {
-  color: inherit;
+button,
+summary {
+  position: relative;
+  vertical-align: middle;
+  border-style: solid;
+  border-color: transparent;
+  border-width: 0 1px 1px 0;
+  outline: var(--bevel-width) outset var(--bevel-face);
+  background-color: var(--chassis);
+  color: var(--muted);
+  cursor: pointer;
 }
 
+button:not(:disabled, [role="tab"]):hover,
+summary:hover {
+  background-color: var(--chassis-high);
+  color: var(--text);
+}
+
+/* The 1px border budget swaps sides, so the face content steps down-right
+   without the box moving. */
+button:not(:disabled, [role="tab"]):active,
+button[aria-pressed="true"],
+button[aria-expanded="true"],
+details[open] > summary {
+  border-width: 1px 0 0 1px;
+  outline-style: inset;
+}
+
+button[aria-pressed="true"],
+button[aria-expanded="true"] {
+  background-color: var(--select-dim);
+  color: var(--select-text);
+}
+
+button:focus-visible:not(.resize-handle)::after {
+  position: absolute;
+  inset: 2px;
+  border: 1px dotted #fff;
+  content: "";
+  pointer-events: none;
+}
+
+button:disabled {
+  color: var(--faint);
+  text-shadow: 1px 1px 0 var(--bevel-face);
+  cursor: default;
+}
+
+/* Tabs are folders, not buttons: raised on three sides and open at the bottom,
+   so the selected one merges with the panel it opens onto. This is the one place
+   outline cannot serve, since it draws all four sides or none. */
+[role="tablist"] {
+  display: flex;
+  gap: 2px;
+}
+
+[role="tab"] {
+  border: none;
+  outline: none;
+  background-color: var(--chassis-low);
+  box-shadow:
+    inset 2px 0 0 var(--edge-light),
+    inset 0 2px 0 var(--edge-light),
+    inset -2px 0 0 var(--edge-shadow);
+}
+
+[role="tab"]:not([aria-selected="true"]):hover {
+  background-color: var(--chassis-high);
+  color: var(--text);
+}
+
+/* Same three-sided shell as the others, pulled forward onto the panel surface.
+   Grows only vertically: widening it would shift every tab after it whenever
+   the selection moved. */
+[role="tab"][aria-selected="true"] {
+  z-index: 1;
+  margin: -2px 0;
+  background-color: var(--chassis);
+  color: var(--text);
+}
+
+input,
+select,
+textarea {
+  border: none;
+  outline: var(--bevel-width) inset var(--bevel-face-screen);
+  background: var(--screen);
+  color: var(--screen-text);
+}
+
+/* The tool panel owns the full height of column 2, so the bar, stage, and chain
+   map all live in column 1 and never run under it. */
 .app-shell {
   display: grid;
   width: 100%;
@@ -164,72 +202,38 @@ button {
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
-  grid-template-rows: 62px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 46px minmax(0, 1fr) auto;
+}
+
+.app-shell.panel-open {
+  grid-template-columns: minmax(0, 1fr) var(--sidebar-width);
+}
+
+.app-shell.resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.app-shell > * {
+  grid-column: 1;
 }
 
 .topbar {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding: 0 24px;
-  border-bottom: 1px solid var(--chassis-line-high);
-  background: var(--chassis-deep);
-  box-shadow:
-    inset 0 1px 0 var(--bevel-light),
-    inset 0 -2px 0 var(--bevel-shadow);
-}
-
-.topbar::before,
-.topbar::after {
-  position: absolute;
-  top: 8px;
-  width: 5px;
-  height: 5px;
-  border: 1px solid color-mix(in srgb, var(--screw) 75%, transparent);
-  border-radius: 50%;
-  background: var(--control-face);
-  box-shadow: inset 1px 1px 0 var(--bevel-light);
-  content: "";
-}
-
-.topbar::before {
-  left: 8px;
-}
-
-.topbar::after {
-  right: 8px;
+  gap: 14px;
+  padding: 0 16px;
+  background: var(--bg);
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
   color: inherit;
   text-decoration: none;
   white-space: nowrap;
-}
-
-.brand-mark {
-  position: relative;
-  display: grid;
-  width: 38px;
-  height: 38px;
-  place-items: center;
-  border: 1px solid var(--chassis-line-high);
-  border-radius: 2px;
-  background: var(--label-paper);
-  box-shadow:
-    inset 0 0 0 3px var(--chassis-deep),
-    inset 0 0 0 4px var(--chassis-line);
-  color: var(--label-ink);
-  font: 700 9px var(--font-mono);
-  letter-spacing: 0.08em;
-}
-
-.brand-mark i {
-  font-style: normal;
-  transform: rotate(-90deg);
 }
 
 .brand strong,
@@ -237,7 +241,7 @@ button {
   display: block;
 }
 .brand strong {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.17em;
   text-transform: uppercase;
@@ -245,118 +249,48 @@ button {
 .brand small {
   margin-top: 3px;
   color: var(--muted);
-  font: 8px/1.2 var(--font-mono);
+  font: 9px/1.2 var(--font-mono);
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
-.document-title {
-  display: grid;
-  min-width: 190px;
-  grid-template-columns: 1fr auto;
-  padding: 6px 10px 5px;
-  border: 1px solid var(--chassis-line);
-  background: var(--label-paper);
-  box-shadow: inset 0 1px 2px var(--bevel-shadow);
-}
-
-.document-title strong {
-  grid-column: 1;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.document-title span {
-  grid-column: 1;
-  color: var(--faint);
-  font: 7px/1.2 var(--font-mono);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.document-title em {
-  grid-row: 1 / 3;
-  grid-column: 2;
-  align-self: center;
-  padding-left: 10px;
-  color: var(--danger-text);
-  font-size: 8px;
-  font-style: normal;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
+/* Bevels are outlines, which take no layout space, so the first
+   2 * --bevel-width of any gap is covered by them. Only the remainder shows. */
 .top-actions {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: calc(var(--bevel-width) * 2 + 4px);
   margin-left: auto;
 }
 
-.machine-state {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-right: 8px;
-  color: var(--muted);
-  font-size: 8px;
+.save-state {
+  margin-right: 10px;
+  color: var(--danger);
+  font-size: 9px;
   letter-spacing: 0.09em;
   text-transform: uppercase;
 }
 
-.machine-state i {
-  width: 6px;
-  height: 6px;
-  border: 1px solid var(--select-line);
-  border-radius: 50%;
-  background: var(--select);
-  box-shadow: 0 0 3px color-mix(in srgb, var(--select) 35%, transparent);
-}
-
+/* One height for the whole row, rather than letting padding and font size
+   decide it per button. */
 .top-actions button {
-  padding: 7px 9px;
-  border-radius: var(--radius-control);
-  cursor: pointer;
-  font-size: 10px;
+  height: 26px;
+  padding: 0 9px;
+  font-size: 11px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-}
-
-.top-actions .quiet {
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-}
-
-.top-actions .quiet:hover {
-  background: var(--chassis-high);
-  color: var(--text);
 }
 
 .top-actions .panel-toggle {
   display: flex;
   align-items: center;
   gap: 7px;
-  border: 1px solid var(--chassis-line-high);
-  background: var(--control-face);
-  box-shadow:
-    inset 0 1px 0 var(--bevel-light),
-    0 1px 1px var(--bevel-shadow);
-  color: var(--muted);
 }
 
 .top-actions .panel-toggle:hover,
-.top-actions .panel-toggle.active {
-  border-color: var(--select-line);
+.top-actions .panel-toggle[aria-pressed="true"] {
   background: var(--select-dim);
   color: var(--select-text);
-}
-
-.top-actions .panel-toggle:active {
-  transform: translateY(1px);
-  box-shadow: inset 0 1px 2px var(--bevel-shadow);
 }
 
 .panel-toggle i {
@@ -364,7 +298,6 @@ button {
   width: 13px;
   height: 11px;
   border: 1px solid currentColor;
-  border-radius: 2px;
 }
 
 .panel-toggle i::after {
@@ -377,33 +310,25 @@ button {
   content: "";
 }
 
+/* Engraved rather than painted: a shadowed edge then a lit one. --bevel-shadow
+   is translucent, so it darkens the bar it sits on instead of stamping a fixed
+   dark over it. */
 .divider {
-  width: 1px;
-  height: 20px;
-  margin: 0 6px;
-  background: var(--chassis-line);
+  width: 2px;
+  height: 16px;
+  background: linear-gradient(
+    90deg,
+    var(--bevel-shadow) 1px,
+    var(--bevel-face) 1px
+  );
 }
 
-.editor {
-  display: grid;
-  min-height: 0;
-  overflow: hidden;
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.editor.panel-open {
-  grid-template-columns: minmax(0, 1fr) var(--sidebar-width);
-}
-
-.editor.resizing {
-  cursor: col-resize;
-  user-select: none;
-}
-
-.sidebar-wrap {
+.app-shell > .sidebar-wrap {
   position: relative;
   min-width: 0;
   min-height: 0;
+  grid-row: 1 / -1;
+  grid-column: 2;
 }
 
 .resize-handle {
@@ -433,7 +358,7 @@ button {
 
 .resize-handle:hover::after,
 .resize-handle:focus-visible::after,
-.editor.resizing .resize-handle::after {
+.app-shell.resizing .resize-handle::after {
   background: var(--select);
 }
 
@@ -441,10 +366,10 @@ button {
   .topbar {
     gap: 10px;
   }
-  .top-actions .quiet {
-    display: none;
-  }
-  .document-title span {
+  /* Only .quiet buttons sit between the dividers, so the dividers go with
+     them rather than stacking against each other. */
+  .top-actions .quiet,
+  .divider {
     display: none;
   }
 }

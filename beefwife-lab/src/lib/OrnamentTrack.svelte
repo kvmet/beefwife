@@ -107,21 +107,21 @@
   .track-label {
     padding: 10px 12px 8px 16px;
     border-right: 1px solid var(--chassis-line);
-    background: var(--label-paper);
-    box-shadow: inset -1px 0 0 var(--bevel-shadow);
+    background: var(--chassis);
+    box-shadow: inset -2px 0 0 var(--bevel-shadow);
   }
   .track-label strong,
   .track-label span {
     display: block;
   }
   .track-label strong {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 650;
   }
   .track-label span {
     margin-top: 2px;
     color: var(--faint);
-    font-size: 9px;
+    font-size: 10px;
   }
 
   .track {
@@ -154,10 +154,9 @@
     position: absolute;
     height: 23px;
     overflow: hidden;
-    border: 1px solid var(--ornament-chip-line);
-    border-radius: 12px;
-    background: var(--ornament-chip);
-    color: var(--ornament-chip-text);
+    background: #1e242c;
+    outline-color: var(--bevel-face-screen);
+    color: #c8cdd5;
     cursor: grab;
     font-size: 9px;
     text-overflow: ellipsis;
@@ -168,10 +167,15 @@
   button:hover,
   button.active {
     z-index: 3;
-    border-color: var(--screen-select);
+    background: #2b333e;
+    color: var(--screen-text);
+  }
+  button.active {
+    outline-color: var(--screen-select);
   }
   button.dragging {
     z-index: 4;
+    outline-style: inset;
     cursor: grabbing;
   }
   button i {
@@ -180,6 +184,6 @@
     height: 5px;
     margin-right: 5px;
     border-radius: 50%;
-    background: var(--ornament);
+    background: #8993a2;
   }
 </style>

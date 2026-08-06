@@ -5,9 +5,8 @@
   export let selected;
   export let activeTab;
   export let ontab;
-  export let onclose;
 
-  const tabs = ["Creature", "Chain", "Motion", "Assets", "JSON"];
+  const tabs = ["Config", "Chain", "Motion", "Assets"];
   const labels = {
     eyes: ["Ornament", "Eyes"],
     feelers: ["Ornament", "Feelers"],
@@ -21,23 +20,20 @@
 
 <aside class="inspector" aria-label="Beefwife tools">
   <div class="panel-nav">
-    <nav aria-label="Editor modes">
+    <nav role="tablist" aria-label="Editor modes">
       {#each tabs as tab}
         <button
-          class:active={activeTab === tab}
-          aria-pressed={activeTab === tab}
+          role="tab"
+          aria-selected={activeTab === tab}
           onclick={() => ontab(tab)}
         >
           {tab}
         </button>
       {/each}
     </nav>
-    <button class="close-button" aria-label="Close tool panel" onclick={onclose}
-      >×</button
-    >
   </div>
 
-  <div class="inspector-scroll">
+  <div class="inspector-scroll" role="tabpanel" aria-label={activeTab}>
     {#if activeTab === "Chain"}
       <header class="panel-heading">
         <div>
@@ -136,7 +132,7 @@
       </details>
 
       <details><summary>Visibility &amp; effects</summary></details>
-    {:else if activeTab === "Creature"}
+    {:else if activeTab === "Config"}
       <header class="panel-heading">
         <div>
           <span>Creature</span>
@@ -175,6 +171,10 @@
         </div>
       </details>
       <details><summary>Visual effects</summary></details>
+      <details open>
+        <summary>Canonical JSON</summary>
+        <JsonPanel />
+      </details>
     {:else if activeTab === "Motion"}
       <header class="panel-heading">
         <div>
@@ -218,8 +218,6 @@
       <details><summary>Idle behavior</summary></details>
     {:else if activeTab === "Assets"}
       <AssetsPanel />
-    {:else}
-      <JsonPanel />
     {/if}
   </div>
 </aside>
@@ -232,89 +230,55 @@
     min-width: 0;
     min-height: 0;
     overflow: hidden;
-    border-left: 6px solid var(--chassis-deep);
-    background: var(--chassis);
-    box-shadow:
-      inset 1px 0 0 var(--chassis-line-high),
-      inset 2px 0 0 var(--bevel-light);
     grid-template-rows: auto minmax(0, 1fr);
   }
 
+  /* Above .inspector-scroll so the selected tab paints over the panel's top
+     edge; the overhang is why this strip cannot clip. */
   .panel-nav {
+    position: relative;
+    z-index: 2;
     display: flex;
     min-width: 0;
     height: 42px;
     padding: 4px 5px 0;
-    border-bottom: 1px solid var(--chassis-line-high);
-    background: var(--chassis-deep);
-    box-shadow: inset 0 1px 0 var(--bevel-light);
+    background: var(--bg);
   }
 
   .panel-nav nav {
-    display: flex;
     min-width: 0;
     flex: 1;
-    overflow-x: auto;
-    scrollbar-width: none;
   }
 
-  .panel-nav nav::-webkit-scrollbar {
-    display: none;
-  }
-
-  .panel-nav button {
-    border: 0;
-    background: transparent;
-    color: var(--muted);
-    cursor: pointer;
-  }
-
+  /* min-width: 0 is what lets a flex item shrink past its label; without it the
+     strip clips the last tab instead. */
   .panel-nav nav button {
     position: relative;
-    min-width: max-content;
+    min-width: 0;
     padding: 0 7px;
-    border: 1px solid transparent;
-    border-bottom: 0;
-    font-size: 10px;
+    overflow: hidden;
+    font-size: 11px;
     letter-spacing: 0.05em;
+    text-overflow: ellipsis;
     text-transform: uppercase;
+    white-space: nowrap;
   }
 
-  .panel-nav nav button:hover,
-  .panel-nav nav button.active {
-    border-color: var(--chassis-line);
-    background: var(--chassis);
-    color: var(--text);
-  }
-
-  .panel-nav nav button.active::after {
-    position: absolute;
-    right: 9px;
-    bottom: 0;
-    left: 9px;
-    height: 2px;
-    background: var(--select);
-    content: "";
-  }
-
-  .close-button {
-    width: 33px;
-    height: 32px;
-    flex: 0 0 33px;
-    border: 1px solid var(--chassis-line-high) !important;
-    border-radius: var(--radius-control);
-    background: var(--control-face) !important;
-    box-shadow: inset 0 1px 0 var(--bevel-light);
-    font-size: 18px;
-  }
-
-  .close-button:hover {
-    background: var(--chassis-high);
-    color: var(--text);
-  }
-
+  /* The top edge the tabs sit on. A border rather than an inset shadow, so the
+     sticky .panel-heading scrolls under it instead of covering it. */
   .inspector-scroll {
+    position: relative;
+    z-index: 1;
     min-height: 0;
+    /* The bevel belongs to this view, so it stops at the view's top corner
+       under the tabs. The lines live in the padding, where no child
+       background (like the sticky heading) can cover them. */
+    padding-left: 3px;
+    border-top: 2px solid var(--edge-light);
+    background: var(--chassis);
+    box-shadow:
+      inset 2px 0 0 var(--chassis-line-high),
+      inset 3px 0 0 var(--bevel-light);
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -326,16 +290,12 @@
     z-index: 4;
     top: 0;
     display: flex;
-    min-height: 72px;
+    min-height: 64px;
     align-items: center;
     justify-content: space-between;
-    margin: 8px 10px 0;
-    padding: 13px 14px;
-    border: 1px solid var(--chassis-line-high);
-    background: var(--label-paper);
-    box-shadow:
-      inset 0 1px 0 var(--bevel-light),
-      0 1px 2px var(--bevel-shadow);
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--chassis-line);
+    background: var(--chassis);
   }
 
   .panel-heading > div > span,
@@ -349,7 +309,7 @@
 
   h2 {
     margin: 3px 0 0;
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 600;
   }
 
@@ -360,25 +320,15 @@
     height: 30px;
     place-items: center;
     padding: 0 8px;
-    border: 0;
-    border-radius: var(--radius-control);
-    background: transparent;
-    color: var(--muted);
-    cursor: pointer;
   }
 
-  .panel-heading button:hover,
-  .header-actions button:hover {
-    background: var(--chassis-high);
-    color: var(--text);
-  }
   .header-actions {
     display: flex;
     gap: 2px;
   }
   .delete-button:hover {
-    background: var(--danger) !important;
-    color: var(--danger-text) !important;
+    background: var(--danger-dim);
+    color: var(--danger);
   }
 
   .delete-button i {
@@ -412,8 +362,7 @@
   .selection-path {
     display: flex;
     gap: 7px;
-    margin: 0 10px;
-    padding: 8px 10px;
+    padding: 8px 16px;
     overflow: hidden;
     border-bottom: 1px solid var(--chassis-line);
     color: var(--muted);
@@ -432,28 +381,17 @@
 
   details {
     margin: 8px 10px;
-    border: 1px solid var(--chassis-line);
-    background: color-mix(in srgb, var(--chassis) 82%, var(--chassis-deep));
-    box-shadow:
-      inset 0 1px 0 var(--bevel-light),
-      0 1px 1px var(--bevel-shadow);
+    background: color-mix(in srgb, var(--chassis) 82%, var(--bg));
   }
 
   summary {
     position: relative;
     padding: 11px 13px;
-    border-bottom: 1px solid transparent;
-    background: var(--label-paper);
-    color: var(--text-dim);
-    cursor: pointer;
-    font-size: 10px;
+    color: var(--text);
+    font-size: 11px;
     font-weight: 650;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-  }
-
-  details[open] summary {
-    border-bottom-color: var(--chassis-line);
   }
 
   summary::after {
@@ -462,11 +400,16 @@
     right: 10px;
     width: 4px;
     height: 4px;
-    border: 1px solid var(--screw);
+    border: 1px solid var(--chassis-line);
     border-radius: 50%;
-    background: var(--control-face);
+    background: var(--bg);
     content: "";
     transform: translateY(-50%);
+  }
+
+  details[open] summary::after {
+    border-color: var(--select-line);
+    background: var(--select);
   }
 
   .fields {
@@ -492,23 +435,9 @@
   select,
   input:not([type="range"]) {
     width: 100%;
-    height: 31px;
-    border: 1px solid var(--chassis-line-high);
-    border-radius: var(--radius-screen);
-    outline: 0;
-    background: var(--screen);
-    color: var(--screen-text);
-  }
-
-  select {
+    height: 34px;
     padding: 0 8px;
-  }
-  input:not([type="range"]) {
-    padding: 0 8px;
-  }
-  input:focus,
-  select:focus {
-    border-color: var(--screen-select);
+    outline-color: var(--bevel-face-screen);
   }
   input[type="range"] {
     width: 100%;

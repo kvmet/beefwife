@@ -56,11 +56,6 @@
   .add-button {
     height: 30px;
     padding: 0 9px;
-    border: 1px solid var(--chassis-line-high);
-    border-radius: var(--radius-control);
-    background: transparent;
-    color: var(--muted);
-    cursor: pointer;
   }
 
   section {
@@ -73,7 +68,7 @@
     margin-bottom: 10px;
   }
   .section-title strong {
-    font-size: 10px;
+    font-size: 11px;
     letter-spacing: 0.06em;
     text-transform: uppercase;
   }
@@ -92,11 +87,9 @@
     align-items: center;
     gap: 9px;
     min-width: 0;
-    border: 1px solid var(--chassis-line);
-    border-radius: var(--radius-screen);
     background: var(--screen);
+    outline-color: var(--bevel-face-screen);
     color: var(--screen-muted);
-    cursor: pointer;
     font-size: 10px;
   }
 
@@ -107,19 +100,19 @@
   }
   .asset-grid button:hover,
   .material-list button:hover {
-    border-color: var(--chassis-line-high);
-    color: var(--text);
+    background: #1b212a;
+    color: var(--screen-text);
   }
   .shape {
     display: block;
     width: 23px;
     height: 17px;
-    background: var(--rust);
+    background: #a8444a;
   }
   .shape.round {
     width: 17px;
     border-radius: 50%;
-    background: var(--glow-material);
+    background: #e1b86c;
   }
   .shape.spike {
     clip-path: polygon(50% 0, 100% 100%, 0 100%);
@@ -141,17 +134,17 @@
   .material-list i {
     width: 17px;
     height: 17px;
-    border: 1px solid var(--swatch-line);
+    border: 1px solid #ffffff22;
     border-radius: var(--radius-screen);
   }
   .rust {
-    background: var(--rust);
+    background: #a8444a;
   }
   .glow {
-    background: var(--glow-material);
-    box-shadow: 0 0 3px var(--glow-material-halo);
+    background: #e1b86c;
+    box-shadow: 0 0 3px #e1b86c1f;
   }
   .ink {
-    background: var(--ink);
+    background: #17191d;
   }
 </style>

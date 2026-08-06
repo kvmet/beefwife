@@ -9,7 +9,6 @@
 
   let canvas;
   let runtime;
-  let runtimeState = "loading";
   let playing = true;
   let guides = false;
   let autoTarget = false;
@@ -105,7 +104,6 @@
 
   async function mountCanvas() {
     try {
-      runtimeState = "loading";
       const mounted = await window.BeefwifeCanvas.mount(canvas, {
         descriptors: [rustWalker],
         count: 1,
@@ -125,10 +123,8 @@
         return;
       }
       runtime = mounted;
-      runtimeState = "online";
       requestAnimationFrame(sendTarget);
     } catch (error) {
-      runtimeState = "fault";
       console.error("Beefwife canvas failed to mount", error);
     }
   }
@@ -174,7 +170,6 @@
   <div class="stage-heading">
     <span>Specimen monitor / live canvas</span>
     <strong>Rust walker</strong>
-    <small class:online={runtimeState === "online"}>{runtimeState}</small>
   </div>
 
   <div class="stage-tools" aria-label="Canvas controls">
@@ -249,8 +244,6 @@
     position: relative;
     min-width: 0;
     overflow: hidden;
-    border: 7px solid var(--chassis-deep);
-    border-right-width: 6px;
     background-color: var(--screen);
     background-image: none;
     background-size:
@@ -415,7 +408,7 @@
     align-items: center;
     gap: 5px;
     margin-top: 4px;
-    color: var(--danger-text);
+    color: var(--danger);
     font-size: 8px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -441,30 +434,17 @@
     padding: 4px;
     border: 1px solid var(--chassis-line-high);
     border-radius: var(--radius-control);
-    background: var(--control-veil);
-    box-shadow: inset 0 1px 0 var(--bevel-light);
+    background: color-mix(in srgb, var(--chassis) 93%, transparent);
   }
 
   .stage-tools button {
-    padding: 6px 9px;
-    border: 1px solid transparent;
-    border-radius: calc(var(--radius-control) - 2px);
-    background: transparent;
-    color: var(--muted);
-    cursor: pointer;
-    font-size: 9px;
+    padding: 4px 8px;
+    font-size: 10px;
     letter-spacing: 0.09em;
     text-transform: uppercase;
   }
 
-  .stage-tools button:hover {
-    border-color: var(--chassis-line);
-    background: var(--chassis-high);
-    color: var(--text);
-  }
-
-  .stage-tools button.active {
-    border-color: var(--select-line);
+  .stage-tools button[aria-pressed="true"] {
     background: var(--select-dim);
     color: var(--select-text);
   }
@@ -474,13 +454,15 @@
     left: 32px;
     min-width: 126px;
     padding: 6px 9px;
-    border: 1px solid var(--screen-line-major);
-    border-left: 3px solid var(--screen-select);
-    border-radius: 0;
-    background: #101318d9;
+    background: #1b212a;
+    outline-color: var(--bevel-face-screen);
     color: var(--screen-text);
-    cursor: pointer;
     text-align: left;
+  }
+
+  .selection-badge:hover {
+    background: #262e3a;
+    color: var(--screen-text);
   }
 
   .selection-badge span,
@@ -497,6 +479,7 @@
 
   .selection-badge strong {
     margin-top: 3px;
+    color: var(--screen-select);
     font-size: 10px;
     font-weight: 600;
     text-transform: uppercase;
@@ -508,9 +491,8 @@
     left: 32px;
     display: flex;
     margin: 0;
-    border: 1px solid var(--chassis-line);
-    background: var(--control-veil);
-    box-shadow: 0 2px 7px #0003;
+    background: color-mix(in srgb, var(--chassis) 93%, transparent);
+    outline: var(--bevel-width) inset var(--bevel-face);
   }
 
   .readout {

@@ -11,14 +11,6 @@
 }`;
 </script>
 
-<header>
-  <div>
-    <span>Descriptor</span>
-    <h2>Canonical JSON</h2>
-  </div>
-  <span class="valid-status"><i></i>Valid</span>
-</header>
-
 <div class="actions">
   <button>Import file</button>
   <button>Copy</button>
@@ -26,45 +18,35 @@
 </div>
 
 <label>
-  <span>Schema 1 · generated preview</span>
+  <span class="schema-row">
+    <span>Schema 1 · generated preview</span>
+    <span class="valid-status"><i></i>Valid</span>
+  </span>
   <textarea readonly spellcheck="false" value={jsonPreview}></textarea>
 </label>
 <p>Editing will be enabled after the descriptor binding is connected.</p>
 
 <style>
-  header {
-    position: sticky;
-    z-index: 4;
-    top: 0;
+  .actions {
     display: flex;
-    min-height: 64px;
     align-items: center;
-    justify-content: space-between;
-    padding: 13px 16px;
+    gap: 5px;
+    padding: 12px 14px;
     border-bottom: 1px solid var(--chassis-line);
-    background: var(--chassis);
+  }
+  .actions button {
+    padding: 6px 8px;
+    font-size: 11px;
   }
 
-  header span,
-  label > span {
-    display: block;
-    color: var(--muted);
-    font: var(--label-font);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-  }
-
-  h2 {
-    margin: 3px 0 0;
-    font-size: 16px;
-    font-weight: 600;
-  }
   .valid-status {
     display: flex;
     align-items: center;
     gap: 6px;
     color: var(--select);
     font-size: 10px;
+    text-transform: none;
+    letter-spacing: normal;
   }
   .valid-status i {
     width: 6px;
@@ -72,27 +54,17 @@
     border-radius: 50%;
     background: var(--select);
   }
-  .actions {
-    display: flex;
-    gap: 5px;
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--chassis-line);
-  }
-  .actions button {
-    padding: 6px 8px;
-    border: 1px solid var(--chassis-line-high);
-    border-radius: var(--radius-control);
-    background: transparent;
-    color: var(--muted);
-    cursor: pointer;
-    font-size: 10px;
-  }
 
-  .actions .export-button {
+  .export-button {
     margin-left: auto;
-    border-color: var(--select-line);
     background: var(--select-dim);
     color: var(--select-text);
+  }
+
+  .schema-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
   label {
     display: block;
@@ -100,17 +72,18 @@
     padding: 14px;
   }
   label > span {
+    display: block;
     margin-bottom: 6px;
+    color: var(--muted);
+    font: var(--label-font);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
   }
   textarea {
     width: 100%;
     min-height: 310px;
     resize: vertical;
-    border: 1px solid var(--chassis-line);
-    border-radius: var(--radius-screen);
-    outline: 0;
-    background: var(--screen);
-    color: var(--screen-text);
+    outline-color: var(--bevel-face-screen);
     font:
       11px/1.6 ui-monospace,
       SFMono-Regular,
