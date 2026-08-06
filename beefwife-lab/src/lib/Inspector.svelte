@@ -1,4 +1,5 @@
 <script>
+  import { tick } from "svelte";
   import AssetsPanel from "./AssetsPanel.svelte";
   import ChainMap from "./ChainMap.svelte";
   import JsonPanel from "./JsonPanel.svelte";
@@ -15,6 +16,20 @@
   const DEG = 180 / Math.PI;
   const SECTION_NAMES = ["head", "trunk", "tail"];
   const CHANNEL_NAMES = ["bend", "thrust", "gather", "contact"];
+  const SECTION_MINIMUMS = { head: 1, trunk: 1, tail: 0 };
+
+  let selectedSection = null;
+  let sectionPanels = {};
+
+  async function revealSection(name) {
+    selectedSection = name;
+    if (activeTab !== "Motion") ontab("Motion");
+    await tick();
+    const panel = sectionPanels[name];
+    if (!panel) return;
+    panel.open = true;
+    panel.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
 
   /* At time zero a channel runs sin(offset - harmonic·lag·d) down the chain,
      so its on-screen cycle count comes from the lag, not the clock.
@@ -67,7 +82,7 @@
       title="Hide panel"
       onclick={onhide}>−</button
     >
-    <ChainMap />
+    <ChainMap section={selectedSection} onsection={revealSection} />
   </div>
 
   <div class="inspector-main">
@@ -662,30 +677,75 @@
             </div>
           </details>
 
-          <details open>
-            <summary>Section response</summary>
-            <div class="matrix">
-              <i></i>
-              {#each CHANNEL_NAMES as channel}
-                <span>{channel}</span>
-              {/each}
-              {#each SECTION_NAMES as name}
-                <span>{name}</span>
-                {#each CHANNEL_NAMES as channel}
+          {#each SECTION_NAMES as name}
+            <details open bind:this={sectionPanels[name]}>
+              <summary>{name}</summary>
+              <div class="rows">
+                <label class="row">
+                  <div class="head">
+                    <span>Segment length</span>
+                    <input
+                      type="number"
+                      min={SECTION_MINIMUMS[name]}
+                      max="256"
+                      step="1"
+                      bind:value={$descriptor.chain.sections[name].chunks}
+                    />
+                  </div>
                   <input
-                    type="number"
-                    min="0"
-                    max="4"
-                    step="0.05"
-                    aria-label={`${name} ${channel} scale`}
-                    bind:value={
-                      $descriptor.chain.sections[name].motionScale[channel]
-                    }
+                    type="range"
+                    min={SECTION_MINIMUMS[name]}
+                    max="64"
+                    step="1"
+                    bind:value={$descriptor.chain.sections[name].chunks}
+                    ondblclick={() =>
+                      ($descriptor.chain.sections[name].chunks =
+                        defaults.chain.sections[name].chunks)}
                   />
-                {/each}
-              {/each}
-            </div>
-          </details>
+                </label>
+                <label class="row">
+                  <div class="head">
+                    <span>Link distance</span>
+                    <div class="unit">
+                      <input
+                        type="number"
+                        min="0.000001"
+                        max="1000"
+                        step="0.5"
+                        bind:value={$descriptor.chain.sections[name].spacing}
+                      /><em>px</em>
+                    </div>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="40"
+                    step="0.5"
+                    bind:value={$descriptor.chain.sections[name].spacing}
+                    ondblclick={() =>
+                      ($descriptor.chain.sections[name].spacing =
+                        defaults.chain.sections[name].spacing)}
+                  />
+                </label>
+                <div class="scales">
+                  {#each CHANNEL_NAMES as channel}
+                    <label>
+                      <span>{channel}</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="4"
+                        step="0.05"
+                        bind:value={
+                          $descriptor.chain.sections[name].motionScale[channel]
+                        }
+                      />
+                    </label>
+                  {/each}
+                </div>
+              </div>
+            </details>
+          {/each}
 
           <details open>
             <summary>Steering</summary>
@@ -913,7 +973,8 @@
                   max="1"
                   step="0.01"
                   bind:value={$descriptor.legs.lead}
-                  ondblclick={() => ($descriptor.legs.lead = defaults.legs.lead)}
+                  ondblclick={() =>
+                    ($descriptor.legs.lead = defaults.legs.lead)}
                 />
               </label>
               <label class="row">
@@ -958,7 +1019,8 @@
                   step="0.005"
                   bind:value={$descriptor.legs.swingSeconds}
                   ondblclick={() =>
-                    ($descriptor.legs.swingSeconds = defaults.legs.swingSeconds)}
+                    ($descriptor.legs.swingSeconds =
+                      defaults.legs.swingSeconds)}
                 />
               </label>
               <label class="row">
@@ -1279,26 +1341,14 @@
     font-size: 10px;
   }
 
-  /* Row labels get the leftover width; four equal value columns line up with
-     the wave plots' idea of one column per channel. */
-  .matrix {
+  /* Four equal columns line up with the wave plots' one column per channel. */
+  .scales {
     display: grid;
-    align-items: center;
-    grid-template-columns: minmax(38px, auto) repeat(4, 1fr);
-    gap: 8px 5px;
-    padding: 6px 2px 15px 23px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 5px;
   }
 
-  .matrix span {
-    overflow: hidden;
-    color: var(--muted);
-    font: var(--label-font);
-    letter-spacing: 0.05em;
-    text-overflow: ellipsis;
-    text-transform: uppercase;
-  }
-
-  .matrix input {
+  .scales input {
     padding: 0 4px;
     text-align: right;
   }
