@@ -173,7 +173,7 @@ to each other, and definitions cannot refer outside their descriptor.
 ## Chain regions
 
 The chain has exactly `head`, `trunk`, and `tail` sections. Head and trunk must
-contain at least one chunk; the tail may be empty. Together they contain 3 to
+contain at least one chunk; the tail may be empty. Together they contain 2 to
 256 chunks.
 
 Each section declares:

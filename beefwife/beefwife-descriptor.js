@@ -386,8 +386,8 @@ const BeefwifeDescriptor = (() => {
       fail("$.chain.sections.head.chunks", "must be at least 1");
     if (sections.trunk.chunks < 1)
       fail("$.chain.sections.trunk.chunks", "must be at least 1");
-    if (total < 3 || total > LIMITS.chunks)
-      fail("$.chain.sections", `must contain 3 to ${LIMITS.chunks} chunks`);
+    if (total < 2 || total > LIMITS.chunks)
+      fail("$.chain.sections", `must contain 2 to ${LIMITS.chunks} chunks`);
     SECTIONS.forEach((name) =>
       reference(
         definitions.materials,

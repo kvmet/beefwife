@@ -279,7 +279,7 @@ rejected("empty trunk", emptyTrunk, /at least 1/);
 
 const tooManyChunks = copy(source);
 tooManyChunks.chain.sections.trunk.chunks = BeefwifeDescriptor.LIMITS.chunks;
-rejected("too many total chunks", tooManyChunks, /3 to 256/);
+rejected("too many total chunks", tooManyChunks, /2 to 256/);
 
 const fractionalPairs = copy(source);
 fractionalPairs.legs.pairs = 0.5;
