@@ -27,6 +27,7 @@ const beefwife = new Beefwife(descriptor, {
   random: Math.random,
   render: {
     roundVertices: false,
+    pixelResolution: 1,
     kneeProjection: {
       centerX: 0,
       centerY: 0,
@@ -57,8 +58,11 @@ simulation reaches the numeric boundary, the whole beefwife is rebased just
 inside it; current, previous, leg, and ornament positions move together, so
 velocity and secondary motion are preserved.
 
-The optional `render` object is a live rendering policy with exactly two
-fields. `roundVertices` is boolean pixel snapping. `kneeProjection` is `null`
+The optional `render` object is a live rendering policy with exactly three
+fields. `roundVertices` is boolean pixel snapping. `pixelResolution` is the
+positive number of output pixels per world pixel and defaults to one; snapping
+uses its output-pixel grid, and a host should update it when renderer resolution
+changes. `kneeProjection` is `null`
 or an object containing finite `centerX`, `centerY`, and nonnegative
 `perspective`, plus an optional nonnegative `maxOffset`. Projection changes only
 the drawn knee shared by the two segments of each limb; simulated hips and

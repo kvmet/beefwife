@@ -60,7 +60,11 @@ const Beefwife = (() => {
     "random",
     "render",
   ]);
-  const RENDER_KEYS = new Set(["roundVertices", "kneeProjection"]);
+  const RENDER_KEYS = new Set([
+    "roundVertices",
+    "pixelResolution",
+    "kneeProjection",
+  ]);
   const KNEE_PROJECTION_KEYS = new Set([
     "centerX",
     "centerY",
@@ -102,6 +106,16 @@ const Beefwife = (() => {
       typeof render.roundVertices !== "boolean"
     )
       throw new TypeError("options.render.roundVertices must be a boolean");
+    if (render.pixelResolution !== undefined) {
+      const pixelResolution = finite(
+        render.pixelResolution,
+        "options.render.pixelResolution",
+      );
+      if (pixelResolution <= 0)
+        throw new RangeError(
+          "options.render.pixelResolution must be positive",
+        );
+    }
     const projection = render.kneeProjection;
     if (projection !== undefined && projection !== null) {
       optionsOf(

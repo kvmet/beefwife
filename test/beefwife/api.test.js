@@ -66,6 +66,8 @@ checks += 3;
   () => new Beefwife(example, { random: 1 }),
   () => new Beefwife(example, { render: { unknown: true } }),
   () => new Beefwife(example, { render: { roundVertices: 1 } }),
+  () => new Beefwife(example, { render: { pixelResolution: 0 } }),
+  () => new Beefwife(example, { render: { pixelResolution: Infinity } }),
   () =>
     new Beefwife(example, {
       render: {

@@ -244,6 +244,27 @@ assert.ok(
 checks++;
 roundedLegs.destroy();
 
+const reducedRender = { roundVertices: true, pixelResolution: 0.25 };
+const reducedLegs = new Beefwife(bentLeggedSource, {
+  random: () => 0.5,
+  render: reducedRender,
+});
+const reducedPositions = reducedLegs.children.find(
+  (child) => child instanceof Mesh,
+).dynamicPositions;
+assert.deepEqual(
+  Array.from(reducedPositions),
+  Array.from(baselinePositions, (value) => Math.round(value * 0.25) * 4),
+);
+reducedRender.pixelResolution = 0.5;
+reducedLegs.onRender();
+assert.deepEqual(
+  Array.from(reducedPositions),
+  Array.from(baselinePositions, (value) => Math.round(value * 0.5) * 2),
+);
+checks += 2;
+reducedLegs.destroy();
+
 const centeredLegs = new Beefwife(bentLeggedSource, {
   random: () => 0.5,
   render: {

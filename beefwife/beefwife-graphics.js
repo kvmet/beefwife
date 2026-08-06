@@ -97,6 +97,30 @@ const BeefwifeGraphics = (() => {
     return meshFor(chunkCount * 2, indices, paint.fill);
   };
 
+  const snapCoordinate = (value, pixelResolution, inversePixelResolution) =>
+    pixelResolution === 1
+      ? Math.round(value)
+      : pixelResolution > 0
+        ? Math.round(value * pixelResolution) * inversePixelResolution
+        : value;
+
+  const snapPositions = (
+    positions,
+    start,
+    end,
+    pixelResolution,
+    inversePixelResolution,
+  ) => {
+    if (pixelResolution === 1)
+      for (let index = start; index < end; index++)
+        positions[index] = Math.round(positions[index]);
+    else if (pixelResolution > 0)
+      for (let index = start; index < end; index++)
+        positions[index] =
+          Math.round(positions[index] * pixelResolution) *
+          inversePixelResolution;
+  };
+
   const writeSegment = (
     positions,
     offset,
@@ -105,7 +129,8 @@ const BeefwifeGraphics = (() => {
     endX,
     endY,
     width,
-    roundVertices = false,
+    pixelResolution = 0,
+    inversePixelResolution = 0,
   ) => {
     const dx = endX - startX;
     const dy = endY - startY;
@@ -120,10 +145,13 @@ const BeefwifeGraphics = (() => {
     positions[offset + 5] = endY + normalY;
     positions[offset + 6] = endX - normalX;
     positions[offset + 7] = endY - normalY;
-    if (roundVertices) {
-      for (let index = offset; index < offset + 8; index++)
-        positions[index] = Math.round(positions[index]);
-    }
+    snapPositions(
+      positions,
+      offset,
+      offset + 8,
+      pixelResolution,
+      inversePixelResolution,
+    );
   };
 
   const setShapeTransform = (
@@ -135,7 +163,8 @@ const BeefwifeGraphics = (() => {
     directionY,
     scale,
     mirror = 1,
-    roundVertices = false,
+    pixelResolution = 0,
+    inversePixelResolution = 0,
   ) => {
     const scaleBucket = Math.round(scale * 64);
     if (graphics.scaleBucket !== scaleBucket) {
@@ -143,8 +172,8 @@ const BeefwifeGraphics = (() => {
       graphics.scaleBucket = scaleBucket;
     }
     graphics.position.set(
-      roundVertices ? Math.round(x) : x,
-      roundVertices ? Math.round(y) : y,
+      snapCoordinate(x, pixelResolution, inversePixelResolution),
+      snapCoordinate(y, pixelResolution, inversePixelResolution),
     );
     graphics.rotation = Math.atan2(directionY, directionX);
     graphics.scale.set(1, mirror);
@@ -234,13 +263,12 @@ const BeefwifeGraphics = (() => {
       }
     }
 
-    _syncLimbs(state) {
+    _syncLimbs(state, pixelResolution, inversePixelResolution) {
       const legs = state.legs;
       const positions = this.limbs.dynamicPositions;
       const width = this.model.legs.skin.limbPaint.strokeWidth;
       const stride = state.layout.legStride;
       const projection = this.options.kneeProjection ?? null;
-      const roundVertices = this.options.roundVertices === true;
       for (let offset = 0; offset < legs.length; offset += stride) {
         const legIndex = offset / stride;
         const vertexOffset = legIndex * 16;
@@ -305,7 +333,8 @@ const BeefwifeGraphics = (() => {
           kneeX,
           kneeY,
           width,
-          roundVertices,
+          pixelResolution,
+          inversePixelResolution,
         );
         writeSegment(
           positions,
@@ -315,20 +344,20 @@ const BeefwifeGraphics = (() => {
           legs[offset + 4],
           legs[offset + 5],
           width,
-          roundVertices,
+          pixelResolution,
+          inversePixelResolution,
         );
       }
       this.limbs.positionBuffer.update();
     }
 
-    _syncRibbon(state) {
+    _syncRibbon(state, pixelResolution, inversePixelResolution) {
       const chunks = state.chunks;
       const stride = state.layout.chunkStride;
       const scale = this.model.skin.scale;
       const lastIndex = this.model.chunks.length - 1;
       if (this.ribbonIsMesh) {
         const positions = this.ribbon.dynamicPositions;
-        const roundVertices = this.options.roundVertices === true;
         for (let index = 0; index < this.model.chunks.length; index++) {
           const chunkOffset = index * stride;
           const vertexOffset = index * 4;
@@ -341,19 +370,26 @@ const BeefwifeGraphics = (() => {
             chunks[chunkOffset] + chunks[chunkOffset + 3] * width;
           positions[vertexOffset + 3] =
             chunks[chunkOffset + 1] - chunks[chunkOffset + 2] * width;
-          if (roundVertices) {
-            for (let vertex = vertexOffset; vertex < vertexOffset + 4; vertex++)
-              positions[vertex] = Math.round(positions[vertex]);
-          }
+          snapPositions(
+            positions,
+            vertexOffset,
+            vertexOffset + 4,
+            pixelResolution,
+            inversePixelResolution,
+          );
         }
         this.ribbon.positionBuffer.update();
         return;
       }
       this.ribbon.clear();
       if (!this.model.skin.hasRibbon) return;
-      const coordinate = this.options.roundVertices
-        ? Math.round
-        : (value) => value;
+      const coordinate =
+        pixelResolution === 1
+          ? Math.round
+          : pixelResolution > 0
+            ? (value) =>
+                Math.round(value * pixelResolution) * inversePixelResolution
+            : (value) => value;
       for (let index = 0; index < this.model.chunks.length; index++) {
         const offset = index * stride;
         const width = this.model.chunks[index].ribbonWidth * scale;
@@ -401,7 +437,13 @@ const BeefwifeGraphics = (() => {
     sync(state) {
       if (state.model !== this.model)
         throw new Error("render state model does not match Beefwife graphics");
-      this._syncLimbs(state);
+      const pixelResolution =
+        this.options.roundVertices === true
+          ? (this.options.pixelResolution ?? 1)
+          : 0;
+      const inversePixelResolution =
+        pixelResolution > 0 ? 1 / pixelResolution : 0;
+      this._syncLimbs(state, pixelResolution, inversePixelResolution);
       const legs = state.legs;
       for (let index = 0; index < this.feet.length; index++) {
         const offset = index * state.layout.legStride;
@@ -414,7 +456,8 @@ const BeefwifeGraphics = (() => {
           legs[offset + 7],
           legs[offset + 8],
           legs[offset + 9],
-          this.options.roundVertices === true,
+          pixelResolution,
+          inversePixelResolution,
         );
       }
       const ornaments = state.ornaments;
@@ -429,10 +472,11 @@ const BeefwifeGraphics = (() => {
           ornaments[offset + 3],
           ornaments[offset + 4],
           ornaments[offset + 5],
-          this.options.roundVertices === true,
+          pixelResolution,
+          inversePixelResolution,
         );
       }
-      this._syncRibbon(state);
+      this._syncRibbon(state, pixelResolution, inversePixelResolution);
       const plates = state.plates;
       for (let index = 0; index < this.plates.length; index++) {
         const offset = index * state.layout.plateStride;
@@ -445,7 +489,8 @@ const BeefwifeGraphics = (() => {
           plates[offset + 3],
           plates[offset + 4],
           1,
-          this.options.roundVertices === true,
+          pixelResolution,
+          inversePixelResolution,
         );
       }
     }
