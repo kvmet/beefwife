@@ -3,13 +3,21 @@
   export let waves;
 
   const steps = 96;
+  const TAU = 2 * Math.PI;
+
+  /* TODO: mirrors BeefwifeGait._pulseAt. The beefwife API should export
+     channel sampling so this copy cannot drift from the simulation. */
+  function value(wave, t) {
+    const angle = TAU * wave.cycles * t + wave.phase;
+    if (!wave.duty) return Math.sin(angle);
+    const cycle = (((angle % TAU) + TAU) % TAU) / TAU;
+    return cycle >= wave.duty ? 0 : Math.sin((Math.PI * cycle) / wave.duty);
+  }
 
   function path(wave) {
     return Array.from({ length: steps + 1 }, (_, index) => {
       const t = index / steps;
-      const x =
-        50 +
-        wave.amp * 44 * Math.sin(2 * Math.PI * wave.cycles * t + wave.phase);
+      const x = 50 + wave.amp * 44 * value(wave, t);
       return `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${(t * 100).toFixed(1)}`;
     }).join(" ");
   }
@@ -28,7 +36,7 @@
 <style>
   .wave-column {
     display: grid;
-    width: 84px;
+    width: 72px;
     min-height: 0;
     flex: none;
     border-right: 1px solid var(--chassis-line);

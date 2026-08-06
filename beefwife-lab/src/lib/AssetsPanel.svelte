@@ -1,11 +1,3 @@
-<header>
-  <div>
-    <span>Parts</span>
-    <h2>Shapes &amp; materials</h2>
-  </div>
-  <button class="add-button">Add</button>
-</header>
-
 <section>
   <div class="section-title"><strong>Shapes</strong><span>4</span></div>
   <div class="asset-grid">
@@ -26,38 +18,6 @@
 </section>
 
 <style>
-  header {
-    position: sticky;
-    z-index: 4;
-    top: 0;
-    display: flex;
-    min-height: 64px;
-    align-items: center;
-    justify-content: space-between;
-    padding: 13px 16px;
-    border-bottom: 1px solid var(--chassis-line);
-    background: var(--chassis);
-  }
-
-  header span {
-    display: block;
-    color: var(--muted);
-    font: var(--label-font);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-  }
-
-  h2 {
-    margin: 3px 0 0;
-    font-size: 16px;
-    font-weight: 600;
-  }
-
-  .add-button {
-    height: 30px;
-    padding: 0 9px;
-  }
-
   section {
     padding: 16px;
     border-bottom: 1px solid var(--chassis-line);

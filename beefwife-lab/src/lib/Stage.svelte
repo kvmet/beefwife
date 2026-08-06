@@ -1,6 +1,7 @@
 <script>
   import { onDestroy, onMount, tick } from "svelte";
-  import { rustWalker } from "./defaultBeefwife.js";
+  import { get } from "svelte/store";
+  import { applyError, descriptor } from "./descriptor.js";
 
   export let selected;
   export let onselect;
@@ -45,6 +46,20 @@
   let filterPreset = "None";
 
   $: markerVisible = showTarget && hasTarget && targetMode === "manual";
+
+  /* The runtime validates on apply; a rejected document leaves the actor on
+     its last good state, so the error is reported instead of thrown. */
+  function applyDescriptor(value) {
+    if (!runtime) return;
+    try {
+      for (const actor of runtime.getActors()) actor.setDescriptor(value);
+      applyError.set(null);
+    } catch (error) {
+      applyError.set(error.message);
+    }
+  }
+
+  $: applyDescriptor($descriptor);
 
   function targetPoint() {
     const bounds = canvas?.getBoundingClientRect();
@@ -138,7 +153,7 @@
   async function mountCanvas(token = mountToken) {
     try {
       const mounted = await window.BeefwifeCanvas.mount(canvas, {
-        descriptors: [rustWalker],
+        descriptors: [get(descriptor)],
         count: 1,
         resolutionScale: Math.min(1, Math.max(0.125, +resolutionScale || 0.5)),
         imageRendering: pixelUpscale ? "pixelated" : "auto",
@@ -159,6 +174,8 @@
       }
       runtime = mounted;
       if (!playing) runtime.stop();
+      // Edits made while the mount was in flight were skipped; catch up.
+      applyDescriptor(get(descriptor));
       applyDebug();
       if (targetMode === "manual" && hasTarget)
         requestAnimationFrame(sendTarget);
@@ -196,13 +213,13 @@
   class:show-grid={showGrid}
   style:background-color={background}
   role="application"
-  aria-label="Beefwife preview and motion target"
+  aria-label="Beefwife preview"
   tabindex="0"
   onclick={placeTarget}
   onkeydown={moveTargetFromKeyboard}
 >
   {#key antialias}
-    <canvas bind:this={canvas} aria-label="Live Rust walker simulation"
+    <canvas bind:this={canvas} aria-label="Live Beefwife simulation"
     ></canvas>
   {/key}
 
@@ -223,7 +240,7 @@
 
   <div class="stage-heading">
     <span>Specimen monitor / live canvas</span>
-    <strong>Rust walker</strong>
+    <strong>Beefwife</strong>
   </div>
 
   <div class="stage-tools" class:collapsed={!toolsOpen}>
@@ -408,15 +425,6 @@
       aria-hidden="true"
     ></div>
   {/if}
-
-  <button
-    class="selection-badge"
-    title="Inspect the selected anchor"
-    onclick={() => onselect(selected)}
-  >
-    <span>Selected anchor</span>
-    <strong>{selected.replace("-", " ")}</strong>
-  </button>
 </section>
 
 <style>
