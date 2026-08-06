@@ -6,7 +6,7 @@
   export let activeTab;
   export let ontab;
 
-  const tabs = ["Config", "Chain", "Motion", "Assets"];
+  const tabs = ["Config", "Motion", "Look", "Parts"];
   const labels = {
     eyes: ["Ornament", "Eyes"],
     feelers: ["Ornament", "Feelers"],
@@ -34,7 +34,7 @@
   </div>
 
   <div class="inspector-scroll" role="tabpanel" aria-label={activeTab}>
-    {#if activeTab === "Chain"}
+    {#if activeTab === "Look"}
       <header class="panel-heading">
         <div>
           <span>{item[0]}</span>
@@ -216,7 +216,7 @@
       </details>
       <details open><summary>Steering &amp; intent</summary></details>
       <details><summary>Idle behavior</summary></details>
-    {:else if activeTab === "Assets"}
+    {:else if activeTab === "Parts"}
       <AssetsPanel />
     {/if}
   </div>

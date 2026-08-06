@@ -9,7 +9,7 @@
 
   $: document.documentElement.dataset.theme = theme;
 
-  let activeTab = "Chain";
+  let activeTab = "Look";
   let selected = "eyes";
   let sidebarOpen = true;
   let sidebarWidth = 316;
@@ -19,7 +19,7 @@
 
   function selectItem(id) {
     selected = id;
-    activeTab = "Chain";
+    activeTab = "Look";
     sidebarOpen = true;
   }
 

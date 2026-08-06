@@ -1,6 +1,6 @@
 <header>
   <div>
-    <span>Assets</span>
+    <span>Parts</span>
     <h2>Shapes &amp; materials</h2>
   </div>
   <button class="add-button">Add</button>
