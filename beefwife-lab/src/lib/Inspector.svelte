@@ -72,7 +72,7 @@
 
   <div class="inspector-main">
     <div class="panel-nav">
-      <nav role="tablist" aria-label="Editor modes">
+      <div role="tablist" aria-label="Editor modes">
         {#each tabs as tab}
           <button
             role="tab"
@@ -82,7 +82,7 @@
             {tab}
           </button>
         {/each}
-      </nav>
+      </div>
     </div>
 
     <div class="inspector-body">
@@ -1088,7 +1088,7 @@
     background: var(--bg);
   }
 
-  .panel-nav nav {
+  .panel-nav [role="tablist"] {
     min-width: 0;
     flex: 1;
     justify-content: flex-end;
@@ -1096,7 +1096,7 @@
 
   /* min-width: 0 is what lets a flex item shrink past its label; without it the
      strip clips the last tab instead. */
-  .panel-nav nav button {
+  .panel-nav [role="tablist"] button {
     position: relative;
     min-width: 0;
     padding: 0 7px;

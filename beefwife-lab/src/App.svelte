@@ -16,12 +16,6 @@
   let resizeStartWidth = 0;
   let resizing = false;
 
-  function selectItem(id) {
-    selected = id;
-    activeTab = "Look";
-    sidebarOpen = true;
-  }
-
   function clampSidebarWidth(width) {
     const viewportMaximum = Math.max(400, window.innerWidth - 340);
     return Math.min(Math.max(400, width), Math.min(800, viewportMaximum));
@@ -96,7 +90,7 @@
     </div>
   </header>
 
-  <Stage {selected} onselect={selectItem} />
+  <Stage />
 
   {#if sidebarOpen}
     <div class="sidebar-wrap">

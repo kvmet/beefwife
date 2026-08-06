@@ -3,9 +3,6 @@
   import { get } from "svelte/store";
   import { applyError, descriptor } from "./descriptor.js";
 
-  export let selected;
-  export let onselect;
-
   const ticks = [10, 20, 30, 40, 50, 60, 70, 80, 90];
   const toolTabs = ["Target", "Stage", "Sim", "Render"];
   const filterPresets = [
@@ -252,7 +249,7 @@
     >
 
     {#if toolsOpen}
-      <nav role="tablist" aria-label="Stage tool tabs">
+      <div role="tablist" aria-label="Stage tool tabs">
         {#each toolTabs as tab}
           <button
             role="tab"
@@ -262,7 +259,7 @@
             {tab}
           </button>
         {/each}
-      </nav>
+      </div>
 
       <div class="tool-body" role="tabpanel" aria-label={toolTab}>
       {#if toolTab === "Target"}
@@ -560,8 +557,7 @@
   }
 
   .stage-heading,
-  .stage-tools,
-  .selection-badge {
+  .stage-tools {
     position: absolute;
     z-index: 4;
   }
@@ -633,7 +629,7 @@
     position: static;
   }
 
-  .stage-tools nav {
+  .stage-tools [role="tablist"] {
     position: relative;
     z-index: 2;
     display: flex;
@@ -713,42 +709,6 @@
     padding: 2px;
   }
 
-  .selection-badge {
-    bottom: 20px;
-    left: 26px;
-    min-width: 126px;
-    padding: 6px 9px;
-    background: #1b212a;
-    outline-color: var(--bevel-face-screen);
-    color: var(--screen-text);
-    text-align: left;
-  }
-
-  .selection-badge:hover {
-    background: #262e3a;
-    color: var(--screen-text);
-  }
-
-  .selection-badge span,
-  .selection-badge strong {
-    display: block;
-  }
-
-  .selection-badge span {
-    color: var(--screen-faint);
-    font-size: 7px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-  }
-
-  .selection-badge strong {
-    margin-top: 3px;
-    color: var(--screen-select);
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-  }
-
   .target {
     position: absolute;
     z-index: 3;
@@ -792,11 +752,5 @@
       transparent 9px 28px,
       var(--screen-measure-line) 28px 37px
     );
-  }
-
-  @media (max-width: 980px) {
-    .selection-badge {
-      display: none;
-    }
   }
 </style>
