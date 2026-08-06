@@ -1,20 +1,50 @@
 <script>
-  import { onDestroy, onMount } from "svelte";
+  import { onDestroy, onMount, tick } from "svelte";
   import { rustWalker } from "./defaultBeefwife.js";
 
   export let selected;
   export let onselect;
 
   const ticks = [10, 20, 30, 40, 50, 60, 70, 80, 90];
+  const toolTabs = ["Target", "Stage", "Sim", "Render"];
+  const filterPresets = [
+    "None",
+    "Night vision",
+    "Thermal",
+    "Mono",
+    "Sepia",
+    "Negative",
+  ];
 
   let canvas;
   let runtime;
-  let playing = true;
-  let guides = false;
-  let autoTarget = false;
-  let target = { x: 62, y: 46 };
-  let autoTargetTimer;
   let disposed = false;
+  let mountToken = 0;
+
+  let toolTab = "Target";
+  let toolsOpen = true;
+
+  let targetMode = "manual";
+  let target = { x: 62, y: 46 };
+  let hasTarget = true;
+  let wanderDelay = 4;
+  let edgeMargin = 52;
+
+  let showGrid = false;
+  let showTarget = true;
+  let background = "#101318";
+
+  let playing = true;
+  let simulationFps = 60;
+
+  let antialias = true;
+  let pixelUpscale = false;
+  let resolutionScale = 0.5;
+  let roundVertices = true;
+  let drawFps = 30;
+  let filterPreset = "None";
+
+  $: markerVisible = showTarget && hasTarget && targetMode === "manual";
 
   function targetPoint() {
     const bounds = canvas?.getBoundingClientRect();
@@ -30,44 +60,45 @@
     if (point && runtime) runtime.setTarget(point);
   }
 
-  function chooseRandomTarget() {
-    target = {
-      x: 12 + Math.random() * 76,
-      y: 16 + Math.random() * 66,
-    };
+  /* The runtime draws its own target crosshair; ours only marks manual
+     placements, so the debug layer covers the modes ours cannot. */
+  function applyDebug() {
+    runtime?.setDebug({ targets: showTarget && targetMode !== "manual" });
+  }
+
+  function selectMode(mode) {
+    targetMode = targetMode === mode ? "manual" : mode;
+    if (!runtime) return;
+    runtime.setTargetMode(targetMode === "wander" ? "wander" : "manual");
+    runtime.setPointerInput(targetMode === "follow" ? "move" : "none");
+    if (targetMode === "manual" && hasTarget) sendTarget();
+    applyDebug();
+  }
+
+  function clearTarget() {
+    hasTarget = false;
+    runtime?.clearTarget();
+  }
+
+  function centerTarget() {
+    target = { x: 50, y: 50 };
+    hasTarget = true;
     sendTarget();
   }
 
-  function scheduleAutoTarget() {
-    clearTimeout(autoTargetTimer);
-    if (!autoTarget) return;
-    autoTargetTimer = setTimeout(
-      () => {
-        chooseRandomTarget();
-        scheduleAutoTarget();
-      },
-      1800 + Math.random() * 1700,
-    );
-  }
-
-  function toggleAutoTarget() {
-    autoTarget = !autoTarget;
-    if (autoTarget) chooseRandomTarget();
-    scheduleAutoTarget();
-  }
-
   function placeTarget(event) {
-    if (event.target.closest("button")) return;
+    if (event.target.closest("button, .stage-tools")) return;
     const bounds = event.currentTarget.getBoundingClientRect();
     target = {
       x: ((event.clientX - bounds.left) / bounds.width) * 100,
       y: ((event.clientY - bounds.top) / bounds.height) * 100,
     };
+    hasTarget = true;
     sendTarget();
-    scheduleAutoTarget();
   }
 
   function moveTargetFromKeyboard(event) {
+    if (event.target.closest("input, select")) return;
     const directions = {
       ArrowLeft: [-1, 0],
       ArrowRight: [1, 0],
@@ -81,19 +112,9 @@
       x: Math.min(Math.max(target.x + direction[0] * step, 4), 96),
       y: Math.min(Math.max(target.y + direction[1] * step, 7), 93),
     };
+    hasTarget = true;
     sendTarget();
     event.preventDefault();
-    scheduleAutoTarget();
-  }
-
-  function centerTarget() {
-    target = { x: 50, y: 50 };
-    sendTarget();
-  }
-
-  function toggleGuides() {
-    guides = !guides;
-    runtime?.setDebug({ targets: guides, routes: guides });
   }
 
   function togglePlaying() {
@@ -102,31 +123,60 @@
     else runtime?.stop();
   }
 
-  async function mountCanvas() {
+  function presetFilter() {
+    if (filterPreset === "None" || typeof window.PIXI === "undefined")
+      return undefined;
+    const filter = new window.PIXI.ColorMatrixFilter();
+    if (filterPreset === "Night vision") filter.night(0.3, false);
+    else if (filterPreset === "Thermal") filter.predator(0.5, false);
+    else if (filterPreset === "Mono") filter.desaturate();
+    else if (filterPreset === "Sepia") filter.sepia(false);
+    else if (filterPreset === "Negative") filter.negative(false);
+    return [filter];
+  }
+
+  async function mountCanvas(token = mountToken) {
     try {
       const mounted = await window.BeefwifeCanvas.mount(canvas, {
         descriptors: [rustWalker],
         count: 1,
-        resolutionScale: 0.5,
-        imageRendering: "auto",
-        roundVertices: true,
-        antialias: true,
-        simulationFps: 60,
-        drawFps: 30,
-        targetMode: "manual",
-        pointerInput: "none",
-        edgeMargin: 52,
+        resolutionScale: Math.min(1, Math.max(0.125, +resolutionScale || 0.5)),
+        imageRendering: pixelUpscale ? "pixelated" : "auto",
+        roundVertices,
+        antialias,
+        simulationFps: Math.max(1, +simulationFps || 60),
+        drawFps: Math.max(1, +drawFps || 30),
+        wanderDelay: Math.max(0, +wanderDelay || 0),
+        targetMode: targetMode === "wander" ? "wander" : "manual",
+        pointerInput: targetMode === "follow" ? "move" : "none",
+        edgeMargin: Math.max(0, +edgeMargin || 0),
         kneeProjectionCenter: "canvas",
+        filters: presetFilter(),
       });
-      if (disposed) {
+      if (disposed || token !== mountToken) {
         mounted.destroy();
         return;
       }
       runtime = mounted;
-      requestAnimationFrame(sendTarget);
+      if (!playing) runtime.stop();
+      applyDebug();
+      if (targetMode === "manual" && hasTarget)
+        requestAnimationFrame(sendTarget);
     } catch (error) {
       console.error("Beefwife canvas failed to mount", error);
     }
+  }
+
+  /* Mount options are read once, so option changes remount. The tick lets a
+     keyed canvas swap land first when antialias changes; the renderer kept for
+     a canvas is fixed to its antialias setting, so only a new element can
+     change it. */
+  async function remount() {
+    const token = ++mountToken;
+    runtime?.destroy();
+    runtime = null;
+    await tick();
+    if (!disposed) await mountCanvas(token);
   }
 
   onMount(() => {
@@ -135,7 +185,7 @@
 
   onDestroy(() => {
     disposed = true;
-    clearTimeout(autoTargetTimer);
+    mountToken += 1;
     runtime?.destroy();
   });
 </script>
@@ -143,14 +193,18 @@
 <!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions (A two-dimensional target surface has arrow-key controls; it cannot contain the toolbar if modeled as a button.) -->
 <section
   class="stage"
-  class:show-guides={guides}
+  class:show-grid={showGrid}
+  style:background-color={background}
   role="application"
   aria-label="Beefwife preview and motion target"
   tabindex="0"
   onclick={placeTarget}
   onkeydown={moveTargetFromKeyboard}
 >
-  <canvas bind:this={canvas} aria-label="Live Rust walker simulation"></canvas>
+  {#key antialias}
+    <canvas bind:this={canvas} aria-label="Live Rust walker simulation"
+    ></canvas>
+  {/key}
 
   <div class="graticule graticule-x" aria-hidden="true">
     {#each ticks as tick}
@@ -172,37 +226,188 @@
     <strong>Rust walker</strong>
   </div>
 
-  <div class="stage-tools" aria-label="Canvas controls">
-    <button title="Send the specimen to center" onclick={centerTarget}
-      >Center</button
-    >
+  <div class="stage-tools" class:collapsed={!toolsOpen}>
     <button
-      class:active={guides}
-      aria-pressed={guides}
-      title="Toggle route diagnostics"
-      onclick={toggleGuides}>Guides</button
+      class="tools-toggle"
+      title={toolsOpen ? "Collapse stage tools" : "Expand stage tools"}
+      aria-expanded={toolsOpen}
+      onclick={() => (toolsOpen = !toolsOpen)}>{toolsOpen ? "−" : "+"}</button
     >
-    <button
-      class:active={playing}
-      aria-pressed={playing}
-      title={playing ? "Pause simulation" : "Resume simulation"}
-      onclick={togglePlaying}>{playing ? "Pause" : "Play"}</button
-    >
-    <button
-      class:active={autoTarget}
-      aria-pressed={autoTarget}
-      title="Move the target automatically"
-      onclick={toggleAutoTarget}>Auto</button
-    >
+
+    {#if toolsOpen}
+      <nav role="tablist" aria-label="Stage tool tabs">
+        {#each toolTabs as tab}
+          <button
+            role="tab"
+            aria-selected={toolTab === tab}
+            onclick={() => (toolTab = tab)}
+          >
+            {tab}
+          </button>
+        {/each}
+      </nav>
+
+      <div class="tool-body" role="tabpanel" aria-label={toolTab}>
+      {#if toolTab === "Target"}
+        <div class="tool-row">
+          <button title="Clear the current target" onclick={clearTarget}
+            >Clear</button
+          >
+          <button title="Send the specimen to center" onclick={centerTarget}
+            >Center</button
+          >
+          <button
+            aria-pressed={targetMode === "follow"}
+            title="Target follows the pointer"
+            onclick={() => selectMode("follow")}>Follow</button
+          >
+          <button
+            aria-pressed={targetMode === "wander"}
+            title="Pick random targets automatically"
+            onclick={() => selectMode("wander")}>Wander</button
+          >
+        </div>
+        {#if targetMode === "wander"}
+          <div class="tool-fields">
+            <label>
+              <span>Delay (s)</span>
+              <input
+                type="number"
+                min="0"
+                max="30"
+                step="0.5"
+                bind:value={wanderDelay}
+                onchange={remount}
+              />
+            </label>
+            <label>
+              <span>Edge margin (px)</span>
+              <input
+                type="number"
+                min="0"
+                max="200"
+                step="4"
+                bind:value={edgeMargin}
+                onchange={remount}
+              />
+            </label>
+          </div>
+        {/if}
+      {:else if toolTab === "Stage"}
+        <div class="tool-row">
+          <button
+            aria-pressed={showGrid}
+            title="Show the alignment grid"
+            onclick={() => (showGrid = !showGrid)}>Grid</button
+          >
+          <button
+            aria-pressed={showTarget}
+            title="Show the target marker"
+            onclick={() => {
+              showTarget = !showTarget;
+              applyDebug();
+            }}>Target</button
+          >
+        </div>
+        <div class="tool-fields">
+          <label>
+            <span>Background</span>
+            <input type="color" bind:value={background} />
+          </label>
+        </div>
+      {:else if toolTab === "Sim"}
+        <div class="tool-row">
+          <button
+            aria-pressed={playing}
+            title={playing ? "Pause simulation" : "Resume simulation"}
+            onclick={togglePlaying}>{playing ? "Pause" : "Play"}</button
+          >
+        </div>
+        <div class="tool-fields">
+          <label>
+            <span>Physics FPS</span>
+            <input
+              type="number"
+              min="1"
+              max="240"
+              step="1"
+              bind:value={simulationFps}
+              onchange={remount}
+            />
+          </label>
+        </div>
+      {:else}
+        <div class="tool-row">
+          <button
+            aria-pressed={antialias}
+            title="Antialiasing"
+            onclick={() => {
+              antialias = !antialias;
+              remount();
+            }}>AA</button
+          >
+          <button
+            aria-pressed={pixelUpscale}
+            title="Upscale with hard pixels instead of interpolation"
+            onclick={() => {
+              pixelUpscale = !pixelUpscale;
+              remount();
+            }}>Upscale</button
+          >
+          <button
+            aria-pressed={roundVertices}
+            title="Snap vertices to the output pixel grid"
+            onclick={() => {
+              roundVertices = !roundVertices;
+              remount();
+            }}>Rounding</button
+          >
+        </div>
+        <div class="tool-fields">
+          <label>
+            <span>Res scale (x)</span>
+            <input
+              type="number"
+              min="0.125"
+              max="1"
+              step="0.125"
+              bind:value={resolutionScale}
+              onchange={remount}
+            />
+          </label>
+          <label>
+            <span>Draw FPS</span>
+            <input
+              type="number"
+              min="1"
+              max="240"
+              step="1"
+              bind:value={drawFps}
+              onchange={remount}
+            />
+          </label>
+          <label class="wide">
+            <span>Filter</span>
+            <select bind:value={filterPreset} onchange={remount}>
+              {#each filterPresets as preset}
+                <option>{preset}</option>
+              {/each}
+            </select>
+          </label>
+        </div>
+      {/if}
+      </div>
+    {/if}
   </div>
 
-  <div
-    class="target"
-    class:auto={autoTarget}
-    style:left={`${target.x}%`}
-    style:top={`${target.y}%`}
-    aria-hidden="true"
-  ></div>
+  {#if markerVisible}
+    <div
+      class="target"
+      style:left={`${target.x}%`}
+      style:top={`${target.y}%`}
+      aria-hidden="true"
+    ></div>
+  {/if}
 
   <button
     class="selection-badge"
@@ -212,29 +417,6 @@
     <span>Selected anchor</span>
     <strong>{selected.replace("-", " ")}</strong>
   </button>
-
-  <dl class="stage-readout">
-    <div class="readout select">
-      <dt>Anchor</dt>
-      <dd>{selected.replace("-", " ")}</dd>
-    </div>
-    <div class="readout measure">
-      <dt>Target X</dt>
-      <dd>{target.x.toFixed(1)}<em>%</em></dd>
-    </div>
-    <div class="readout measure">
-      <dt>Target Y</dt>
-      <dd>{target.y.toFixed(1)}<em>%</em></dd>
-    </div>
-    <div class="readout">
-      <dt>Tracking</dt>
-      <dd>{autoTarget ? "Auto" : "Manual"}</dd>
-    </div>
-    <div class="readout scale-readout">
-      <dt>Render</dt>
-      <dd>0.5<em>x</em> · AA</dd>
-    </div>
-  </dl>
 </section>
 
 <style>
@@ -257,7 +439,7 @@
       0 0 0 1px var(--chassis-line-high);
   }
 
-  .stage.show-guides {
+  .stage.show-grid {
     background-image:
       linear-gradient(var(--screen-grid-major) 1px, transparent 1px),
       linear-gradient(90deg, var(--screen-grid-major) 1px, transparent 1px),
@@ -288,7 +470,7 @@
     pointer-events: none;
   }
 
-  .stage.show-guides::after {
+  .stage.show-grid::after {
     opacity: 1;
   }
 
@@ -311,7 +493,7 @@
     visibility: hidden;
   }
 
-  .show-guides .graticule {
+  .show-grid .graticule {
     visibility: visible;
   }
 
@@ -371,7 +553,6 @@
 
   .stage-heading,
   .stage-tools,
-  .stage-readout,
   .selection-badge {
     position: absolute;
     z-index: 4;
@@ -403,54 +584,129 @@
     text-transform: uppercase;
   }
 
-  .stage-heading small {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    margin-top: 4px;
-    color: var(--danger);
-    font-size: 8px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-  }
-
-  .stage-heading small::before {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: currentColor;
-    content: "";
-  }
-
-  .stage-heading small.online {
-    color: var(--screen-select);
-  }
-
   .stage-tools {
     top: 22px;
     right: 14px;
-    display: flex;
-    gap: 2px;
-    padding: 4px;
+    width: 296px;
     border: 1px solid var(--chassis-line-high);
     border-radius: var(--radius-control);
-    background: color-mix(in srgb, var(--chassis) 93%, transparent);
+    background: var(--chassis);
   }
 
-  .stage-tools button {
+  .stage-tools.collapsed {
+    width: auto;
+    padding: 4px;
+  }
+
+  /* Same 4px inset the collapsed box's padding gives it, so the button stays
+     put when the panel collapses under it. */
+  .tools-toggle {
+    position: absolute;
+    z-index: 3;
+    top: 4px;
+    right: 4px;
+    display: grid;
+    width: 18px;
+    height: 18px;
+    place-items: center;
+    padding: 0;
+    font-size: 12px;
+  }
+
+  /* An open panel is not a pressed state; keep the toggle raised either way. */
+  .tools-toggle[aria-expanded="true"] {
+    border-width: 0 1px 1px 0;
+    outline-style: outset;
+    background-color: var(--chassis);
+    color: var(--muted);
+  }
+
+  .collapsed .tools-toggle {
+    position: static;
+  }
+
+  .stage-tools nav {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    gap: 2px;
+    padding: 7px 36px 0 8px;
+  }
+
+  .stage-tools [role="tab"] {
+    padding: 4px 8px;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .tool-body {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: 8px;
+    padding: 8px;
+    border-top: 2px solid var(--edge-light);
+  }
+
+  .tool-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--bevel-width) * 2 + 1px);
+    padding: var(--bevel-width);
+  }
+
+  .tool-row button {
     padding: 4px 8px;
     font-size: 10px;
     letter-spacing: 0.09em;
     text-transform: uppercase;
   }
 
-  .stage-tools button[aria-pressed="true"] {
+  .tool-row button[aria-pressed="true"] {
     background: var(--select-dim);
     color: var(--select-text);
   }
 
+  .tool-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 0 var(--bevel-width) var(--bevel-width);
+  }
+
+  .tool-fields label {
+    min-width: 0;
+  }
+
+  .tool-fields label.wide {
+    grid-column: 1 / -1;
+  }
+
+  .tool-fields label > span {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--muted);
+    font: var(--label-font);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .tool-fields input,
+  .tool-fields select {
+    width: 100%;
+    height: 26px;
+    padding: 0 6px;
+    font-size: 11px;
+    outline-color: var(--bevel-face-screen);
+  }
+
+  .tool-fields input[type="color"] {
+    padding: 2px;
+  }
+
   .selection-badge {
-    bottom: 62px;
+    bottom: 20px;
     left: 32px;
     min-width: 126px;
     padding: 6px 9px;
@@ -485,66 +741,6 @@
     text-transform: uppercase;
   }
 
-  .stage-readout {
-    right: 14px;
-    bottom: 14px;
-    left: 32px;
-    display: flex;
-    margin: 0;
-    background: color-mix(in srgb, var(--chassis) 93%, transparent);
-    outline: var(--bevel-width) inset var(--bevel-face);
-  }
-
-  .readout {
-    min-width: 88px;
-    padding: 6px 10px 7px;
-    border-left: 1px solid var(--chassis-line);
-  }
-
-  .readout:first-child {
-    border-left: 0;
-  }
-
-  .readout:last-child {
-    margin-left: auto;
-    text-align: right;
-  }
-
-  .readout dt {
-    color: var(--faint);
-    font-size: 8px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-  }
-
-  .readout dd {
-    margin: 3px 0 0;
-    color: var(--text);
-    font-size: 12px;
-    text-transform: capitalize;
-  }
-
-  .readout em {
-    margin-left: 2px;
-    color: var(--faint);
-    font-size: 9px;
-    font-style: normal;
-  }
-
-  .readout.select,
-  .readout.measure {
-    border-top: 2px solid transparent;
-    padding-top: 4px;
-  }
-
-  .readout.select {
-    border-top-color: var(--select);
-  }
-
-  .readout.measure {
-    border-top-color: var(--measure);
-  }
-
   .target {
     position: absolute;
     z-index: 3;
@@ -557,10 +753,6 @@
     transition:
       left 700ms cubic-bezier(0.22, 1, 0.36, 1),
       top 700ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  .target.auto {
-    border-style: dashed;
   }
 
   .target::before,
@@ -595,8 +787,7 @@
   }
 
   @media (max-width: 980px) {
-    .selection-badge,
-    .scale-readout {
+    .selection-badge {
       display: none;
     }
   }
