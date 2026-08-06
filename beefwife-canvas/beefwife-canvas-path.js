@@ -76,9 +76,8 @@ class BeefwifeCanvasRouter {
     const y0 = Math.min(this.edgeMargin, height / 2);
     const x = x0 + this.random() * (width - 2 * x0);
     const y = y0 + this.random() * (height - 2 * y0);
-    const at = this.terrain.at(x, y);
-    if (!at) return null;
-    return at.d === 0 ? { x, y } : { x: x + at.dx * at.d, y: y + at.dy * at.d };
+    const nearest = this.terrain.nearest(x, y);
+    return nearest ? { x: nearest.x, y: nearest.y } : null;
   }
 }
 

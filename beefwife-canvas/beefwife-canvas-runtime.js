@@ -76,6 +76,7 @@ class BeefwifeCanvasRuntime {
     const kneeProjectionCenter = options.kneeProjectionCenter || "canvas";
     const renderOptions = {
       roundVertices: options.roundVertices === true,
+      pixelResolution: 1,
       kneeProjection: ownsProjection
         ? {
             centerX: 0,

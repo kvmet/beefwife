@@ -36,6 +36,9 @@ global.window = { innerWidth: 800, innerHeight: 600 };
 const BeefwifeCanvasActor = require(
   "../../beefwife-canvas/beefwife-canvas-actor.js",
 );
+const { BeefwifeCanvasRouter } = require(
+  "../../beefwife-canvas/beefwife-canvas-path.js",
+);
 const { BeefwifeCanvasTargetPolicy } = require(
   "../../beefwife-canvas/beefwife-canvas-targeting.js",
 );
@@ -52,7 +55,7 @@ const descriptor = JSON.parse(
 let checks = 0;
 
 const policyRouter = {
-  terrain: { at: () => ({ d: 0, dx: 0, dy: 0 }) },
+  terrain: { offset: () => ({ distance: 0, dx: 0, dy: 0 }) },
   randomPoint: () => ({ x: 300, y: 200 }),
   planTo: (_head, goal) => [{ ...goal }],
 };
@@ -161,6 +164,37 @@ steerRoute(toleranceRoute, passivePolicy, { x: 23, y: 0 }, 0, splitTolerance);
 assert.deepEqual(toleranceRoute.path, [{ x: 20, y: 0 }]);
 steerRoute(toleranceRoute, passivePolicy, { x: 21, y: 0 }, 0, splitTolerance);
 assert.equal(toleranceRoute.satisfied, true);
+checks += 3;
+
+const landingRouter = new BeefwifeCanvasRouter(
+  {
+    ready: true,
+    nearest: (x, y) => ({ x: x + 3, y: y - 4, distance: 5 }),
+  },
+  () => ({ width: 100, height: 80 }),
+  { random: () => 0.5 },
+);
+assert.deepEqual(landingRouter.randomPoint(), { x: 53, y: 36 });
+
+const escapingRoute = newSteerRoute();
+escapingRoute.from = { x: 0, y: 0 };
+escapingRoute.path = [{ x: 10, y: 0 }];
+const escapingPolicy = {
+  readyToPlan: false,
+  terrain: {
+    offset: (_x, _y, result = {}) =>
+      Object.assign(result, { dx: 0, dy: 4, distance: 4 }),
+  },
+};
+const escaping = steerRoute(
+  escapingRoute,
+  escapingPolicy,
+  { x: 0, y: 0 },
+  0,
+  BEEFWIFE_CANVAS_ROUTE_DEFAULTS,
+);
+assert.ok(Math.abs(escaping.bearing.x - Math.SQRT1_2) < 1e-12);
+assert.ok(Math.abs(escaping.bearing.y - Math.SQRT1_2) < 1e-12);
 checks += 3;
 
 const terrain = { x0: 0, y0: 0, x1: 800, y1: 600 };
@@ -413,7 +447,11 @@ const classicBoundary = async () => {
     })`,
     browser,
   );
-  assert.equal(browser.layer.scene.dpr, 1);
+  assert.equal(browser.layer.scene.dpr, 0.5);
+  assert.equal(
+    browser.layer.scene.renderOptions.pixelResolution,
+    browser.layer.scene.dpr,
+  );
   assert.equal(
     browser.layer.terrain.options.edgeMargin,
     browser.Terrain.DEFAULTS.edgeMargin,

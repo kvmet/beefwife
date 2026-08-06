@@ -24,6 +24,7 @@ class BeefwifeCanvasScene {
 
   async initialize() {
     if (typeof PIXI === "undefined") throw new Error("PIXI must load first");
+    this._syncPixelResolution();
     if (this.reusableApplication) {
       this.application = this.reusableApplication;
       if (this.application.canvas !== this.canvas)
@@ -54,9 +55,7 @@ class BeefwifeCanvasScene {
       antialias: this.antialias,
       autoDensity: this.ownsCanvas,
       autoStart: false,
-      resolution:
-        Math.min(window.devicePixelRatio || 1, this.maxPixelRatio) *
-        this.resolutionScale,
+      resolution: this.dpr,
       width: Math.max(1, viewport.width),
       height: Math.max(1, viewport.height),
     });
@@ -104,9 +103,7 @@ class BeefwifeCanvasScene {
     if (!this.application) return;
     const viewport = this.viewportRect();
     this.viewport = viewport;
-    this.dpr =
-      Math.min(window.devicePixelRatio || 1, this.maxPixelRatio) *
-      this.resolutionScale;
+    this._syncPixelResolution();
     this.canvas.style.imageRendering = this.imageRendering;
     const projection = this.renderOptions.kneeProjection;
     if (projection) {
@@ -120,6 +117,13 @@ class BeefwifeCanvasScene {
     }
     this.application.renderer.resolution = this.dpr;
     this.application.renderer.resize(viewport.width, viewport.height);
+  }
+
+  _syncPixelResolution() {
+    this.dpr =
+      Math.min(window.devicePixelRatio || 1, this.maxPixelRatio) *
+      this.resolutionScale;
+    this.renderOptions.pixelResolution = this.dpr;
   }
 
   syncDisplays(displays) {

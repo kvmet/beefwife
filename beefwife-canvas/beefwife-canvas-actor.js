@@ -33,7 +33,7 @@ class BeefwifeCanvasActor {
       target: null,
       bearing: null,
       direction: { x: 1, y: 0 },
-      field: { dx: 0, dy: 0, d: 0 },
+      field: { dx: 0, dy: 0, distance: 0 },
     };
     this.route = newRoute();
     this.planner = options.planner || router;

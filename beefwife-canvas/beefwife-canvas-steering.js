@@ -45,29 +45,28 @@ const passed = (from, p, head) =>
 /**
  * The unit vector from the head to `p`, or null when it is already there.
  *
- * `off` is what terrain says about where the head is standing, and is added in
- * as a second unit vector. In bounds it is zero and the bearing is the waypoint
- * alone, so this is the same call it has always been for a creature on the
- * field. Outside, the two blend, which walks a creature off a widget along the
- * plan it already has instead of drawing another one.
+ * `off` is Terrain's additive correction for where the head is standing. Its
+ * direction is added as a second unit vector. In bounds it is zero and the
+ * bearing is the waypoint alone. Outside, the two blend, which walks a creature
+ * off a widget along the plan it already has instead of drawing another one.
  */
 const bearingTo = (p, head, off, result = {}) => {
   const dx = p.x - head.x;
   const dy = p.y - head.y;
   const m = Math.hypot(dx, dy);
   if (m < 1) return null;
-  if (!off || off.d === 0) {
+  if (!off || off.distance === 0) {
     result.x = dx / m;
     result.y = dy / m;
     return result;
   }
-  const bx = dx / m + off.dx;
-  const by = dy / m + off.dy;
+  const bx = dx / m + off.dx / off.distance;
+  const by = dy / m + off.dy / off.distance;
   const n = Math.hypot(bx, by);
   // The waypoint is straight back through the widget, so the way out wins.
   if (n < 1e-6) {
-    result.x = off.dx;
-    result.y = off.dy;
+    result.x = off.dx / off.distance;
+    result.y = off.dy / off.distance;
   } else {
     result.x = bx / n;
     result.y = by / n;
@@ -100,7 +99,7 @@ const stepRoute = (route, router, head, dt, roam, result) => {
   route.age += dt;
   // One reading of the ground under the head, on the hot path: it decides both
   // how long this creature may stall and which way it leans while it walks.
-  const off = router.terrain.at(head.x, head.y, result?.field);
+  const off = router.terrain.offset(head.x, head.y, result?.field);
 
   // Crossing the incoming plane spends an intermediate waypoint so a chain
   // with momentum does not circle back. The final target requires proximity;
@@ -138,7 +137,7 @@ const stepRoute = (route, router, head, dt, roam, result) => {
   // for a page that no longer holds it. Out of bounds it is given far less
   // time to stop making progress, since the way back in is the one plan it
   // cannot be left without.
-  const limit = off.d > 0 ? roam.replan : roam.patience;
+  const limit = off.distance > 0 ? roam.replan : roam.patience;
   const policyReady = router.readyToPlan ?? true;
   const unplanned = route.from === null;
   const released = route.satisfied && policyReady;

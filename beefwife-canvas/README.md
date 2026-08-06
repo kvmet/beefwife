@@ -150,7 +150,9 @@ Performance and appearance options are `resolutionScale`, `roundVertices`,
 the simulated body are unchanged. `kneeProjectionCenter` is
 `canvas` by default; `viewport` makes separate canvases share one apparent
 knee-projection field. `resolutionScale` accepts 0.125 through 1 and defaults
-to 0.25, where quarter resolution costs a sixteenth of the fill work.
+to 0.25, where quarter resolution costs a sixteenth of the fill work. When
+vertex rounding is enabled, vertices snap to pixels at the effective renderer
+resolution, including device pixel ratio and `resolutionScale`.
 `imageRendering` independently selects `pixelated` (the default) or `auto`,
 allowing either interpolation style at any resolution. For color effects, pass
 a configured `PIXI.ColorMatrixFilter` in `filters`.
