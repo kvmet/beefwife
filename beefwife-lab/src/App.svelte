@@ -1,5 +1,4 @@
 <script>
-  import ChainMap from "./lib/ChainMap.svelte";
   import Inspector from "./lib/Inspector.svelte";
   import Stage from "./lib/Stage.svelte";
   import packageInfo from "../package.json";
@@ -12,7 +11,7 @@
   let activeTab = "Look";
   let selected = "eyes";
   let sidebarOpen = true;
-  let sidebarWidth = 316;
+  let sidebarWidth = 480;
   let resizeStartX = 0;
   let resizeStartWidth = 0;
   let resizing = false;
@@ -24,8 +23,8 @@
   }
 
   function clampSidebarWidth(width) {
-    const viewportMaximum = Math.max(260, window.innerWidth - 340);
-    return Math.min(Math.max(260, width), Math.min(520, viewportMaximum));
+    const viewportMaximum = Math.max(400, window.innerWidth - 340);
+    return Math.min(Math.max(400, width), Math.min(800, viewportMaximum));
   }
 
   function beginSidebarResize(event) {
@@ -59,10 +58,7 @@
 </script>
 
 <svelte:head>
-  <meta
-    name="description"
-    content="The Beefwife chain editor."
-  />
+  <meta name="description" content="The Beefwife chain editor." />
 </svelte:head>
 
 <main
@@ -112,8 +108,8 @@
         role="slider"
         aria-label="Tool panel width"
         aria-orientation="horizontal"
-        aria-valuemin="260"
-        aria-valuemax="520"
+        aria-valuemin="400"
+        aria-valuemax="800"
         aria-valuenow={sidebarWidth}
         tabindex="0"
         title="Drag to resize · Double-click to reset"
@@ -122,11 +118,9 @@
         onpointerup={endSidebarResize}
         onpointercancel={endSidebarResize}
         onkeydown={resizeSidebarFromKeyboard}
-        ondblclick={() => (sidebarWidth = 316)}
+        ondblclick={() => (sidebarWidth = 480)}
       ></div>
       <Inspector {selected} {activeTab} ontab={(tab) => (activeTab = tab)} />
     </div>
   {/if}
-
-  <ChainMap bind:selected />
 </main>

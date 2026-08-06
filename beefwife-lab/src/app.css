@@ -193,8 +193,8 @@ textarea {
   color: var(--screen-text);
 }
 
-/* The tool panel owns the full height of column 2, so the bar, stage, and chain
-   map all live in column 1 and never run under it. */
+/* The tool panel owns the full height of column 2, so the bar and stage live
+   in column 1 and never run under it. */
 .app-shell {
   display: grid;
   width: 100%;
@@ -203,7 +203,7 @@ textarea {
   min-height: 0;
   overflow: hidden;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: 46px minmax(0, 1fr) auto;
+  grid-template-rows: 46px minmax(0, 1fr);
 }
 
 .app-shell.panel-open {

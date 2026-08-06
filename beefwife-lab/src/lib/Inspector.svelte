@@ -1,12 +1,20 @@
 <script>
   import AssetsPanel from "./AssetsPanel.svelte";
+  import ChainMap from "./ChainMap.svelte";
   import JsonPanel from "./JsonPanel.svelte";
+  import WaveColumn from "./WaveColumn.svelte";
 
   export let selected;
   export let activeTab;
   export let ontab;
 
   const tabs = ["Config", "Motion", "Look", "Parts"];
+  const bodyWaves = [
+    { variant: "primary", amp: 0.8, cycles: 3, phase: 0 },
+    { variant: "weave", amp: 0.5, cycles: 4, phase: 1.3 },
+    { variant: "gather", amp: 0.65, cycles: 2, phase: 2.4 },
+  ];
+  const liftWaves = [{ variant: "primary", amp: 0.7, cycles: 5, phase: 0.7 }];
   const labels = {
     eyes: ["Ornament", "Eyes"],
     feelers: ["Ornament", "Feelers"],
@@ -19,217 +27,260 @@
 </script>
 
 <aside class="inspector" aria-label="Beefwife tools">
-  <div class="panel-nav">
-    <nav role="tablist" aria-label="Editor modes">
-      {#each tabs as tab}
-        <button
-          role="tab"
-          aria-selected={activeTab === tab}
-          onclick={() => ontab(tab)}
-        >
-          {tab}
-        </button>
-      {/each}
-    </nav>
-  </div>
+  <ChainMap />
 
-  <div class="inspector-scroll" role="tabpanel" aria-label={activeTab}>
-    {#if activeTab === "Look"}
-      <header class="panel-heading">
-        <div>
-          <span>{item[0]}</span>
-          <h2>{item[1]}</h2>
-        </div>
-        <div class="header-actions">
+  <div class="inspector-main">
+    <div class="panel-nav">
+      <nav role="tablist" aria-label="Editor modes">
+        {#each tabs as tab}
           <button
-            class="delete-button"
-            aria-label={`Remove ${item[0].toLowerCase()}`}
-            title={`Remove ${item[0].toLowerCase()}`}
-            ><i aria-hidden="true"></i></button
+            role="tab"
+            aria-selected={activeTab === tab}
+            onclick={() => ontab(tab)}
           >
-          <button aria-label="More actions" title="More actions">•••</button>
-        </div>
-      </header>
+            {tab}
+          </button>
+        {/each}
+      </nav>
+    </div>
 
-      <div class="selection-path">
-        <span>Head</span><b>/</b><span>Upper surface</span><b>/</b><strong
-          >{item[1]}</strong
-        >
+    <div class="inspector-body">
+      {#if activeTab === "Motion"}
+        <WaveColumn title="Body waves" waves={bodyWaves} />
+        <WaveColumn title="Lift" waves={liftWaves} />
+      {:else if activeTab === "Look"}
+        <div class="selector-column">
+          <header>Plates</header>
+          <div class="selector-screen"></div>
+        </div>
+        <div class="selector-column">
+          <header>Ornaments</header>
+          <div class="selector-screen"></div>
+        </div>
+      {/if}
+
+      <div class="inspector-scroll" role="tabpanel" aria-label={activeTab}>
+        {#if activeTab === "Look"}
+          <header class="panel-heading">
+            <div>
+              <span>{item[0]}</span>
+              <h2>{item[1]}</h2>
+            </div>
+            <div class="header-actions">
+              <button
+                class="delete-button"
+                aria-label={`Remove ${item[0].toLowerCase()}`}
+                title={`Remove ${item[0].toLowerCase()}`}
+                ><i aria-hidden="true"></i></button
+              >
+              <button aria-label="More actions" title="More actions">•••</button
+              >
+            </div>
+          </header>
+
+          <div class="selection-path">
+            <span>Head</span><b>/</b><span>Upper surface</span><b>/</b><strong
+              >{item[1]}</strong
+            >
+          </div>
+
+          <details open>
+            <summary>Placement</summary>
+            <div class="fields">
+              <label class="wide">
+                <span>Anchor scope</span>
+                <select
+                  ><option>Section</option><option>Whole chain</option></select
+                >
+              </label>
+              <label>
+                <span>Section</span>
+                <select
+                  ><option>Head</option><option>Trunk</option><option
+                    >Tail</option
+                  ></select
+                >
+              </label>
+              <label>
+                <span>From</span>
+                <select
+                  ><option>Start</option><option>Center</option><option
+                    >End</option
+                  ></select
+                >
+              </label>
+              <label>
+                <span>Position</span>
+                <div class="unit"><input value="1.00" /><em>u</em></div>
+              </label>
+              <label>
+                <span>Normal offset</span>
+                <div class="unit"><input value="0.16" /><em>u</em></div>
+              </label>
+            </div>
+          </details>
+
+          <details open>
+            <summary>Appearance</summary>
+            <div class="fields">
+              <label>
+                <span>Shape</span>
+                <select
+                  ><option>Round eye</option><option>Spike</option><option
+                    >Fin</option
+                  ></select
+                >
+              </label>
+              <label>
+                <span>Material</span>
+                <select
+                  ><option>Warm glow</option><option>Shell</option><option
+                    >Ink</option
+                  ></select
+                >
+              </label>
+              <label>
+                <span>Layer</span>
+                <select><option>Over</option><option>Under</option></select>
+              </label>
+              <label>
+                <span>Side</span>
+                <select
+                  ><option>Both</option><option>Left</option><option
+                    >Right</option
+                  ></select
+                >
+              </label>
+              <label>
+                <span>Scale</span>
+                <input type="range" min="0" max="100" value="54" />
+              </label>
+              <label>
+                <span>Rotation</span>
+                <div class="unit"><input value="4" /><em>deg</em></div>
+              </label>
+            </div>
+          </details>
+
+          <details><summary>Visibility &amp; effects</summary></details>
+        {:else if activeTab === "Config"}
+          <header class="panel-heading">
+            <div>
+              <span>Creature</span>
+              <h2>Rust walker</h2>
+            </div>
+            <button aria-label="More actions">•••</button>
+          </header>
+
+          <details open>
+            <summary>Identity</summary>
+            <div class="fields single-column">
+              <label><span>Name</span><input value="Rust walker" /></label>
+              <label
+                ><span>Tags</span><input
+                  value="beefwife, ambient, warm"
+                /></label
+              >
+            </div>
+          </details>
+          <details open>
+            <summary>Body defaults</summary>
+            <div class="fields">
+              <label
+                ><span>Scale</span>
+                <div class="unit"><input value="1.00" /><em>x</em></div></label
+              >
+              <label
+                ><span>Facing</span><select
+                  ><option>Auto</option><option>Left</option><option
+                    >Right</option
+                  ></select
+                ></label
+              >
+              <label class="wide"
+                ><span>Base material</span><select
+                  ><option>Rust shell</option><option>Ink shell</option></select
+                ></label
+              >
+            </div>
+          </details>
+          <details><summary>Visual effects</summary></details>
+          <details open>
+            <summary>Canonical JSON</summary>
+            <JsonPanel />
+          </details>
+        {:else if activeTab === "Motion"}
+          <header class="panel-heading">
+            <div>
+              <span>Motion</span>
+              <h2>Crawl profile</h2>
+            </div>
+            <button aria-label="More actions">•••</button>
+          </header>
+
+          <details open>
+            <summary>Locomotion</summary>
+            <div class="fields">
+              <label
+                ><span>Gait</span><select
+                  ><option>Ripple</option><option>Tripod</option></select
+                ></label
+              >
+              <label
+                ><span>Pace</span>
+                <div class="unit"><input value="1.20" /><em>Hz</em></div></label
+              >
+              <label
+                ><span>Stride</span>
+                <div class="unit"><input value="0.72" /><em>u</em></div></label
+              >
+              <label
+                ><span>Lift</span>
+                <div class="unit"><input value="0.34" /><em>u</em></div></label
+              >
+              <label class="wide"
+                ><span>Body wave</span><input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value="38"
+                /></label
+              >
+            </div>
+          </details>
+          <details open><summary>Steering &amp; intent</summary></details>
+          <details><summary>Idle behavior</summary></details>
+        {:else if activeTab === "Parts"}
+          <AssetsPanel />
+        {/if}
       </div>
-
-      <details open>
-        <summary>Placement</summary>
-        <div class="fields">
-          <label class="wide">
-            <span>Anchor scope</span>
-            <select><option>Section</option><option>Whole chain</option></select
-            >
-          </label>
-          <label>
-            <span>Section</span>
-            <select
-              ><option>Head</option><option>Trunk</option><option>Tail</option
-              ></select
-            >
-          </label>
-          <label>
-            <span>From</span>
-            <select
-              ><option>Start</option><option>Center</option><option>End</option
-              ></select
-            >
-          </label>
-          <label>
-            <span>Position</span>
-            <div class="unit"><input value="1.00" /><em>u</em></div>
-          </label>
-          <label>
-            <span>Normal offset</span>
-            <div class="unit"><input value="0.16" /><em>u</em></div>
-          </label>
-        </div>
-      </details>
-
-      <details open>
-        <summary>Appearance</summary>
-        <div class="fields">
-          <label>
-            <span>Shape</span>
-            <select
-              ><option>Round eye</option><option>Spike</option><option
-                >Fin</option
-              ></select
-            >
-          </label>
-          <label>
-            <span>Material</span>
-            <select
-              ><option>Warm glow</option><option>Shell</option><option
-                >Ink</option
-              ></select
-            >
-          </label>
-          <label>
-            <span>Layer</span>
-            <select><option>Over</option><option>Under</option></select>
-          </label>
-          <label>
-            <span>Side</span>
-            <select
-              ><option>Both</option><option>Left</option><option>Right</option
-              ></select
-            >
-          </label>
-          <label>
-            <span>Scale</span>
-            <input type="range" min="0" max="100" value="54" />
-          </label>
-          <label>
-            <span>Rotation</span>
-            <div class="unit"><input value="4" /><em>deg</em></div>
-          </label>
-        </div>
-      </details>
-
-      <details><summary>Visibility &amp; effects</summary></details>
-    {:else if activeTab === "Config"}
-      <header class="panel-heading">
-        <div>
-          <span>Creature</span>
-          <h2>Rust walker</h2>
-        </div>
-        <button aria-label="More actions">•••</button>
-      </header>
-
-      <details open>
-        <summary>Identity</summary>
-        <div class="fields single-column">
-          <label><span>Name</span><input value="Rust walker" /></label>
-          <label
-            ><span>Tags</span><input value="beefwife, ambient, warm" /></label
-          >
-        </div>
-      </details>
-      <details open>
-        <summary>Body defaults</summary>
-        <div class="fields">
-          <label
-            ><span>Scale</span>
-            <div class="unit"><input value="1.00" /><em>x</em></div></label
-          >
-          <label
-            ><span>Facing</span><select
-              ><option>Auto</option><option>Left</option><option>Right</option
-              ></select
-            ></label
-          >
-          <label class="wide"
-            ><span>Base material</span><select
-              ><option>Rust shell</option><option>Ink shell</option></select
-            ></label
-          >
-        </div>
-      </details>
-      <details><summary>Visual effects</summary></details>
-      <details open>
-        <summary>Canonical JSON</summary>
-        <JsonPanel />
-      </details>
-    {:else if activeTab === "Motion"}
-      <header class="panel-heading">
-        <div>
-          <span>Motion</span>
-          <h2>Crawl profile</h2>
-        </div>
-        <button aria-label="More actions">•••</button>
-      </header>
-
-      <details open>
-        <summary>Locomotion</summary>
-        <div class="fields">
-          <label
-            ><span>Gait</span><select
-              ><option>Ripple</option><option>Tripod</option></select
-            ></label
-          >
-          <label
-            ><span>Pace</span>
-            <div class="unit"><input value="1.20" /><em>Hz</em></div></label
-          >
-          <label
-            ><span>Stride</span>
-            <div class="unit"><input value="0.72" /><em>u</em></div></label
-          >
-          <label
-            ><span>Lift</span>
-            <div class="unit"><input value="0.34" /><em>u</em></div></label
-          >
-          <label class="wide"
-            ><span>Body wave</span><input
-              type="range"
-              min="0"
-              max="100"
-              value="38"
-            /></label
-          >
-        </div>
-      </details>
-      <details open><summary>Steering &amp; intent</summary></details>
-      <details><summary>Idle behavior</summary></details>
-    {:else if activeTab === "Parts"}
-      <AssetsPanel />
-    {/if}
+    </div>
   </div>
 </aside>
 
 <style>
+  /* The bevel belongs to the panel, so it runs the full height of its left
+     edge beside the chain map. The lines live in the padding, where no child
+     background can cover them. */
   .inspector {
-    display: grid;
+    display: flex;
     width: 100%;
     height: 100%;
     min-width: 0;
     min-height: 0;
+    padding-left: 3px;
     overflow: hidden;
+    background: var(--bg);
+    box-shadow:
+      inset 2px 0 0 var(--chassis-line-high),
+      inset 3px 0 0 var(--bevel-light);
+  }
+
+  .inspector-main {
+    display: grid;
+    min-width: 0;
+    min-height: 0;
+    flex: 1;
     grid-template-rows: auto minmax(0, 1fr);
   }
 
@@ -266,23 +317,51 @@
 
   /* The top edge the tabs sit on. A border rather than an inset shadow, so the
      sticky .panel-heading scrolls under it instead of covering it. */
-  .inspector-scroll {
+  .inspector-body {
     position: relative;
     z-index: 1;
+    display: flex;
     min-height: 0;
-    /* The bevel belongs to this view, so it stops at the view's top corner
-       under the tabs. The lines live in the padding, where no child
-       background (like the sticky heading) can cover them. */
-    padding-left: 3px;
     border-top: 2px solid var(--edge-light);
     background: var(--chassis);
-    box-shadow:
-      inset 2px 0 0 var(--chassis-line-high),
-      inset 3px 0 0 var(--bevel-light);
+  }
+
+  .inspector-scroll {
+    min-width: 0;
+    min-height: 0;
+    flex: 1;
+    background: var(--chassis);
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-gutter: stable;
+  }
+
+  .selector-column {
+    display: grid;
+    width: 84px;
+    min-height: 0;
+    flex: none;
+    border-right: 1px solid var(--chassis-line);
+    grid-template-rows: 22px minmax(0, 1fr);
+  }
+
+  .selector-column header {
+    overflow: hidden;
+    padding: 5px 6px 0;
+    border-bottom: 1px solid var(--chassis-line);
+    background: var(--chassis);
+    color: var(--muted);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .selector-screen {
+    background: var(--screen);
   }
 
   .panel-heading {
