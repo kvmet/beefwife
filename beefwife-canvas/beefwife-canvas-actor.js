@@ -77,6 +77,17 @@ class BeefwifeCanvasActor {
     if (previous) previous.destroy();
   }
 
+  /**
+   * Reconfigures the live body and keeps the canonical copy as the spec, so a
+   * later respawn rebuilds the creature as it is now, not as it was cast.
+   */
+  setDescriptor(descriptor) {
+    this.beefwife.setDescriptor(descriptor);
+    this.spec = this.beefwife.descriptor;
+    this.name = this.spec.name;
+    return this;
+  }
+
   /** A carried-off creature returns just inside a random viewport edge. */
   _reentry() {
     const { width, height } = this.router.viewport();

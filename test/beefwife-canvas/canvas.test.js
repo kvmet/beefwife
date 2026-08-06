@@ -52,6 +52,7 @@ const newHost = (options) => {
   const actor = {
     name: Object.keys(options.cast)[0],
     beefwife: { getPose: () => ({ head: { x: 4, y: 5 } }) },
+    setDescriptor: (descriptor) => calls.push(["setDescriptor", descriptor]),
   };
   const host = {
     actors: [actor],
@@ -287,8 +288,10 @@ vm.runInContext(
   assert.equal(handle.setTargetMode("manual"), handle);
   assert.equal(handle.clearTarget(), handle);
   assert.equal(handle.respawn(), handle);
+  assert.equal(handle.setDescriptor({ name: "edited" }), handle);
+  assert.deepEqual(calls.at(-1), ["setDescriptor", { name: "edited" }]);
   assert.equal(handle.host, undefined);
-  checks += 8;
+  checks += 10;
 
   runtime.destroy();
   assert.equal(created.host.destroyed, true);

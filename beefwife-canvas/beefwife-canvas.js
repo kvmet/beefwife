@@ -219,6 +219,11 @@ const BeefwifeCanvas = (() => {
               this._host().respawn(actor);
               return handle;
             },
+            setDescriptor: (descriptor) => {
+              this._host();
+              actor.setDescriptor(descriptor);
+              return handle;
+            },
             setTarget: (target) => {
               this._host().setTarget(target, actor);
               return handle;
