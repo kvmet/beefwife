@@ -380,13 +380,19 @@
   }
 
   details {
-    margin: 8px 10px;
-    background: color-mix(in srgb, var(--chassis) 82%, var(--bg));
+    margin: 4px 10px;
   }
 
+  /* Section headings are silkscreen on the chassis, not controls; the only
+     control face is the small latch, which presses in while open. */
   summary {
-    position: relative;
-    padding: 11px 13px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 2px;
+    border: 0;
+    outline: none;
+    background: none;
     color: var(--text);
     font-size: 11px;
     font-weight: 650;
@@ -394,29 +400,53 @@
     text-transform: uppercase;
   }
 
+  summary:hover,
+  details[open] > summary {
+    border: 0;
+    outline: none;
+    background: none;
+    color: var(--text);
+  }
+
+  summary::before {
+    display: grid;
+    width: 14px;
+    height: 14px;
+    flex: none;
+    place-items: center;
+    outline: 2px outset var(--bevel-face);
+    background: var(--chassis);
+    color: var(--muted);
+    content: "+";
+    font-size: 10px;
+    line-height: 1;
+  }
+
+  details[open] summary::before {
+    outline-style: inset;
+    background: var(--select-dim);
+    color: var(--select-text);
+    content: "−";
+  }
+
+  /* Engraved rule: dark line over light, running to the section's edge. */
   summary::after {
-    position: absolute;
-    top: 50%;
-    right: 10px;
-    width: 4px;
-    height: 4px;
-    border: 1px solid var(--chassis-line);
-    border-radius: 50%;
-    background: var(--bg);
+    flex: 1;
+    height: 2px;
+    background: linear-gradient(
+      var(--chassis-line-high) 1px,
+      var(--bevel-light) 1px
+    );
     content: "";
-    transform: translateY(-50%);
   }
 
-  details[open] summary::after {
-    border-color: var(--select-line);
-    background: var(--select);
-  }
-
+  /* 23px lines the fields up under the heading text, past the 14px latch
+     and its 9px gap. */
   .fields {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 13px 10px;
-    padding: 13px 13px 15px;
+    padding: 6px 2px 15px 23px;
   }
 
   .fields.single-column {
