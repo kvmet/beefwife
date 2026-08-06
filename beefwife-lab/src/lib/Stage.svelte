@@ -568,7 +568,7 @@
 
   .stage-heading {
     top: 26px;
-    left: 32px;
+    left: 26px;
     color: var(--screen-text);
   }
 
@@ -593,7 +593,7 @@
   }
 
   .stage-tools {
-    top: 22px;
+    top: 14px;
     right: 14px;
     width: 296px;
     border: 1px solid var(--chassis-line-high);
@@ -715,7 +715,7 @@
 
   .selection-badge {
     bottom: 20px;
-    left: 32px;
+    left: 26px;
     min-width: 126px;
     padding: 6px 9px;
     background: #1b212a;

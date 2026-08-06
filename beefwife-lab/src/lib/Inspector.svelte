@@ -1054,14 +1054,15 @@
     background: var(--bg);
   }
 
-  /* 26px face at 10px from the top matches the topbar buttons; the margins
-     total 42px so the rail hands off to the chain map at the same y as the
-     tabs do to the body. */
+  /* 26px face at 10px from the top matches the topbar buttons, and the 16px
+     left margin mirrors the topbar's right padding across the divider; the
+     margins total 46px so the rail hands off to the chain map at the same y
+     as the tabs do to the body. */
   .hide-panel {
     display: grid;
     height: 26px;
     flex: none;
-    margin: 10px auto 6px 5px;
+    margin: 10px auto 10px 16px;
     padding: 0 9px;
     place-items: center;
     font-size: 12px;
@@ -1075,13 +1076,15 @@
 
   /* Above .inspector-scroll so the selected tab paints over the panel's top
      edge; the overhang is why this strip cannot clip. */
+  /* 46px puts the body's top edge level with the stage's top under the
+     46px topbar; the padding grows instead of the tabs. */
   .panel-nav {
     position: relative;
     z-index: 2;
     display: flex;
     min-width: 0;
-    height: 42px;
-    padding: 4px 5px 0;
+    height: 46px;
+    padding: 8px 5px 0;
     background: var(--bg);
   }
 
