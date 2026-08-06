@@ -287,27 +287,15 @@ textarea {
   gap: 7px;
 }
 
-.top-actions .panel-toggle:hover,
-.top-actions .panel-toggle[aria-pressed="true"] {
+.top-actions .panel-toggle:hover {
   background: var(--select-dim);
   color: var(--select-text);
 }
 
-.panel-toggle i {
-  position: relative;
-  width: 13px;
-  height: 11px;
-  border: 1px solid currentColor;
-}
-
-.panel-toggle i::after {
-  position: absolute;
-  top: 0;
-  right: 3px;
-  bottom: 0;
-  width: 1px;
-  background: currentColor;
-  content: "";
+.panel-toggle b {
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 1;
 }
 
 /* Engraved rather than painted: a shadowed edge then a lit one. --bevel-shadow

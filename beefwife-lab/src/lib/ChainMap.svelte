@@ -12,16 +12,12 @@
     start += section.chunks;
     return band;
   });
-  const used = start;
 
   const ticks = Array.from({ length: capacity / 32 + 1 }, (_, i) => i * 32);
 </script>
 
 <section class="chain-map" aria-label="Chain map">
-  <header>
-    <strong>Chain</strong>
-    <span>{used}/{capacity}</span>
-  </header>
+  <header>Chain</header>
   <div class="strip">
     {#each ticks as tick}
       <i
@@ -43,45 +39,37 @@
 </section>
 
 <style>
-  /* The 66px header matches the tab row, its 2px edge, and the 22px column
-     headers beside it, so the strip's top lines up with the wave screens. */
+  /* The 2px top edge continues the tab row's edge across the chain rail, so
+     42px of rail above it plus the 22px header lines the strip's top up with
+     the wave screens. */
   .chain-map {
     display: grid;
-    width: 66px;
     min-height: 0;
-    flex: none;
-    border-right: 1px solid var(--chassis-line);
-    grid-template-rows: 66px minmax(0, 1fr);
+    flex: 1;
+    border-top: 2px solid var(--edge-light);
+    grid-template-rows: 22px minmax(0, 1fr);
   }
 
+  /* The right border sits on the header and strip, not the section, so it
+     starts below the 2px top edge at the same y as the wave columns'. */
   header {
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    gap: 2px;
     overflow: hidden;
-    padding: 0 6px 5px;
+    padding: 5px 6px 0;
+    border-right: 1px solid var(--chassis-line);
     border-bottom: 1px solid var(--chassis-line);
     background: var(--chassis);
-    white-space: nowrap;
-  }
-
-  header strong {
     color: var(--muted);
     font-size: 8px;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-  }
-
-  header span {
-    color: var(--faint);
-    font-size: 7px;
+    white-space: nowrap;
   }
 
   .strip {
     position: relative;
     overflow: hidden;
+    border-right: 1px solid var(--chassis-line);
     background: var(--screen);
   }
 

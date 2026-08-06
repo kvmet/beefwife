@@ -86,16 +86,13 @@
         onclick={() => (theme = theme === "dark" ? "light" : "dark")}
         >Theme</button
       >
-      <span class="divider"></span>
-      <button
-        class="panel-toggle"
-        class:active={sidebarOpen}
-        aria-pressed={sidebarOpen}
-        onclick={() => (sidebarOpen = !sidebarOpen)}
-      >
-        <i aria-hidden="true"></i>
-        Panel
-      </button>
+      {#if !sidebarOpen}
+        <span class="divider"></span>
+        <button class="panel-toggle" onclick={() => (sidebarOpen = true)}>
+          <b aria-hidden="true">+</b>
+          Panel
+        </button>
+      {/if}
     </div>
   </header>
 
@@ -120,7 +117,12 @@
         onkeydown={resizeSidebarFromKeyboard}
         ondblclick={() => (sidebarWidth = 480)}
       ></div>
-      <Inspector {selected} {activeTab} ontab={(tab) => (activeTab = tab)} />
+      <Inspector
+        {selected}
+        {activeTab}
+        ontab={(tab) => (activeTab = tab)}
+        onhide={() => (sidebarOpen = false)}
+      />
     </div>
   {/if}
 </main>

@@ -7,6 +7,7 @@
   export let selected;
   export let activeTab;
   export let ontab;
+  export let onhide;
 
   const tabs = ["Config", "Motion", "Look", "Parts"];
   const bodyWaves = [
@@ -27,7 +28,15 @@
 </script>
 
 <aside class="inspector" aria-label="Beefwife tools">
-  <ChainMap />
+  <div class="chain-rail">
+    <button
+      class="hide-panel"
+      aria-label="Hide panel"
+      title="Hide panel"
+      onclick={onhide}>−</button
+    >
+    <ChainMap />
+  </div>
 
   <div class="inspector-main">
     <div class="panel-nav">
@@ -276,12 +285,44 @@
       inset 3px 0 0 var(--bevel-light);
   }
 
+  /* minmax(0, 1fr) pins the implicit column to the panel's width; an auto
+     column would grow to the tab row's max-content and push the right-aligned
+     tabs off-screen when the panel is narrow. */
   .inspector-main {
     display: grid;
     min-width: 0;
     min-height: 0;
     flex: 1;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .chain-rail {
+    display: flex;
+    width: 66px;
+    min-height: 0;
+    flex: none;
+    flex-direction: column;
+    background: var(--bg);
+  }
+
+  /* 26px face at 10px from the top matches the topbar buttons; the margins
+     total 42px so the rail hands off to the chain map at the same y as the
+     tabs do to the body. */
+  .hide-panel {
+    display: grid;
+    height: 26px;
+    flex: none;
+    margin: 10px auto 6px 5px;
+    padding: 0 9px;
+    place-items: center;
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .hide-panel:hover {
+    background: var(--select-dim);
+    color: var(--select-text);
   }
 
   /* Above .inspector-scroll so the selected tab paints over the panel's top
@@ -299,6 +340,7 @@
   .panel-nav nav {
     min-width: 0;
     flex: 1;
+    justify-content: flex-end;
   }
 
   /* min-width: 0 is what lets a flex item shrink past its label; without it the
