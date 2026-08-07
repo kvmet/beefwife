@@ -55,7 +55,12 @@
   --screen-axis: #ffffff1f;
   --screen-line-major: #56606d80;
   --screen-select: #76d6bc;
-  --screen-measure-line: #e1b86c99;
+  --screen-measure: #e1b86c;
+  --screen-measure-line: color-mix(
+    in srgb,
+    var(--screen-measure) 60%,
+    transparent
+  );
 }
 
 :root[data-theme="dark"] {

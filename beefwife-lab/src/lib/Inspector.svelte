@@ -5,6 +5,7 @@
   import ConfigPanel from "./ConfigPanel.svelte";
   import LookPanel from "./LookPanel.svelte";
   import MotionPanel from "./MotionPanel.svelte";
+  import Tooltip from "./Tooltip.svelte";
   import WaveColumn from "./WaveColumn.svelte";
   import { descriptor, SECTION_NAMES } from "./descriptor.js";
 
@@ -81,24 +82,21 @@
 
 <aside class="inspector" aria-label="Beefwife tools">
   <div class="chain-rail">
-    <button
-      class="hide-panel"
-      aria-label="Hide panel"
-      title="Hide panel"
-      onclick={onhide}
-    >
-      <svg viewBox="0 0 16 16" aria-hidden="true">
-        <rect
-          x="1.5"
-          y="2.5"
-          width="13"
-          height="11"
-          fill="none"
-          stroke="currentColor"
-        />
-        <rect x="9.5" y="4" width="3.5" height="8" fill="currentColor" />
-      </svg>
-    </button>
+    <Tooltip label="Hide panel">
+      <button class="hide-panel" aria-label="Hide panel" onclick={onhide}>
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <rect
+            x="1.5"
+            y="2.5"
+            width="13"
+            height="11"
+            fill="none"
+            stroke="currentColor"
+          />
+          <rect x="9.5" y="4" width="3.5" height="8" fill="currentColor" />
+        </svg>
+      </button>
+    </Tooltip>
     <ChainMap
       section={selectedSection}
       onsection={revealSection}

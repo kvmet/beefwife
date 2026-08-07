@@ -1,4 +1,6 @@
 <script>
+  import Tooltip from "./Tooltip.svelte";
+
   /* Everything the runtime is mounted with; every edit here calls onremount. */
   export let options;
   export let showGrid;
@@ -56,22 +58,24 @@
     <div class="tool-body" role="tabpanel" aria-label={toolTab}>
       {#if toolTab === "Target"}
         <div class="tool-row">
-          <button title="Clear the current target" onclick={onclear}
-            >Clear</button
-          >
-          <button title="Send the specimen to center" onclick={oncenter}
-            >Center</button
-          >
-          <button
-            aria-pressed={mode === "follow"}
-            title="Target follows the pointer"
-            onclick={() => onmode("follow")}>Follow</button
-          >
-          <button
-            aria-pressed={mode === "wander"}
-            title="Pick random targets automatically"
-            onclick={() => onmode("wander")}>Wander</button
-          >
+          <Tooltip label="Clear the current target">
+            <button onclick={onclear}>Clear</button>
+          </Tooltip>
+          <Tooltip label="Send the specimen to center">
+            <button onclick={oncenter}>Center</button>
+          </Tooltip>
+          <Tooltip label="Target follows the pointer">
+            <button
+              aria-pressed={mode === "follow"}
+              onclick={() => onmode("follow")}>Follow</button
+            >
+          </Tooltip>
+          <Tooltip label="Pick random targets automatically">
+            <button
+              aria-pressed={mode === "wander"}
+              onclick={() => onmode("wander")}>Wander</button
+            >
+          </Tooltip>
         </div>
         {#if mode === "wander"}
           <div class="tool-fields">
@@ -101,19 +105,21 @@
         {/if}
       {:else if toolTab === "Stage"}
         <div class="tool-row">
-          <button
-            aria-pressed={showGrid}
-            title="Show the alignment grid"
-            onclick={() => (showGrid = !showGrid)}>Grid</button
-          >
-          <button
-            aria-pressed={showTarget}
-            title="Show the target marker"
-            onclick={() => {
-              showTarget = !showTarget;
-              ondebug();
-            }}>Target</button
-          >
+          <Tooltip label="Show the alignment grid">
+            <button
+              aria-pressed={showGrid}
+              onclick={() => (showGrid = !showGrid)}>Grid</button
+            >
+          </Tooltip>
+          <Tooltip label="Show the target marker">
+            <button
+              aria-pressed={showTarget}
+              onclick={() => {
+                showTarget = !showTarget;
+                ondebug();
+              }}>Target</button
+            >
+          </Tooltip>
         </div>
         <div class="tool-fields">
           <label>
@@ -123,11 +129,11 @@
         </div>
       {:else if toolTab === "Sim"}
         <div class="tool-row">
-          <button
-            aria-pressed={playing}
-            title={playing ? "Pause simulation" : "Resume simulation"}
-            onclick={onplay}>{playing ? "Pause" : "Play"}</button
-          >
+          <Tooltip label={playing ? "Pause simulation" : "Resume simulation"}>
+            <button aria-pressed={playing} onclick={onplay}
+              >{playing ? "Pause" : "Play"}</button
+            >
+          </Tooltip>
         </div>
         <div class="tool-fields">
           <label>
@@ -144,21 +150,24 @@
         </div>
       {:else}
         <div class="tool-row">
-          <button
-            aria-pressed={options.antialias}
-            title="Antialiasing"
-            onclick={() => toggle("antialias")}>AA</button
-          >
-          <button
-            aria-pressed={options.pixelUpscale}
-            title="Upscale with hard pixels instead of interpolation"
-            onclick={() => toggle("pixelUpscale")}>Upscale</button
-          >
-          <button
-            aria-pressed={options.roundVertices}
-            title="Snap vertices to the output pixel grid"
-            onclick={() => toggle("roundVertices")}>Rounding</button
-          >
+          <Tooltip label="Antialiasing">
+            <button
+              aria-pressed={options.antialias}
+              onclick={() => toggle("antialias")}>AA</button
+            >
+          </Tooltip>
+          <Tooltip label="Upscale with hard pixels instead of interpolation">
+            <button
+              aria-pressed={options.pixelUpscale}
+              onclick={() => toggle("pixelUpscale")}>Upscale</button
+            >
+          </Tooltip>
+          <Tooltip label="Snap vertices to the output pixel grid">
+            <button
+              aria-pressed={options.roundVertices}
+              onclick={() => toggle("roundVertices")}>Rounding</button
+            >
+          </Tooltip>
         </div>
         <div class="tool-fields">
           <label>

@@ -1,6 +1,7 @@
 <script>
   import Inspector from "./lib/Inspector.svelte";
   import Stage from "./lib/Stage.svelte";
+  import Tooltip from "./lib/Tooltip.svelte";
   import packageInfo from "../package.json";
 
   const version = packageInfo.version;
@@ -71,58 +72,64 @@
 
     <div class="top-actions">
       <span class="save-state">Unsaved</span>
-      <button class="quiet" title="Undo" aria-label="Undo">
-        <svg viewBox="0 0 16 16" aria-hidden="true">
-          <path
-            d="M6.5 4.5 3 8l3.5 3.5M3 8h7a3 3 0 0 1 0 6H7"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-          />
-        </svg>
-      </button>
-      <button class="quiet" title="Redo" aria-label="Redo">
-        <svg viewBox="0 0 16 16" aria-hidden="true">
-          <path
-            d="M9.5 4.5 13 8l-3.5 3.5M13 8H6a3 3 0 0 0 0 6h3"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-          />
-        </svg>
-      </button>
-      <span class="divider"></span>
-      <button
-        class="quiet"
-        title="Light/dark mode"
-        aria-label="Light/dark mode"
-        onclick={() => (theme = theme === "dark" ? "light" : "dark")}
-      >
-        <svg viewBox="0 0 16 16" aria-hidden="true">
-          <circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" />
-          <path d="M8 2.5a5.5 5.5 0 0 1 0 11z" fill="currentColor" />
-        </svg>
-      </button>
-      {#if !sidebarOpen}
-        <span class="divider"></span>
-        <button
-          class="panel-toggle"
-          title="Show panel"
-          aria-label="Show panel"
-          onclick={() => (sidebarOpen = true)}
-        >
+      <Tooltip label="Undo" keys="⌘Z">
+        <button class="quiet" aria-label="Undo">
           <svg viewBox="0 0 16 16" aria-hidden="true">
-            <rect
-              x="1.5"
-              y="2.5"
-              width="13"
-              height="11"
+            <path
+              d="M6.5 4.5 3 8l3.5 3.5M3 8h7a3 3 0 0 1 0 6H7"
               fill="none"
               stroke="currentColor"
+              stroke-width="1.5"
             />
-            <rect x="9.5" y="4" width="3.5" height="8" fill="currentColor" />
           </svg>
         </button>
+      </Tooltip>
+      <Tooltip label="Redo" keys="⇧⌘Z">
+        <button class="quiet" aria-label="Redo">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path
+              d="M9.5 4.5 13 8l-3.5 3.5M13 8H6a3 3 0 0 0 0 6h3"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            />
+          </svg>
+        </button>
+      </Tooltip>
+      <span class="divider"></span>
+      <Tooltip label="Light/dark mode">
+        <button
+          class="quiet"
+          aria-label="Light/dark mode"
+          onclick={() => (theme = theme === "dark" ? "light" : "dark")}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" />
+            <path d="M8 2.5a5.5 5.5 0 0 1 0 11z" fill="currentColor" />
+          </svg>
+        </button>
+      </Tooltip>
+      {#if !sidebarOpen}
+        <span class="divider"></span>
+        <Tooltip label="Show panel">
+          <button
+            class="panel-toggle"
+            aria-label="Show panel"
+            onclick={() => (sidebarOpen = true)}
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <rect
+                x="1.5"
+                y="2.5"
+                width="13"
+                height="11"
+                fill="none"
+                stroke="currentColor"
+              />
+              <rect x="9.5" y="4" width="3.5" height="8" fill="currentColor" />
+            </svg>
+          </button>
+        </Tooltip>
       {/if}
     </div>
   </header>
