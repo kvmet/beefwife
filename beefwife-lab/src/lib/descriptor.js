@@ -9,3 +9,9 @@ export const defaults = rustWalker;
 
 /** Message from the last rejected apply, or null while the canvas accepts. */
 export const applyError = writable(null);
+
+/** The chain's sections, head to tail. */
+export const SECTION_NAMES = ["head", "trunk", "tail"];
+
+/** Smallest chunk count each section allows; only the tail may vanish. */
+export const SECTION_MINIMUMS = { head: 1, trunk: 1, tail: 0 };

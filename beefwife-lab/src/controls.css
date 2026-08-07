@@ -1,0 +1,252 @@
+/* The inspector's field kit. The tool panels, the rows inside them, and the
+   section latches are separate components that must draw one surface, and a
+   component's own styles cannot reach across that boundary, so these live
+   here. Scoped to .inspector-scroll, the panel container, so bare `details`
+   and `label > span` stay out of the rest of the app. */
+
+.inspector-scroll details {
+  margin: 4px 10px;
+}
+
+/* Section headings are silkscreen on the chassis, not controls; the only
+   control face is the small latch, which presses in while open. */
+.inspector-scroll summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 2px;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Motion holds the dense settings, so its text runs larger and mixed-case
+   to stay readable. */
+.inspector-scroll.motion summary {
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.inspector-scroll summary:hover,
+.inspector-scroll details[open] > summary {
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--text);
+}
+
+.inspector-scroll summary::before {
+  display: grid;
+  width: 14px;
+  height: 14px;
+  flex: none;
+  place-items: center;
+  outline: 2px outset var(--bevel-face);
+  background: var(--chassis);
+  color: var(--muted);
+  content: "+";
+  font-size: 10px;
+  line-height: 1;
+}
+
+.inspector-scroll details[open] summary::before {
+  outline-style: inset;
+  background: var(--select-dim);
+  color: var(--select-text);
+  content: "−";
+}
+
+/* Engraved rule: dark line over light, running to the section's edge. */
+.inspector-scroll summary::after {
+  flex: 1;
+  height: 2px;
+  background: linear-gradient(
+    var(--chassis-line-high) 1px,
+    var(--bevel-light) 1px
+  );
+  content: "";
+}
+
+/* The same rule as a standalone divider inside a section. */
+.inspector-scroll .rule {
+  height: 2px;
+  margin: 2px 0;
+  border: 0;
+  background: linear-gradient(
+    var(--chassis-line-high) 1px,
+    var(--bevel-light) 1px
+  );
+}
+
+/* 23px lines the fields up under the heading text, past the 14px latch
+   and its 9px gap. */
+.inspector-scroll .fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 13px 10px;
+  padding: 6px 2px 15px 23px;
+}
+
+.inspector-scroll .fields.single-column {
+  grid-template-columns: 1fr;
+}
+
+.inspector-scroll .rows {
+  display: grid;
+  gap: 12px;
+  padding: 6px 2px 15px 23px;
+}
+
+.inspector-scroll label {
+  min-width: 0;
+}
+
+.inspector-scroll label.wide {
+  grid-column: 1 / -1;
+}
+
+.inspector-scroll label > span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font: var(--label-font);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.inspector-scroll select,
+.inspector-scroll input:not([type="range"], [type="checkbox"]) {
+  width: 100%;
+  height: 34px;
+  padding: 0 8px;
+  outline-color: var(--bevel-face-screen);
+}
+
+.inspector-scroll input[type="number"] {
+  appearance: textfield;
+}
+.inspector-scroll input[type="number"]::-webkit-inner-spin-button,
+.inspector-scroll input[type="number"]::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* Same bevel language as the fields: a recessed groove with a raised,
+   pressable thumb. */
+.inspector-scroll input[type="range"] {
+  width: 100%;
+  height: 18px;
+  margin: 0;
+  outline: none;
+  background: transparent;
+  appearance: none;
+  cursor: ew-resize;
+  -webkit-appearance: none;
+}
+.inspector-scroll input[type="range"]::-webkit-slider-runnable-track {
+  height: 2px;
+  outline: 1px inset var(--chassis);
+  background: var(--screen);
+}
+.inspector-scroll input[type="range"]::-webkit-slider-thumb {
+  width: 14px;
+  height: 16px;
+  margin-top: -7px;
+  outline: 2px outset var(--bevel-face);
+  background: var(--grip) center / 11px 11px no-repeat var(--chassis);
+  appearance: none;
+  -webkit-appearance: none;
+}
+.inspector-scroll input[type="range"]:hover::-webkit-slider-thumb {
+  background-color: var(--chassis-high);
+}
+.inspector-scroll input[type="range"]::-moz-range-track {
+  height: 2px;
+  outline: 1px inset var(--chassis);
+  background: var(--screen);
+}
+.inspector-scroll input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 16px;
+  border: none;
+  border-radius: 0;
+  outline: 2px outset var(--bevel-face);
+  background: var(--grip) center / 11px 11px no-repeat var(--chassis);
+}
+.inspector-scroll input[type="range"]:hover::-moz-range-thumb {
+  background-color: var(--chassis-high);
+}
+
+.inspector-scroll .row {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.inspector-scroll .row .head {
+  display: grid;
+  align-items: center;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 104px;
+}
+
+.inspector-scroll .row .head > span {
+  overflow: hidden;
+  color: var(--muted);
+  font: 13px/1.2 var(--font-mono);
+  letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-scroll .row input[type="number"] {
+  text-align: right;
+}
+
+.inspector-scroll .stepper {
+  display: grid;
+  gap: calc(var(--bevel-width) * 2);
+  grid-template-columns: 26px minmax(0, 1fr) 26px;
+}
+
+.inspector-scroll .stepper button {
+  height: 34px;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* The unit sits in a ruled gutter of its own so digits always end at the
+   same x, which is what makes a column of values scannable. */
+.inspector-scroll .unit {
+  position: relative;
+}
+
+.inspector-scroll .unit input {
+  padding-right: 38px;
+  text-align: right;
+}
+
+.inspector-scroll .unit em {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  bottom: 1px;
+  display: grid;
+  width: 30px;
+  place-items: center;
+  border-left: 1px solid var(--chassis-line-high);
+  color: color-mix(in oklch, var(--screen-text) 75%, var(--screen));
+  font-size: 9px;
+  font-style: normal;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: center;
+}

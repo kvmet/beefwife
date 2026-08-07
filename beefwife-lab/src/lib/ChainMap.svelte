@@ -1,5 +1,9 @@
 <script>
-  import { descriptor } from "./descriptor.js";
+  import {
+    descriptor,
+    SECTION_MINIMUMS as MINIMUMS,
+    SECTION_NAMES as NAMES,
+  } from "./descriptor.js";
 
   export let section = null;
   export let onsection;
@@ -7,8 +11,6 @@
 
   const LIMIT = 256;
   const TOTAL_MINIMUM = 2;
-  const NAMES = ["head", "trunk", "tail"];
-  const MINIMUMS = { head: 1, trunk: 1, tail: 0 };
   const gradations = Array.from({ length: LIMIT / 8 + 1 }, (_, i) => i * 8);
 
   const clamp = (value, low, high) => Math.min(Math.max(value, low), high);
