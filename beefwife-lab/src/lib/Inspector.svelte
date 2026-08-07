@@ -20,6 +20,8 @@
 
   let selectedSection = null;
   let sectionPanels = {};
+  let advancedMode = false;
+  let chainScale = 32;
 
   async function revealSection(name) {
     selectedSection = name;
@@ -48,20 +50,66 @@
     if (next >= 1 && next <= 8) $descriptor.gait[channel].harmonic = next;
   };
 
+  /* Thrust spans 0..1e6 in the schema, but bodies walk between 0 and a few
+     thousand, so a linear slider spends all its travel above the useful band.
+     The taper puts that band across the whole track and keeps 0 at the left
+     end, where two of the sample bodies sit. */
+  const THRUST_SLIDER_MAX = 10000;
+  const THRUST_TAPER = 20;
+  const thrustPosition = (value) =>
+    Math.log1p((THRUST_TAPER * value) / THRUST_SLIDER_MAX) /
+    Math.log1p(THRUST_TAPER);
+  const thrustValue = (position) =>
+    Math.round(
+      (Math.expm1(position * Math.log1p(THRUST_TAPER)) / THRUST_TAPER) *
+        THRUST_SLIDER_MAX,
+    );
+
+  /* Fixed decimals per field so a value's digits hold still as it changes;
+     the store keeps the typed precision. */
+  const numField = (digits, apply) => (event) => {
+    const value = +event.target.value;
+    if (!Number.isFinite(value)) return;
+    apply(value);
+    event.target.value = value.toFixed(digits);
+  };
+
   $: gait = $descriptor.gait;
   $: chainLength = SECTION_NAMES.reduce((sum, name) => {
     const section = $descriptor.chain.sections[name];
     return sum + section.chunks * section.spacing;
   }, 0);
+  /* The wave plots share the chain map's chunk scale, so their traces span
+     the same fraction of the column the bands span of the strip, and their
+     rows keep the 4-chunk rhythm across a doubling. */
+  $: totalChunks = SECTION_NAMES.reduce(
+    (sum, name) => sum + $descriptor.chain.sections[name].chunks,
+    0,
+  );
+  $: chainSpan = totalChunks / chainScale;
+  $: waveRow = (4 / chainScale) * 100;
   /* Bend plots saturated past 1 (the schema allows 10); thrust has no bounded
      unit, so its trace shows timing at full width and the field shows size. */
   $: bodyWaves = [
-    waveOf(gait, gait.bend, chainLength, "primary", Math.min(1, gait.bend.amplitude)),
+    waveOf(
+      gait,
+      gait.bend,
+      chainLength,
+      "primary",
+      Math.min(1, gait.bend.amplitude),
+    ),
     waveOf(gait, gait.thrust, chainLength, "weave", 1, gait.thrust.dutyCycle),
     waveOf(gait, gait.gather, chainLength, "gather", gait.gather.amplitude),
   ];
   $: liftWaves = [
-    waveOf(gait, gait.contact, chainLength, "primary", gait.contact.lift, gait.contact.dutyCycle),
+    waveOf(
+      gait,
+      gait.contact,
+      chainLength,
+      "primary",
+      gait.contact.lift,
+      gait.contact.dutyCycle,
+    ),
   ];
   const labels = {
     eyes: ["Ornament", "Eyes"],
@@ -80,9 +128,25 @@
       class="hide-panel"
       aria-label="Hide panel"
       title="Hide panel"
-      onclick={onhide}>−</button
+      onclick={onhide}
     >
-    <ChainMap section={selectedSection} onsection={revealSection} />
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <rect
+          x="1.5"
+          y="2.5"
+          width="13"
+          height="11"
+          fill="none"
+          stroke="currentColor"
+        />
+        <rect x="9.5" y="4" width="3.5" height="8" fill="currentColor" />
+      </svg>
+    </button>
+    <ChainMap
+      section={selectedSection}
+      onsection={revealSection}
+      onscale={(value) => (chainScale = value)}
+    />
   </div>
 
   <div class="inspector-main">
@@ -102,8 +166,18 @@
 
     <div class="inspector-body">
       {#if activeTab === "Motion"}
-        <WaveColumn title="Body waves" waves={bodyWaves} />
-        <WaveColumn title="Lift" waves={liftWaves} />
+        <WaveColumn
+          title="Body waves"
+          waves={bodyWaves}
+          span={chainSpan}
+          row={waveRow}
+        />
+        <WaveColumn
+          title="Lift"
+          waves={liftWaves}
+          span={chainSpan}
+          row={waveRow}
+        />
       {:else if activeTab === "Look"}
         <div class="selector-column">
           <header>Plates</header>
@@ -115,8 +189,20 @@
         </div>
       {/if}
 
-      <div class="inspector-scroll" role="tabpanel" aria-label={activeTab}>
-        <div class="slim-heading"></div>
+      <div
+        class="inspector-scroll"
+        class:motion={activeTab === "Motion"}
+        role="tabpanel"
+        aria-label={activeTab}
+      >
+        <div class="slim-heading">
+          {#if activeTab === "Motion"}
+            <label class="advanced-mode">
+              <input type="checkbox" bind:checked={advancedMode} />
+              <span>Advanced mode</span>
+            </label>
+          {/if}
+        </div>
         {#if activeTab === "Look"}
           <div class="selection-path">
             <span>Head</span><b>/</b><span>Upper surface</span><b>/</b><strong
@@ -248,7 +334,10 @@
 
           <!-- Sliders sweep the useful range; the textbox takes the schema's
                full range, so a typed value can sit past the slider's end. -->
-          <details open>
+          <!-- Basic mode opens every panel so the short list reads as one
+               page; advanced mode adds enough rows that open panels bury the
+               summaries, so switching collapses them. -->
+          <details open={!advancedMode}>
             <summary>Gait clock</summary>
             <div class="rows">
               <label class="row">
@@ -260,7 +349,11 @@
                       min="0"
                       max="100"
                       step="0.01"
-                      bind:value={$descriptor.gait.cyclesPerSecond}
+                      value={$descriptor.gait.cyclesPerSecond.toFixed(2)}
+                      onchange={numField(
+                        2,
+                        (value) => ($descriptor.gait.cyclesPerSecond = value),
+                      )}
                     /><em>Hz</em>
                   </div>
                 </div>
@@ -284,8 +377,15 @@
                       min="-3.14"
                       max="3.14"
                       step="0.005"
-                      bind:value={$descriptor.gait.phaseLagRadiansPerPixel}
-                    /><em>rad/px</em>
+                      value={$descriptor.gait.phaseLagRadiansPerPixel.toFixed(
+                        3,
+                      )}
+                      onchange={numField(
+                        3,
+                        (value) =>
+                          ($descriptor.gait.phaseLagRadiansPerPixel = value),
+                      )}
+                    /><em>rad<br/>/px</em>
                   </div>
                 </div>
                 <input
@@ -302,7 +402,7 @@
             </div>
           </details>
 
-          <details open>
+          <details open={!advancedMode}>
             <summary>Bend</summary>
             <div class="rows">
               <label class="row">
@@ -313,7 +413,11 @@
                     min="0"
                     max="10"
                     step="0.01"
-                    bind:value={$descriptor.gait.bend.amplitude}
+                    value={$descriptor.gait.bend.amplitude.toFixed(2)}
+                    onchange={numField(
+                      2,
+                      (value) => ($descriptor.gait.bend.amplitude = value),
+                    )}
                   />
                 </div>
                 <input
@@ -327,68 +431,73 @@
                       defaults.gait.bend.amplitude)}
                 />
               </label>
-              <div class="row">
-                <div class="head">
-                  <span>Harmonic</span>
-                  <div class="stepper">
-                    <button
-                      type="button"
-                      aria-label="Lower harmonic"
-                      onclick={() => stepHarmonic("bend", -1)}>−</button
-                    >
-                    <input
-                      type="number"
-                      min="1"
-                      max="8"
-                      step="1"
-                      aria-label="Harmonic"
-                      bind:value={$descriptor.gait.bend.harmonic}
-                    />
-                    <button
-                      type="button"
-                      aria-label="Raise harmonic"
-                      onclick={() => stepHarmonic("bend", 1)}>+</button
-                    >
+              {#if advancedMode}
+                <div class="row">
+                  <div class="head">
+                    <span>Harmonic</span>
+                    <div class="stepper">
+                      <button
+                        type="button"
+                        aria-label="Lower harmonic"
+                        onclick={() => stepHarmonic("bend", -1)}>−</button
+                      >
+                      <input
+                        type="number"
+                        min="1"
+                        max="8"
+                        step="1"
+                        aria-label="Harmonic"
+                        bind:value={$descriptor.gait.bend.harmonic}
+                      />
+                      <button
+                        type="button"
+                        aria-label="Raise harmonic"
+                        onclick={() => stepHarmonic("bend", 1)}>+</button
+                      >
+                    </div>
                   </div>
                 </div>
-              </div>
-              <label class="row">
-                <div class="head">
-                  <span>Phase</span>
-                  <div class="unit">
-                    <input
-                      type="number"
-                      min="-180"
-                      max="180"
-                      step="1"
-                      value={Math.round($descriptor.gait.bend.phaseOffset * DEG)}
-                      onchange={(event) =>
-                        ($descriptor.gait.bend.phaseOffset =
-                          +event.target.value / DEG)}
-                    /><em>deg</em>
+              {/if}
+              {#if advancedMode}
+                <label class="row">
+                  <div class="head">
+                    <span>Phase</span>
+                    <div class="unit">
+                      <input
+                        type="number"
+                        min="-180"
+                        max="180"
+                        step="1"
+                        value={Math.round(
+                          $descriptor.gait.bend.phaseOffset * DEG,
+                        )}
+                        onchange={(event) =>
+                          ($descriptor.gait.bend.phaseOffset =
+                            +event.target.value / DEG)}
+                      /><em>deg</em>
+                    </div>
                   </div>
-                </div>
-                <input
-                  type="range"
-                  min="-180"
-                  max="180"
-                  step="1"
-                  value={$descriptor.gait.bend.phaseOffset * DEG}
-                  oninput={(event) =>
-                    ($descriptor.gait.bend.phaseOffset =
-                      +event.target.value / DEG)}
-                  ondblclick={() =>
-                    ($descriptor.gait.bend.phaseOffset =
-                      defaults.gait.bend.phaseOffset)}
-                />
-              </label>
+                  <input
+                    type="range"
+                    min="-180"
+                    max="180"
+                    step="1"
+                    value={$descriptor.gait.bend.phaseOffset * DEG}
+                    oninput={(event) =>
+                      ($descriptor.gait.bend.phaseOffset =
+                        +event.target.value / DEG)}
+                    ondblclick={() =>
+                      ($descriptor.gait.bend.phaseOffset =
+                        defaults.gait.bend.phaseOffset)}
+                  />
+                </label>
+              {/if}
             </div>
           </details>
 
-          <details open>
+          <details open={!advancedMode}>
             <summary>Thrust</summary>
             <div class="rows">
-              <!-- No slider: linear 0..1e6 is unusable; wants a log taper. -->
               <label class="row">
                 <div class="head">
                   <span>Acceleration</span>
@@ -398,94 +507,122 @@
                       min="0"
                       max="1000000"
                       step="1"
-                      bind:value={$descriptor.gait.thrust.acceleration}
-                    /><em>px/s²</em>
-                  </div>
-                </div>
-              </label>
-              <div class="row">
-                <div class="head">
-                  <span>Harmonic</span>
-                  <div class="stepper">
-                    <button
-                      type="button"
-                      aria-label="Lower harmonic"
-                      onclick={() => stepHarmonic("thrust", -1)}>−</button
-                    >
-                    <input
-                      type="number"
-                      min="1"
-                      max="8"
-                      step="1"
-                      aria-label="Harmonic"
-                      bind:value={$descriptor.gait.thrust.harmonic}
-                    />
-                    <button
-                      type="button"
-                      aria-label="Raise harmonic"
-                      onclick={() => stepHarmonic("thrust", 1)}>+</button
-                    >
-                  </div>
-                </div>
-              </div>
-              <label class="row">
-                <div class="head">
-                  <span>Phase</span>
-                  <div class="unit">
-                    <input
-                      type="number"
-                      min="-180"
-                      max="180"
-                      step="1"
-                      value={Math.round(
-                        $descriptor.gait.thrust.phaseOffset * DEG,
+                      value={$descriptor.gait.thrust.acceleration.toFixed(0)}
+                      onchange={numField(
+                        0,
+                        (value) => ($descriptor.gait.thrust.acceleration = value),
                       )}
-                      onchange={(event) =>
-                        ($descriptor.gait.thrust.phaseOffset =
-                          +event.target.value / DEG)}
-                    /><em>deg</em>
+                    /><em>px<br/>/s²</em>
                   </div>
                 </div>
                 <input
                   type="range"
-                  min="-180"
-                  max="180"
-                  step="1"
-                  value={$descriptor.gait.thrust.phaseOffset * DEG}
+                  min="0"
+                  max="1"
+                  step="0.001"
+                  value={thrustPosition($descriptor.gait.thrust.acceleration)}
                   oninput={(event) =>
-                    ($descriptor.gait.thrust.phaseOffset =
-                      +event.target.value / DEG)}
+                    ($descriptor.gait.thrust.acceleration = thrustValue(
+                      +event.target.value,
+                    ))}
                   ondblclick={() =>
-                    ($descriptor.gait.thrust.phaseOffset =
-                      defaults.gait.thrust.phaseOffset)}
+                    ($descriptor.gait.thrust.acceleration =
+                      defaults.gait.thrust.acceleration)}
                 />
               </label>
-              <label class="row">
-                <div class="head">
-                  <span>Duty cycle</span>
+              {#if advancedMode}
+                <div class="row">
+                  <div class="head">
+                    <span>Harmonic</span>
+                    <div class="stepper">
+                      <button
+                        type="button"
+                        aria-label="Lower harmonic"
+                        onclick={() => stepHarmonic("thrust", -1)}>−</button
+                      >
+                      <input
+                        type="number"
+                        min="1"
+                        max="8"
+                        step="1"
+                        aria-label="Harmonic"
+                        bind:value={$descriptor.gait.thrust.harmonic}
+                      />
+                      <button
+                        type="button"
+                        aria-label="Raise harmonic"
+                        onclick={() => stepHarmonic("thrust", 1)}>+</button
+                      >
+                    </div>
+                  </div>
+                </div>
+              {/if}
+              {#if advancedMode}
+                <label class="row">
+                  <div class="head">
+                    <span>Phase</span>
+                    <div class="unit">
+                      <input
+                        type="number"
+                        min="-180"
+                        max="180"
+                        step="1"
+                        value={Math.round(
+                          $descriptor.gait.thrust.phaseOffset * DEG,
+                        )}
+                        onchange={(event) =>
+                          ($descriptor.gait.thrust.phaseOffset =
+                            +event.target.value / DEG)}
+                      /><em>deg</em>
+                    </div>
+                  </div>
                   <input
-                    type="number"
+                    type="range"
+                    min="-180"
+                    max="180"
+                    step="1"
+                    value={$descriptor.gait.thrust.phaseOffset * DEG}
+                    oninput={(event) =>
+                      ($descriptor.gait.thrust.phaseOffset =
+                        +event.target.value / DEG)}
+                    ondblclick={() =>
+                      ($descriptor.gait.thrust.phaseOffset =
+                        defaults.gait.thrust.phaseOffset)}
+                  />
+                </label>
+              {/if}
+              {#if advancedMode}
+                <label class="row">
+                  <div class="head">
+                    <span>Duty cycle</span>
+                    <input
+                      type="number"
+                      min="0.01"
+                      max="1"
+                      step="0.01"
+                      value={$descriptor.gait.thrust.dutyCycle.toFixed(2)}
+                      onchange={numField(
+                        2,
+                        (value) => ($descriptor.gait.thrust.dutyCycle = value),
+                      )}
+                    />
+                  </div>
+                  <input
+                    type="range"
                     min="0.01"
                     max="1"
                     step="0.01"
                     bind:value={$descriptor.gait.thrust.dutyCycle}
+                    ondblclick={() =>
+                      ($descriptor.gait.thrust.dutyCycle =
+                        defaults.gait.thrust.dutyCycle)}
                   />
-                </div>
-                <input
-                  type="range"
-                  min="0.01"
-                  max="1"
-                  step="0.01"
-                  bind:value={$descriptor.gait.thrust.dutyCycle}
-                  ondblclick={() =>
-                    ($descriptor.gait.thrust.dutyCycle =
-                      defaults.gait.thrust.dutyCycle)}
-                />
-              </label>
+                </label>
+              {/if}
             </div>
           </details>
 
-          <details open>
+          <details open={!advancedMode}>
             <summary>Gather</summary>
             <div class="rows">
               <label class="row">
@@ -496,7 +633,11 @@
                     min="0"
                     max="0.95"
                     step="0.01"
-                    bind:value={$descriptor.gait.gather.amplitude}
+                    value={$descriptor.gait.gather.amplitude.toFixed(2)}
+                    onchange={numField(
+                      2,
+                      (value) => ($descriptor.gait.gather.amplitude = value),
+                    )}
                   />
                 </div>
                 <input
@@ -510,67 +651,71 @@
                       defaults.gait.gather.amplitude)}
                 />
               </label>
-              <div class="row">
-                <div class="head">
-                  <span>Harmonic</span>
-                  <div class="stepper">
-                    <button
-                      type="button"
-                      aria-label="Lower harmonic"
-                      onclick={() => stepHarmonic("gather", -1)}>−</button
-                    >
-                    <input
-                      type="number"
-                      min="1"
-                      max="8"
-                      step="1"
-                      aria-label="Harmonic"
-                      bind:value={$descriptor.gait.gather.harmonic}
-                    />
-                    <button
-                      type="button"
-                      aria-label="Raise harmonic"
-                      onclick={() => stepHarmonic("gather", 1)}>+</button
-                    >
+              {#if advancedMode}
+                <div class="row">
+                  <div class="head">
+                    <span>Harmonic</span>
+                    <div class="stepper">
+                      <button
+                        type="button"
+                        aria-label="Lower harmonic"
+                        onclick={() => stepHarmonic("gather", -1)}>−</button
+                      >
+                      <input
+                        type="number"
+                        min="1"
+                        max="8"
+                        step="1"
+                        aria-label="Harmonic"
+                        bind:value={$descriptor.gait.gather.harmonic}
+                      />
+                      <button
+                        type="button"
+                        aria-label="Raise harmonic"
+                        onclick={() => stepHarmonic("gather", 1)}>+</button
+                      >
+                    </div>
                   </div>
                 </div>
-              </div>
-              <label class="row">
-                <div class="head">
-                  <span>Phase</span>
-                  <div class="unit">
-                    <input
-                      type="number"
-                      min="-180"
-                      max="180"
-                      step="1"
-                      value={Math.round(
-                        $descriptor.gait.gather.phaseOffset * DEG,
-                      )}
-                      onchange={(event) =>
-                        ($descriptor.gait.gather.phaseOffset =
-                          +event.target.value / DEG)}
-                    /><em>deg</em>
+              {/if}
+              {#if advancedMode}
+                <label class="row">
+                  <div class="head">
+                    <span>Phase</span>
+                    <div class="unit">
+                      <input
+                        type="number"
+                        min="-180"
+                        max="180"
+                        step="1"
+                        value={Math.round(
+                          $descriptor.gait.gather.phaseOffset * DEG,
+                        )}
+                        onchange={(event) =>
+                          ($descriptor.gait.gather.phaseOffset =
+                            +event.target.value / DEG)}
+                      /><em>deg</em>
+                    </div>
                   </div>
-                </div>
-                <input
-                  type="range"
-                  min="-180"
-                  max="180"
-                  step="1"
-                  value={$descriptor.gait.gather.phaseOffset * DEG}
-                  oninput={(event) =>
-                    ($descriptor.gait.gather.phaseOffset =
-                      +event.target.value / DEG)}
-                  ondblclick={() =>
-                    ($descriptor.gait.gather.phaseOffset =
-                      defaults.gait.gather.phaseOffset)}
-                />
-              </label>
+                  <input
+                    type="range"
+                    min="-180"
+                    max="180"
+                    step="1"
+                    value={$descriptor.gait.gather.phaseOffset * DEG}
+                    oninput={(event) =>
+                      ($descriptor.gait.gather.phaseOffset =
+                        +event.target.value / DEG)}
+                    ondblclick={() =>
+                      ($descriptor.gait.gather.phaseOffset =
+                        defaults.gait.gather.phaseOffset)}
+                  />
+                </label>
+              {/if}
             </div>
           </details>
 
-          <details open>
+          <details open={!advancedMode}>
             <summary>Contact</summary>
             <div class="rows">
               <label class="row">
@@ -581,7 +726,11 @@
                     min="0"
                     max="1"
                     step="0.01"
-                    bind:value={$descriptor.gait.contact.lift}
+                    value={$descriptor.gait.contact.lift.toFixed(2)}
+                    onchange={numField(
+                      2,
+                      (value) => ($descriptor.gait.contact.lift = value),
+                    )}
                   />
                 </div>
                 <input
@@ -595,91 +744,101 @@
                       defaults.gait.contact.lift)}
                 />
               </label>
-              <div class="row">
-                <div class="head">
-                  <span>Harmonic</span>
-                  <div class="stepper">
-                    <button
-                      type="button"
-                      aria-label="Lower harmonic"
-                      onclick={() => stepHarmonic("contact", -1)}>−</button
-                    >
-                    <input
-                      type="number"
-                      min="1"
-                      max="8"
-                      step="1"
-                      aria-label="Harmonic"
-                      bind:value={$descriptor.gait.contact.harmonic}
-                    />
-                    <button
-                      type="button"
-                      aria-label="Raise harmonic"
-                      onclick={() => stepHarmonic("contact", 1)}>+</button
-                    >
+              {#if advancedMode}
+                <div class="row">
+                  <div class="head">
+                    <span>Harmonic</span>
+                    <div class="stepper">
+                      <button
+                        type="button"
+                        aria-label="Lower harmonic"
+                        onclick={() => stepHarmonic("contact", -1)}>−</button
+                      >
+                      <input
+                        type="number"
+                        min="1"
+                        max="8"
+                        step="1"
+                        aria-label="Harmonic"
+                        bind:value={$descriptor.gait.contact.harmonic}
+                      />
+                      <button
+                        type="button"
+                        aria-label="Raise harmonic"
+                        onclick={() => stepHarmonic("contact", 1)}>+</button
+                      >
+                    </div>
                   </div>
                 </div>
-              </div>
-              <label class="row">
-                <div class="head">
-                  <span>Phase</span>
-                  <div class="unit">
-                    <input
-                      type="number"
-                      min="-180"
-                      max="180"
-                      step="1"
-                      value={Math.round(
-                        $descriptor.gait.contact.phaseOffset * DEG,
-                      )}
-                      onchange={(event) =>
-                        ($descriptor.gait.contact.phaseOffset =
-                          +event.target.value / DEG)}
-                    /><em>deg</em>
+              {/if}
+              {#if advancedMode}
+                <label class="row">
+                  <div class="head">
+                    <span>Phase</span>
+                    <div class="unit">
+                      <input
+                        type="number"
+                        min="-180"
+                        max="180"
+                        step="1"
+                        value={Math.round(
+                          $descriptor.gait.contact.phaseOffset * DEG,
+                        )}
+                        onchange={(event) =>
+                          ($descriptor.gait.contact.phaseOffset =
+                            +event.target.value / DEG)}
+                      /><em>deg</em>
+                    </div>
                   </div>
-                </div>
-                <input
-                  type="range"
-                  min="-180"
-                  max="180"
-                  step="1"
-                  value={$descriptor.gait.contact.phaseOffset * DEG}
-                  oninput={(event) =>
-                    ($descriptor.gait.contact.phaseOffset =
-                      +event.target.value / DEG)}
-                  ondblclick={() =>
-                    ($descriptor.gait.contact.phaseOffset =
-                      defaults.gait.contact.phaseOffset)}
-                />
-              </label>
-              <label class="row">
-                <div class="head">
-                  <span>Duty cycle</span>
                   <input
-                    type="number"
+                    type="range"
+                    min="-180"
+                    max="180"
+                    step="1"
+                    value={$descriptor.gait.contact.phaseOffset * DEG}
+                    oninput={(event) =>
+                      ($descriptor.gait.contact.phaseOffset =
+                        +event.target.value / DEG)}
+                    ondblclick={() =>
+                      ($descriptor.gait.contact.phaseOffset =
+                        defaults.gait.contact.phaseOffset)}
+                  />
+                </label>
+              {/if}
+              {#if advancedMode}
+                <label class="row">
+                  <div class="head">
+                    <span>Duty cycle</span>
+                    <input
+                      type="number"
+                      min="0.01"
+                      max="1"
+                      step="0.01"
+                      value={$descriptor.gait.contact.dutyCycle.toFixed(2)}
+                      onchange={numField(
+                        2,
+                        (value) => ($descriptor.gait.contact.dutyCycle = value),
+                      )}
+                    />
+                  </div>
+                  <input
+                    type="range"
                     min="0.01"
                     max="1"
                     step="0.01"
                     bind:value={$descriptor.gait.contact.dutyCycle}
+                    ondblclick={() =>
+                      ($descriptor.gait.contact.dutyCycle =
+                        defaults.gait.contact.dutyCycle)}
                   />
-                </div>
-                <input
-                  type="range"
-                  min="0.01"
-                  max="1"
-                  step="0.01"
-                  bind:value={$descriptor.gait.contact.dutyCycle}
-                  ondblclick={() =>
-                    ($descriptor.gait.contact.dutyCycle =
-                      defaults.gait.contact.dutyCycle)}
-                />
-              </label>
+                </label>
+              {/if}
             </div>
           </details>
 
           {#each SECTION_NAMES as name}
-            <details open bind:this={sectionPanels[name]}>
-              <summary>{name}</summary>
+            <details bind:this={sectionPanels[name]} open={!advancedMode}>
+              <summary>{name[0].toUpperCase() + name.slice(1)}</summary>
               <div class="rows">
                 <label class="row">
                   <div class="head">
@@ -712,7 +871,14 @@
                         min="0.000001"
                         max="1000"
                         step="0.5"
-                        bind:value={$descriptor.chain.sections[name].spacing}
+                        value={$descriptor.chain.sections[name].spacing.toFixed(
+                          1,
+                        )}
+                        onchange={numField(
+                          1,
+                          (value) =>
+                            ($descriptor.chain.sections[name].spacing = value),
+                        )}
                       /><em>px</em>
                     </div>
                   </div>
@@ -727,111 +893,152 @@
                         defaults.chain.sections[name].spacing)}
                   />
                 </label>
-                <div class="scales">
+                {#if advancedMode}
+                  <hr class="rule" />
                   {#each CHANNEL_NAMES as channel}
-                    <label>
-                      <span>{channel}</span>
+                    <label class="row">
+                      <div class="head">
+                        <span>
+                          {channel[0].toUpperCase() + channel.slice(1)} sensitivity
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="4"
+                          step="0.05"
+                          value={$descriptor.chain.sections[name].motionScale[
+                            channel
+                          ].toFixed(2)}
+                          onchange={numField(
+                            2,
+                            (value) =>
+                              ($descriptor.chain.sections[name].motionScale[
+                                channel
+                              ] = value),
+                          )}
+                        />
+                      </div>
                       <input
-                        type="number"
+                        type="range"
                         min="0"
-                        max="4"
+                        max="2"
                         step="0.05"
                         bind:value={
                           $descriptor.chain.sections[name].motionScale[channel]
                         }
+                        ondblclick={() =>
+                          ($descriptor.chain.sections[name].motionScale[
+                            channel
+                          ] = defaults.chain.sections[name].motionScale[
+                            channel
+                          ])}
                       />
                     </label>
                   {/each}
-                </div>
+                {/if}
               </div>
             </details>
           {/each}
 
-          <details open>
-            <summary>Steering</summary>
-            <div class="rows">
-              <label class="row">
-                <div class="head">
-                  <span>Gain</span>
+          {#if advancedMode}
+            <details>
+              <summary>Steering</summary>
+              <div class="rows">
+                <label class="row">
+                  <div class="head">
+                    <span>Gain</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.05"
+                      value={$descriptor.chain.physics.steering.gain.toFixed(2)}
+                      onchange={numField(
+                        2,
+                        (value) =>
+                          ($descriptor.chain.physics.steering.gain = value),
+                      )}
+                    />
+                  </div>
                   <input
-                    type="number"
+                    type="range"
                     min="0"
-                    max="100"
+                    max="5"
                     step="0.05"
                     bind:value={$descriptor.chain.physics.steering.gain}
+                    ondblclick={() =>
+                      ($descriptor.chain.physics.steering.gain =
+                        defaults.chain.physics.steering.gain)}
                   />
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="5"
-                  step="0.05"
-                  bind:value={$descriptor.chain.physics.steering.gain}
-                  ondblclick={() =>
-                    ($descriptor.chain.physics.steering.gain =
-                      defaults.chain.physics.steering.gain)}
-                />
-              </label>
-              <label class="row">
-                <div class="head">
-                  <span>Limit</span>
-                  <div class="unit">
-                    <input
-                      type="number"
-                      min="0"
-                      max="180"
-                      step="1"
-                      value={Math.round(
-                        $descriptor.chain.physics.steering.limit * DEG,
-                      )}
-                      onchange={(event) =>
-                        ($descriptor.chain.physics.steering.limit =
-                          +event.target.value / DEG)}
-                    /><em>deg</em>
+                </label>
+                <label class="row">
+                  <div class="head">
+                    <span>Limit</span>
+                    <div class="unit">
+                      <input
+                        type="number"
+                        min="0"
+                        max="180"
+                        step="1"
+                        value={Math.round(
+                          $descriptor.chain.physics.steering.limit * DEG,
+                        )}
+                        onchange={(event) =>
+                          ($descriptor.chain.physics.steering.limit =
+                            +event.target.value / DEG)}
+                      /><em>deg</em>
+                    </div>
                   </div>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="180"
-                  step="1"
-                  value={$descriptor.chain.physics.steering.limit * DEG}
-                  oninput={(event) =>
-                    ($descriptor.chain.physics.steering.limit =
-                      +event.target.value / DEG)}
-                  ondblclick={() =>
-                    ($descriptor.chain.physics.steering.limit =
-                      defaults.chain.physics.steering.limit)}
-                />
-              </label>
-              <label class="row">
-                <div class="head">
-                  <span>Rate</span>
-                  <div class="unit">
-                    <input
-                      type="number"
-                      min="0"
-                      max="1000"
-                      step="0.5"
-                      bind:value={$descriptor.chain.physics.steering.rate}
-                    /><em>/s</em>
+                  <input
+                    type="range"
+                    min="0"
+                    max="180"
+                    step="1"
+                    value={$descriptor.chain.physics.steering.limit * DEG}
+                    oninput={(event) =>
+                      ($descriptor.chain.physics.steering.limit =
+                        +event.target.value / DEG)}
+                    ondblclick={() =>
+                      ($descriptor.chain.physics.steering.limit =
+                        defaults.chain.physics.steering.limit)}
+                  />
+                </label>
+                <label class="row">
+                  <div class="head">
+                    <span>Rate</span>
+                    <div class="unit">
+                      <input
+                        type="number"
+                        min="0"
+                        max="1000"
+                        step="0.5"
+                        value={$descriptor.chain.physics.steering.rate.toFixed(
+                          1,
+                        )}
+                        onchange={numField(
+                          1,
+                          (value) =>
+                            ($descriptor.chain.physics.steering.rate = value),
+                        )}
+                      /><em>/s</em>
+                    </div>
                   </div>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="50"
-                  step="0.5"
-                  bind:value={$descriptor.chain.physics.steering.rate}
-                  ondblclick={() =>
-                    ($descriptor.chain.physics.steering.rate =
-                      defaults.chain.physics.steering.rate)}
-                />
-              </label>
-            </div>
-          </details>
+                  <input
+                    type="range"
+                    min="0"
+                    max="50"
+                    step="0.5"
+                    bind:value={$descriptor.chain.physics.steering.rate}
+                    ondblclick={() =>
+                      ($descriptor.chain.physics.steering.rate =
+                        defaults.chain.physics.steering.rate)}
+                  />
+                </label>
+              </div>
+            </details>
+          {/if}
 
-          <details open>
+          <details open={!advancedMode}>
             <summary>Ground lift</summary>
             <div class="rows">
               <label class="row">
@@ -842,7 +1049,12 @@
                     min="0"
                     max="1"
                     step="0.01"
-                    bind:value={$descriptor.chain.physics.autoLift.amount}
+                    value={$descriptor.chain.physics.autoLift.amount.toFixed(2)}
+                    onchange={numField(
+                      2,
+                      (value) =>
+                        ($descriptor.chain.physics.autoLift.amount = value),
+                    )}
                   />
                 </div>
                 <input
@@ -856,56 +1068,70 @@
                       defaults.chain.physics.autoLift.amount)}
                 />
               </label>
-              <label class="row">
-                <div class="head">
-                  <span>Share</span>
+              {#if advancedMode}
+                <label class="row">
+                  <div class="head">
+                    <span>Share</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="1"
+                      step="0.005"
+                      value={$descriptor.chain.physics.autoLift.share.toFixed(3)}
+                      onchange={numField(
+                        3,
+                        (value) =>
+                          ($descriptor.chain.physics.autoLift.share = value),
+                      )}
+                    />
+                  </div>
                   <input
-                    type="number"
+                    type="range"
                     min="0"
                     max="1"
                     step="0.005"
                     bind:value={$descriptor.chain.physics.autoLift.share}
+                    ondblclick={() =>
+                      ($descriptor.chain.physics.autoLift.share =
+                        defaults.chain.physics.autoLift.share)}
                   />
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.005"
-                  bind:value={$descriptor.chain.physics.autoLift.share}
-                  ondblclick={() =>
-                    ($descriptor.chain.physics.autoLift.share =
-                      defaults.chain.physics.autoLift.share)}
-                />
-              </label>
-              <label class="row">
-                <div class="head">
-                  <span>Rate</span>
-                  <div class="unit">
-                    <input
-                      type="number"
-                      min="0"
-                      max="1000"
-                      step="0.5"
-                      bind:value={$descriptor.chain.physics.autoLift.rate}
-                    /><em>/s</em>
+                </label>
+                <label class="row">
+                  <div class="head">
+                    <span>Rate</span>
+                    <div class="unit">
+                      <input
+                        type="number"
+                        min="0"
+                        max="1000"
+                        step="0.5"
+                        value={$descriptor.chain.physics.autoLift.rate.toFixed(
+                          1,
+                        )}
+                        onchange={numField(
+                          1,
+                          (value) =>
+                            ($descriptor.chain.physics.autoLift.rate = value),
+                        )}
+                      /><em>/s</em>
+                    </div>
                   </div>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="50"
-                  step="0.5"
-                  bind:value={$descriptor.chain.physics.autoLift.rate}
-                  ondblclick={() =>
-                    ($descriptor.chain.physics.autoLift.rate =
-                      defaults.chain.physics.autoLift.rate)}
-                />
-              </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="50"
+                    step="0.5"
+                    bind:value={$descriptor.chain.physics.autoLift.rate}
+                    ondblclick={() =>
+                      ($descriptor.chain.physics.autoLift.rate =
+                        defaults.chain.physics.autoLift.rate)}
+                  />
+                </label>
+              {/if}
             </div>
           </details>
 
-          <details open>
+          <details open={!advancedMode}>
             <summary>Idle behavior</summary>
             <div class="rows">
               <label class="row">
@@ -916,7 +1142,11 @@
                     min="0"
                     max="1"
                     step="0.01"
-                    bind:value={$descriptor.chain.breathing}
+                    value={$descriptor.chain.breathing.toFixed(2)}
+                    onchange={numField(
+                      2,
+                      (value) => ($descriptor.chain.breathing = value),
+                    )}
                   />
                 </div>
                 <input
@@ -932,7 +1162,7 @@
             </div>
           </details>
 
-          <details open>
+          <details open={!advancedMode}>
             <summary>Leg cycle</summary>
             <div class="rows">
               <label class="row">
@@ -943,7 +1173,11 @@
                     min="0"
                     max="1"
                     step="0.01"
-                    bind:value={$descriptor.legs.sidePhase}
+                    value={$descriptor.legs.sidePhase.toFixed(2)}
+                    onchange={numField(
+                      2,
+                      (value) => ($descriptor.legs.sidePhase = value),
+                    )}
                   />
                 </div>
                 <input
@@ -964,7 +1198,11 @@
                     min="0"
                     max="1"
                     step="0.01"
-                    bind:value={$descriptor.legs.lead}
+                    value={$descriptor.legs.lead.toFixed(2)}
+                    onchange={numField(
+                      2,
+                      (value) => ($descriptor.legs.lead = value),
+                    )}
                   />
                 </div>
                 <input
@@ -985,7 +1223,11 @@
                     min="0"
                     max="1"
                     step="0.01"
-                    bind:value={$descriptor.legs.liftThreshold}
+                    value={$descriptor.legs.liftThreshold.toFixed(2)}
+                    onchange={numField(
+                      2,
+                      (value) => ($descriptor.legs.liftThreshold = value),
+                    )}
                   />
                 </div>
                 <input
@@ -1008,7 +1250,11 @@
                       min="0.001"
                       max="60"
                       step="0.01"
-                      bind:value={$descriptor.legs.swingSeconds}
+                      value={$descriptor.legs.swingSeconds.toFixed(2)}
+                      onchange={numField(
+                        2,
+                        (value) => ($descriptor.legs.swingSeconds = value),
+                      )}
                     /><em>s</em>
                   </div>
                 </div>
@@ -1032,7 +1278,11 @@
                       min="0"
                       max="1000"
                       step="0.5"
-                      bind:value={$descriptor.legs.swingArc}
+                      value={$descriptor.legs.swingArc.toFixed(1)}
+                      onchange={numField(
+                        1,
+                        (value) => ($descriptor.legs.swingArc = value),
+                      )}
                     /><em>px</em>
                   </div>
                 </div>
@@ -1054,7 +1304,11 @@
                     min="0"
                     max="1"
                     step="0.01"
-                    bind:value={$descriptor.legs.jitter}
+                    value={$descriptor.legs.jitter.toFixed(2)}
+                    onchange={numField(
+                      2,
+                      (value) => ($descriptor.legs.jitter = value),
+                    )}
                   />
                 </div>
                 <input
@@ -1122,13 +1376,18 @@
      as the tabs do to the body. */
   .hide-panel {
     display: grid;
+    width: 26px;
     height: 26px;
     flex: none;
     margin: 10px auto 10px 16px;
-    padding: 0 9px;
+    padding: 0;
     place-items: center;
-    font-size: 12px;
-    line-height: 1;
+  }
+
+  .hide-panel svg {
+    display: block;
+    width: 16px;
+    height: 16px;
   }
 
   .hide-panel:hover {
@@ -1163,7 +1422,7 @@
     min-width: 0;
     padding: 0 7px;
     overflow: hidden;
-    font-size: 11px;
+    font-size: 12px;
     letter-spacing: 0.05em;
     text-overflow: ellipsis;
     text-transform: uppercase;
@@ -1198,18 +1457,18 @@
     min-height: 0;
     flex: none;
     border-right: 1px solid var(--chassis-line);
-    grid-template-rows: 22px minmax(0, 1fr);
+    grid-template-rows: 26px minmax(0, 1fr);
   }
 
   .selector-column header {
     overflow: hidden;
-    padding: 5px 6px 0;
+    padding: 7px 3px 0;
     border-bottom: 1px solid var(--chassis-line);
     background: var(--chassis);
     color: var(--muted);
-    font-size: 8px;
+    font-size: 10px;
     font-weight: 700;
-    letter-spacing: 0.08em;
+    letter-spacing: 0;
     text-overflow: ellipsis;
     text-transform: uppercase;
     white-space: nowrap;
@@ -1234,7 +1493,7 @@
     overflow: hidden;
     border-bottom: 1px solid var(--chassis-line);
     color: var(--muted);
-    font-size: 10px;
+    font-size: 11px;
     white-space: nowrap;
   }
 
@@ -1262,10 +1521,18 @@
     outline: none;
     background: none;
     color: var(--text);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 650;
     letter-spacing: 0.06em;
     text-transform: uppercase;
+  }
+
+  /* Motion holds the dense settings, so its text runs larger and mixed-case
+     to stay readable. */
+  .inspector-scroll.motion summary {
+    font-size: 14px;
+    letter-spacing: 0.02em;
+    text-transform: none;
   }
 
   summary:hover,
@@ -1321,13 +1588,16 @@
     grid-template-columns: 1fr;
   }
 
-  /* Same 22px rule the wave column headers draw, so the strips read as one
+  /* Same 26px rule the wave column headers draw, so the strips read as one
      band across the panel. */
   .slim-heading {
     position: sticky;
     z-index: 4;
     top: 0;
-    height: 22px;
+    display: flex;
+    height: 26px;
+    align-items: center;
+    padding: 0 16px;
     border-bottom: 1px solid var(--chassis-line);
     background: var(--chassis);
   }
@@ -1338,19 +1608,69 @@
     border-bottom: 1px solid var(--chassis-line);
     background: var(--danger-dim);
     color: var(--danger);
-    font-size: 10px;
+    font-size: 11px;
   }
 
-  /* Four equal columns line up with the wave plots' one column per channel. */
-  .scales {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 5px;
+  .advanced-mode {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
   }
 
-  .scales input {
-    padding: 0 4px;
-    text-align: right;
+  .advanced-mode input {
+    flex: none;
+  }
+
+  /* Silkscreen legend: O and I flank the switch. The thrown side's glyph
+     darkens, and I takes the select ink while on. */
+  .advanced-mode::before,
+  .advanced-mode::after {
+    color: var(--faint);
+    font-size: 9px;
+    line-height: 1;
+  }
+
+  .advanced-mode::before {
+    content: "O";
+  }
+
+  .advanced-mode::after {
+    content: "I";
+  }
+
+  /* The label leads the switch inside the right-riding control. */
+  .advanced-mode span {
+    order: -1;
+  }
+
+  .advanced-mode:not(:has(input:checked))::before {
+    color: var(--muted);
+  }
+
+  .advanced-mode:has(input:checked)::after {
+    color: var(--select-text);
+  }
+
+  .advanced-mode span {
+    margin: 0;
+    margin-right: 6px;
+    color: var(--text);
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    text-transform: none;
+  }
+
+  /* Same engraved rule the section headings draw, splitting the sensitivity
+     rows from the section's geometry. */
+  .rule {
+    height: 2px;
+    margin: 2px 0;
+    border: 0;
+    background: linear-gradient(
+      var(--chassis-line-high) 1px,
+      var(--bevel-light) 1px
+    );
   }
   label {
     min-width: 0;
@@ -1363,7 +1683,7 @@
   }
 
   select,
-  input:not([type="range"]) {
+  input:not([type="range"], [type="checkbox"]) {
     width: 100%;
     height: 34px;
     padding: 0 8px;
@@ -1393,25 +1713,25 @@
     -webkit-appearance: none;
   }
   input[type="range"]::-webkit-slider-runnable-track {
-    height: 6px;
-    outline: 2px inset var(--bevel-face-screen);
+    height: 2px;
+    outline: 1px inset var(--chassis);
     background: var(--screen);
   }
   input[type="range"]::-webkit-slider-thumb {
     width: 14px;
     height: 16px;
-    margin-top: -5px;
+    margin-top: -7px;
     outline: 2px outset var(--bevel-face);
-    background: var(--chassis);
+    background: var(--grip) center / 11px 11px no-repeat var(--chassis);
     appearance: none;
     -webkit-appearance: none;
   }
   input[type="range"]:hover::-webkit-slider-thumb {
-    background: var(--select-dim);
+    background-color: var(--chassis-high);
   }
   input[type="range"]::-moz-range-track {
-    height: 6px;
-    outline: 2px inset var(--bevel-face-screen);
+    height: 2px;
+    outline: 1px inset var(--chassis);
     background: var(--screen);
   }
   input[type="range"]::-moz-range-thumb {
@@ -1420,7 +1740,10 @@
     border: none;
     border-radius: 0;
     outline: 2px outset var(--bevel-face);
-    background: var(--chassis);
+    background: var(--grip) center / 11px 11px no-repeat var(--chassis);
+  }
+  input[type="range"]:hover::-moz-range-thumb {
+    background-color: var(--chassis-high);
   }
 
   .rows {
@@ -1445,10 +1768,9 @@
   .row .head > span {
     overflow: hidden;
     color: var(--muted);
-    font: 11px/1.2 var(--font-mono);
-    letter-spacing: 0.05em;
+    font: 13px/1.2 var(--font-mono);
+    letter-spacing: 0.02em;
     text-overflow: ellipsis;
-    text-transform: uppercase;
     white-space: nowrap;
   }
 
@@ -1488,10 +1810,11 @@
     width: 30px;
     place-items: center;
     border-left: 1px solid var(--chassis-line-high);
-    color: var(--screen-muted);
+    color: color-mix(in oklch, var(--screen-text) 75%, var(--screen));
     font-size: 9px;
     font-style: normal;
     letter-spacing: 0.04em;
     text-transform: uppercase;
+    text-align: center;
   }
 </style>

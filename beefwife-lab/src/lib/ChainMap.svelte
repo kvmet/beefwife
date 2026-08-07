@@ -3,6 +3,7 @@
 
   export let section = null;
   export let onsection;
+  export let onscale = () => {};
 
   const LIMIT = 256;
   const TOTAL_MINIMUM = 2;
@@ -12,12 +13,13 @@
 
   const clamp = (value, low, high) => Math.min(Math.max(value, low), high);
 
-  /* The strip holds the smallest power-of-two scale the chain still fits in
-     under half, so the 12-chunk default reads as a third of the rail instead of
-     the 5% sliver a fixed 1/256 scale gives it. */
-  const scaleFor = (total) => {
-    let scale = 32;
-    while (scale < LIMIT && total > scale / 2) scale *= 2;
+  /* Hysteresis around the current scale: the chain fills past 3/4 before the
+     scale doubles and drops under 3/8 before it halves. 3/8 is the highest
+     halving point that cannot bounce, since halving doubles the fill and
+     anything past 3/8 would land past 3/4 and re-double. */
+  const rescale = (scale, total) => {
+    while (scale < LIMIT && total > (scale * 3) / 4) scale *= 2;
+    while (scale > 32 && total * 8 < scale * 3) scale /= 2;
     return scale;
   };
 
@@ -29,7 +31,8 @@
   $: total = NAMES.reduce((sum, name) => sum + sections[name].chunks, 0);
   /* Frozen while a handle is down: rescaling mid-drag slides the edge out from
      under the pointer. */
-  $: if (!dragging) scale = scaleFor(total);
+  $: if (!dragging) scale = rescale(scale, total);
+  $: onscale(scale);
 
   $: bands = NAMES.map((name, index) => {
     const chunks = sections[name].chunks;
@@ -126,7 +129,35 @@
         title={`${band.name} · ${band.count}`}
         aria-label={`${band.name}, ${band.count}`}
         onclick={() => onsection(band.name)}
-      ></button>
+      >
+        <svg viewBox="0 0 14 14" aria-hidden="true">
+          {#if band.name === "head"}
+            <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" />
+            <circle cx="5.2" cy="6.2" r="1" fill="currentColor" />
+            <circle cx="8.8" cy="6.2" r="1" fill="currentColor" />
+          {:else if band.name === "trunk"}
+            <rect
+              x="3.5"
+              y="2"
+              width="7"
+              height="10"
+              rx="2.5"
+              fill="none"
+              stroke="currentColor"
+            />
+            <line x1="3.5" y1="5.3" x2="10.5" y2="5.3" stroke="currentColor" />
+            <line x1="3.5" y1="8.7" x2="10.5" y2="8.7" stroke="currentColor" />
+          {:else}
+            <path
+              d="M3.5 2.5h7L7 12.5Z"
+              fill="none"
+              stroke="currentColor"
+              stroke-linejoin="round"
+            />
+          {/if}
+        </svg>
+        <span>{band.name}</span>
+      </button>
     {/each}
 
     {#each bands as band}
@@ -147,35 +178,43 @@
         onpointerup={endDrag}
         onpointercancel={endDrag}
         onkeydown={(event) => nudge(event, band.index)}
-      ></button>
+      >
+        <svg viewBox="0 0 11 11" aria-hidden="true">
+          <path
+            d="M2 3.5h7M2 5.5h7M2 7.5h7"
+            fill="none"
+            stroke="currentColor"
+          />
+        </svg>
+      </button>
     {/each}
   </div>
 </section>
 
 <style>
   /* The 2px top edge continues the tab row's edge across the chain rail, so
-     42px of rail above it plus the 22px header lines the strip's top up with
+     42px of rail above it plus the 26px header lines the strip's top up with
      the wave screens. */
   .chain-map {
     display: grid;
     min-height: 0;
     flex: 1;
     border-top: 2px solid var(--edge-light);
-    grid-template-rows: 22px minmax(0, 1fr);
+    grid-template-rows: 26px minmax(0, 1fr);
   }
 
   /* The right border sits on the header and strip, not the section, so it
      starts below the 2px top edge at the same y as the wave columns'. */
   header {
     overflow: hidden;
-    padding: 5px 6px 0;
+    padding: 7px 3px 0;
     border-right: 1px solid var(--chassis-line);
     border-bottom: 1px solid var(--chassis-line);
     background: var(--chassis);
     color: var(--muted);
-    font-size: 8px;
+    font-size: 10px;
     font-weight: 700;
-    letter-spacing: 0.08em;
+    letter-spacing: 0;
     text-transform: uppercase;
     white-space: nowrap;
   }
@@ -225,22 +264,63 @@
     position: absolute;
     right: 2px;
     left: 2px;
+    display: flex;
     min-height: 4px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
     padding: 0;
     border: 0;
-    outline: 1px solid var(--screen-line-major);
-    background: color-mix(in oklch, var(--screen) 82%, var(--screen-text));
+    overflow: hidden;
+    outline: 1px solid var(--chassis-line);
+    background: var(--chassis);
+    color: var(--muted);
+    container-type: size;
   }
 
   .band:hover {
-    background: color-mix(in oklch, var(--screen) 70%, var(--screen-select));
-    outline-color: var(--screen-select);
+    background: var(--chassis-high);
+    outline-color: var(--chassis-line-high);
+    color: var(--text);
+  }
+
+  /* The band reveals its glyph, then its name, as the section grows tall
+     enough to hold each without spilling; the glyph itself grows with the
+     band up to a 36px face. */
+  .band svg {
+    display: none;
+    width: clamp(12px, 60cqh, 36px);
+    height: clamp(12px, 60cqh, 36px);
+    flex: none;
+  }
+
+  .band span {
+    display: none;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  @container (min-height: 17px) {
+    .band svg {
+      display: block;
+    }
+  }
+
+  /* 72px leaves the centered icon-plus-label block clear of the drag handle,
+     which overlaps the band's bottom 8px. */
+  @container (min-height: 72px) {
+    .band span {
+      display: block;
+    }
   }
 
   .band[aria-pressed="true"] {
-    outline: 2px solid var(--screen-select);
-    background: color-mix(in oklch, var(--screen) 62%, var(--screen-select));
-    color: var(--screen-text);
+    outline: 2px solid var(--select);
+    background: var(--select-dim);
+    color: var(--select-text);
   }
 
   /* Three fixed slots across the strip, so the handles of two sections that
@@ -248,11 +328,20 @@
   .lip {
     position: absolute;
     z-index: 3;
+    display: grid;
     width: 30%;
-    height: 9px;
+    height: 16px;
     padding: 0;
+    place-items: center;
     cursor: ns-resize;
     touch-action: none;
     transform: translateY(-50%);
+  }
+
+  .lip svg {
+    display: block;
+    width: 11px;
+    height: 11px;
+    pointer-events: none;
   }
 </style>

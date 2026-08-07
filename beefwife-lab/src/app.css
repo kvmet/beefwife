@@ -12,7 +12,7 @@
   --radius-screen: 0;
   --radius-control: 0;
   --track-label: 112px;
-  --label-font: 10px/1.2 var(--font-mono);
+  --label-font: 11px/1.2 var(--font-mono);
 
   /* Seeds: a theme repaints these; everything else derives. */
   --bg: #c0b8a7;
@@ -28,6 +28,11 @@
   --bevel-face-screen: #59636f;
   --bevel-light: #ffffffa0;
   --bevel-shadow: #4b403048;
+
+  /* Rib grip for every draggable thumb; 1px lines on the pixel grid stay
+     crisp at 11px. --muted is baked to hex because url() cannot read custom
+     properties. */
+  --grip: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 11'%3E%3Cpath d='M3.5 2v7M5.5 2v7M7.5 2v7' fill='none' stroke='%23414e5d'/%3E%3C/svg%3E");
 
   --chassis-high: color-mix(in oklch, var(--chassis) 60%, white);
   --chassis-low: color-mix(in oklab, var(--chassis) 85%, var(--bg));
@@ -68,6 +73,7 @@
   --bevel-face-screen: #59636f;
   --bevel-light: #ffffff28;
   --bevel-shadow: #00000068;
+  --grip: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 11'%3E%3Cpath d='M3.5 2v7M5.5 2v7M7.5 2v7' fill='none' stroke='%23acb0b6'/%3E%3C/svg%3E");
 }
 
 * {
@@ -86,7 +92,7 @@ body {
   min-width: 760px;
   background: var(--bg);
   color: var(--text);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 #app {
@@ -162,6 +168,7 @@ button:disabled {
 [role="tab"] {
   border: none;
   outline: none;
+  font-weight: 700;
   background-color: var(--chassis-low);
   box-shadow:
     inset 2px 0 0 var(--edge-light),
@@ -191,6 +198,56 @@ textarea {
   outline: var(--bevel-width) inset var(--bevel-face-screen);
   background: var(--screen);
   color: var(--screen-text);
+}
+
+/* A slide switch on the slider's parts: the same 2px slot and 14x16 thumb,
+   thrown left for off and right for on. */
+input[type="checkbox"] {
+  position: relative;
+  width: 30px;
+  height: 16px;
+  margin: 0;
+  outline: none;
+  background: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+input[type="checkbox"]::after {
+  position: absolute;
+  top: 7px;
+  right: 0;
+  left: 0;
+  height: 2px;
+  outline: 1px inset var(--chassis);
+  background: var(--screen);
+  content: "";
+}
+
+input[type="checkbox"]::before {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 0;
+  width: 14px;
+  height: 16px;
+  outline: 2px outset var(--bevel-face);
+  background: var(--grip) center / 11px 11px no-repeat var(--chassis);
+  content: "";
+}
+
+input[type="checkbox"]:checked::before {
+  right: 0;
+  left: auto;
+}
+
+input[type="checkbox"]:hover::before {
+  background-color: var(--chassis-high);
+}
+
+input[type="checkbox"]:focus-visible {
+  outline: 1px dotted #fff;
+  outline-offset: 2px;
 }
 
 /* The tool panel owns the full height of column 2, so the bar and stage live
@@ -249,7 +306,7 @@ textarea {
 .brand small {
   margin-top: 3px;
   color: var(--muted);
-  font: 9px/1.2 var(--font-mono);
+  font: 10px/1.2 var(--font-mono);
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -266,7 +323,7 @@ textarea {
 .save-state {
   margin-right: 10px;
   color: var(--danger);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.09em;
   text-transform: uppercase;
 }
@@ -276,26 +333,30 @@ textarea {
 .top-actions button {
   height: 26px;
   padding: 0 9px;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
+/* Icon-only buttons: square face, icon centered. */
+.top-actions .quiet,
 .top-actions .panel-toggle {
-  display: flex;
-  align-items: center;
-  gap: 7px;
+  display: grid;
+  width: 26px;
+  padding: 0;
+  place-items: center;
+}
+
+.top-actions .quiet svg,
+.panel-toggle svg {
+  display: block;
+  width: 16px;
+  height: 16px;
 }
 
 .top-actions .panel-toggle:hover {
   background: var(--select-dim);
   color: var(--select-text);
-}
-
-.panel-toggle b {
-  font-weight: 400;
-  font-size: 12px;
-  line-height: 1;
 }
 
 /* Engraved rather than painted: a shadowed edge then a lit one. --bevel-shadow

@@ -61,8 +61,9 @@
    {:exts #{"sh" "bash" "zsh" "fish" "nix"}  :warn 200 :fail 400}
    {:exts #{"toml" "ini" "cfg"}              :warn 150 :fail 300}
    {:exts #{"yaml" "yml" "edn" "sql"}        :warn 200 :fail 500}
+   {:exts #{"svelte"}                          :warn 400 :fail 500}
    {:exts #{"ts" "tsx" "js" "jsx" "mjs" "cjs"
-            "vue" "svelte" "html"}           :warn 500 :fail 600}
+            "vue" "html"}                    :warn 500 :fail 600}
    {:exts #{"css" "scss" "sass" "less"}      :warn 400 :fail 800}
    {:exts #{"clj" "cljs" "cljc" "py" "rb" "go" "java" "kt" "cs"
             "swift" "ex" "exs" "erl" "lua" "hs" "scala"} :warn 400 :fail 800}
