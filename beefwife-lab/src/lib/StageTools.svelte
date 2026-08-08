@@ -2,12 +2,12 @@
   /* Everything the runtime is mounted with. The stage seeds its options from
      these and every row resets to the same value. */
   export const DEFAULT_OPTIONS = {
-    antialias: true,
-    pixelUpscale: false,
+    antialias: false,
+    pixelUpscale: true,
     roundVertices: true,
-    resolutionScale: 0.5,
+    resolutionScale: 0.25,
     simulationFps: 60,
-    drawFps: 30,
+    drawFps: 20,
     wanderDelay: 4,
     edgeMargin: 52,
     filterPreset: "None",
