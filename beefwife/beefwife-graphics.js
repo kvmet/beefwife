@@ -60,29 +60,35 @@ const BeefwifeGraphics = (() => {
     return mesh;
   };
 
+  /* A limb is one closed outline, wound down one side and back up the other:
+     hip, knee, foot, foot, knee, hip. Both halves share each knee vertex, so
+     they cannot part company there. */
+  const LIMB_VERTICES = 6;
+  const LIMB_FLOATS = LIMB_VERTICES * 2;
+
   const limbMeshFor = (legCount, paint) => {
     const indices = new Uint32Array(legCount * 12);
     for (let leg = 0; leg < legCount; leg++) {
-      const vertex = leg * 8;
+      const vertex = leg * LIMB_VERTICES;
       indices.set(
         [
           vertex,
+          vertex + 5,
           vertex + 1,
-          vertex + 2,
-          vertex + 2,
           vertex + 1,
-          vertex + 3,
+          vertex + 5,
           vertex + 4,
-          vertex + 5,
-          vertex + 6,
-          vertex + 6,
-          vertex + 5,
-          vertex + 7,
+          vertex + 1,
+          vertex + 4,
+          vertex + 2,
+          vertex + 2,
+          vertex + 4,
+          vertex + 3,
         ],
         leg * 12,
       );
     }
-    return meshFor(legCount * 8, indices, paint.stroke);
+    return meshFor(legCount * LIMB_VERTICES, indices, paint.fill);
   };
 
   const ribbonMeshFor = (chunkCount, paint) => {
@@ -121,34 +127,63 @@ const BeefwifeGraphics = (() => {
           inversePixelResolution;
   };
 
-  const writeSegment = (
+  /* Each side of the outline turns a corner at the knee where its two offset
+     edges cross. A leg folded back on itself throws that crossing towards
+     infinity, so the reach is capped; the outline stays closed either way. */
+  const LIMB_CORNER_REACH = 4;
+
+  const writeLimb = (
     positions,
     offset,
-    startX,
-    startY,
-    endX,
-    endY,
+    hipX,
+    hipY,
+    kneeX,
+    kneeY,
+    footX,
+    footY,
     width,
     pixelResolution = 0,
     inversePixelResolution = 0,
   ) => {
-    const dx = endX - startX;
-    const dy = endY - startY;
-    const length = Math.hypot(dx, dy) || 1;
-    const normalX = (-dy / length) * width * 0.5;
-    const normalY = (dx / length) * width * 0.5;
-    positions[offset] = startX + normalX;
-    positions[offset + 1] = startY + normalY;
-    positions[offset + 2] = startX - normalX;
-    positions[offset + 3] = startY - normalY;
-    positions[offset + 4] = endX + normalX;
-    positions[offset + 5] = endY + normalY;
-    positions[offset + 6] = endX - normalX;
-    positions[offset + 7] = endY - normalY;
+    const half = width * 0.5;
+    const thighX = kneeX - hipX;
+    const thighY = kneeY - hipY;
+    const thighLength = Math.hypot(thighX, thighY) || 1;
+    const shinX = footX - kneeX;
+    const shinY = footY - kneeY;
+    const shinLength = Math.hypot(shinX, shinY) || 1;
+    const thighNormalX = -thighY / thighLength;
+    const thighNormalY = thighX / thighLength;
+    const shinNormalX = -shinY / shinLength;
+    const shinNormalY = shinX / shinLength;
+    const spread = 1 + thighNormalX * shinNormalX + thighNormalY * shinNormalY;
+    let cornerX = thighNormalX;
+    let cornerY = thighNormalY;
+    if (spread > 1e-6) {
+      cornerX = (thighNormalX + shinNormalX) / spread;
+      cornerY = (thighNormalY + shinNormalY) / spread;
+      const reach = Math.hypot(cornerX, cornerY);
+      if (reach > LIMB_CORNER_REACH) {
+        cornerX = (cornerX / reach) * LIMB_CORNER_REACH;
+        cornerY = (cornerY / reach) * LIMB_CORNER_REACH;
+      }
+    }
+    positions[offset] = hipX + thighNormalX * half;
+    positions[offset + 1] = hipY + thighNormalY * half;
+    positions[offset + 2] = kneeX + cornerX * half;
+    positions[offset + 3] = kneeY + cornerY * half;
+    positions[offset + 4] = footX + shinNormalX * half;
+    positions[offset + 5] = footY + shinNormalY * half;
+    positions[offset + 6] = footX - shinNormalX * half;
+    positions[offset + 7] = footY - shinNormalY * half;
+    positions[offset + 8] = kneeX - cornerX * half;
+    positions[offset + 9] = kneeY - cornerY * half;
+    positions[offset + 10] = hipX - thighNormalX * half;
+    positions[offset + 11] = hipY - thighNormalY * half;
     snapPositions(
       positions,
       offset,
-      offset + 8,
+      offset + LIMB_FLOATS,
       pixelResolution,
       inversePixelResolution,
     );
@@ -211,11 +246,16 @@ const BeefwifeGraphics = (() => {
       this.parent = parent;
       this.model = state.model;
       this.options = options || {};
+      /* A mesh carries a tint and nothing else, so a limb that wants an
+         outline as well draws through Graphics, as the ribbon does. */
       const legPaint = this.model.legs.skin.limbPaint;
-      this.limbs = limbMeshFor(
-        state.legs.length / state.layout.legStride,
-        legPaint,
-      );
+      this.limbIsMesh =
+        legPaint.fill !== null &&
+        (legPaint.stroke === null || legPaint.strokeWidth <= 0);
+      this.limbs = this.limbIsMesh
+        ? limbMeshFor(state.legs.length / state.layout.legStride, legPaint)
+        : new PIXI.Graphics();
+      this.limbPoints = this.limbIsMesh ? null : new Float64Array(LIMB_FLOATS);
       const ribbonPaint = this.model.skin.ribbonPaint;
       this.ribbonIsMesh =
         ribbonPaint.fill !== null &&
@@ -265,14 +305,25 @@ const BeefwifeGraphics = (() => {
 
     _syncLimbs(state, pixelResolution, inversePixelResolution) {
       const legs = state.legs;
-      const positions = this.limbs.dynamicPositions;
-      const width = this.model.legs.skin.limbPaint.strokeWidth;
+      const width = this.model.legs.skin.limbWidth;
+      const positions = this.limbIsMesh
+        ? this.limbs.dynamicPositions
+        : this.limbPoints;
+      if (!this.limbIsMesh) this.limbs.clear();
+      // A limb with no width is no limb; the feet still stand on their own.
+      if (width <= 0) {
+        if (this.limbIsMesh) {
+          positions.fill(0);
+          this.limbs.positionBuffer.update();
+        }
+        return;
+      }
       const stride = state.layout.legStride;
       const projection = this.options.kneeProjection ?? null;
       const jointLean = this.model.legs.jointLean;
       for (let offset = 0; offset < legs.length; offset += stride) {
         const legIndex = offset / stride;
-        const vertexOffset = legIndex * 16;
+        const vertexOffset = this.limbIsMesh ? legIndex * LIMB_FLOATS : 0;
         let kneeX = legs[offset + 2];
         let kneeY = legs[offset + 3];
         if (projection) {
@@ -312,20 +363,11 @@ const BeefwifeGraphics = (() => {
           kneeX += legs[offset + 6] * leanOffset;
           kneeY += legs[offset + 7] * leanOffset;
         }
-        writeSegment(
+        writeLimb(
           positions,
           vertexOffset,
           legs[offset],
           legs[offset + 1],
-          kneeX,
-          kneeY,
-          width,
-          pixelResolution,
-          inversePixelResolution,
-        );
-        writeSegment(
-          positions,
-          vertexOffset + 8,
           kneeX,
           kneeY,
           legs[offset + 4],
@@ -334,8 +376,25 @@ const BeefwifeGraphics = (() => {
           pixelResolution,
           inversePixelResolution,
         );
+        if (this.limbIsMesh) continue;
+        this.limbs.moveTo(positions[0], positions[1]);
+        for (let vertex = 2; vertex < LIMB_FLOATS; vertex += 2)
+          this.limbs.lineTo(positions[vertex], positions[vertex + 1]);
+        this.limbs.closePath();
       }
-      this.limbs.positionBuffer.update();
+      if (this.limbIsMesh) {
+        this.limbs.positionBuffer.update();
+        return;
+      }
+      const legPaint = this.model.legs.skin.limbPaint;
+      if (legPaint.fill !== null) this.limbs.fill(legPaint.fill);
+      if (legPaint.stroke !== null && legPaint.strokeWidth > 0)
+        this.limbs.stroke({
+          color: legPaint.stroke,
+          width: legPaint.strokeWidth,
+          cap: "butt",
+          join: "miter",
+        });
     }
 
     _syncRibbon(state, pixelResolution, inversePixelResolution) {

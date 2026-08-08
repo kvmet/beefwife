@@ -11,7 +11,13 @@ const fs = require("node:fs");
 const path = require("node:path");
 const BeefwifeDescriptor = require("../../beefwife/beefwife-descriptor.js");
 
-const examplePath = path.join(__dirname, "..", "..", "beefwife", "beefwife.example.json");
+const examplePath = path.join(
+  __dirname,
+  "..",
+  "..",
+  "beefwife",
+  "beefwife.example.json",
+);
 const exampleText = fs.readFileSync(examplePath, "utf8");
 const source = JSON.parse(exampleText);
 const copy = (value) => JSON.parse(JSON.stringify(value));
@@ -303,10 +309,33 @@ const widthWithoutStroke = copy(source);
 widthWithoutStroke.definitions.paints.ribbon.strokeWidth = 1;
 rejected("width without stroke", widthWithoutStroke, /without a stroke/);
 
-const invisibleLeg = copy(source);
-invisibleLeg.legs.pairs = 1;
-invisibleLeg.legs.skin.limbPaint = "ribbon";
-rejected("legs without limb stroke", invisibleLeg, /visible stroke/);
+/* A limb draws whatever its paint draws, and a body may want bare feet, so
+   the schema asks nothing of either the paint or the width. */
+const outlinedLeg = copy(source);
+outlinedLeg.legs.pairs = 1;
+outlinedLeg.definitions.paints.outline = {
+  fill: null,
+  stroke: "#123456",
+  strokeWidth: 2,
+};
+outlinedLeg.legs.skin.limbPaint = "outline";
+accepted("outline-only limb paint", outlinedLeg);
+
+const filledAndStrokedLeg = copy(source);
+filledAndStrokedLeg.legs.pairs = 1;
+filledAndStrokedLeg.definitions.paints.leg.stroke = "#ffffff";
+filledAndStrokedLeg.definitions.paints.leg.strokeWidth = 12;
+accepted("filled and stroked limb paint", filledAndStrokedLeg);
+
+const widthlessLeg = copy(source);
+widthlessLeg.legs.pairs = 1;
+widthlessLeg.legs.skin.limbWidth = 0;
+accepted("legs without limb width", widthlessLeg);
+
+const widthlessLegless = copy(source);
+widthlessLegless.legs.pairs = 0;
+widthlessLegless.legs.skin.limbWidth = 0;
+accepted("legless body without limb width", widthlessLegless);
 
 const notFinite = copy(source);
 notFinite.gait.cyclesPerSecond = Infinity;

@@ -43,9 +43,9 @@
         "strokeWidth": 3.1
       },
       "leg": {
-        "fill": null,
-        "stroke": "#39424e",
-        "strokeWidth": 2.4
+        "fill": "#39424e",
+        "stroke": null,
+        "strokeWidth": 0
       },
       "ribbon": {
         "fill": "#7a1414",
@@ -251,6 +251,7 @@
     "jitter": 0.3,
     "skin": {
       "limbPaint": "leg",
+      "limbWidth": 2.4,
       "foot": {
         "shape": "foot",
         "paint": "foot",

@@ -285,6 +285,13 @@ pair exactly mirrored and consumes randomness without changing its geometry.
 All positional jitter scales with the larger of `reach` and `spread`; it never
 introduces a fixed world-pixel displacement.
 
+A limb is one closed outline, not a stroked line: hip, knee, foot down one side
+and back up the other, with both sides sharing each knee vertex so a bend leaves
+no gap. `legs.skin.limbWidth` sets its thickness in px. A fill-only `limbPaint`
+draws it as a tinted mesh; any paint that also asks for a stroke moves the limbs
+to a Graphics path and draws both passes, as the ribbon does. A `limbWidth` of
+zero draws no limbs at all, leaving the feet on their own.
+
 Ornament `length` and offsets are px, `angleDegrees` is degrees, and `snapRate`
 and `dampingRate` are per second. They are time-based so visual motion does not
 depend on frame rate.

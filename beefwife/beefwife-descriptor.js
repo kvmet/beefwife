@@ -199,6 +199,7 @@ const BeefwifeDescriptor = (() => {
       jitter: ratio,
       skin: object({
         limbPaint: id,
+        limbWidth: number(0, 1000),
         foot: object({
           shape: id,
           paint: id,
@@ -487,9 +488,6 @@ const BeefwifeDescriptor = (() => {
         "$.definitions.shapes",
         `paths must total at most ${LIMITS.pathTotal} characters`,
       );
-    const limbPaint = definitions.paints[legs.skin.limbPaint];
-    if (legs.pairs && (limbPaint.stroke === null || !limbPaint.strokeWidth))
-      fail("$.legs.skin.limbPaint", "must reference a visible stroke");
     return descriptor;
   };
 

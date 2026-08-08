@@ -231,6 +231,7 @@ const BeefwifeModel = (() => {
         end: sections[descriptor.legs.section].end,
         skin: {
           limbPaint: paints[descriptor.legs.skin.limbPaint],
+          limbWidth: descriptor.legs.skin.limbWidth,
           foot: {
             shape: shapes[descriptor.legs.skin.foot.shape],
             paint: paints[descriptor.legs.skin.foot.paint],

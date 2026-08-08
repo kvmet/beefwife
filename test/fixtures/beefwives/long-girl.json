@@ -42,9 +42,9 @@
         "strokeWidth": 3.1
       },
       "leg": {
-        "fill": null,
-        "stroke": "#cb0605",
-        "strokeWidth": 8.2
+        "fill": "#cb0605",
+        "stroke": null,
+        "strokeWidth": 0
       },
       "ornament-1": {
         "fill": "#050505",
@@ -222,6 +222,7 @@
     "jitter": 0.3,
     "skin": {
       "limbPaint": "leg",
+      "limbWidth": 8.2,
       "foot": {
         "shape": "foot",
         "paint": "foot",

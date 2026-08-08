@@ -207,8 +207,9 @@ const Beefwife = (() => {
       (name) => before.sections[name].count === after.sections[name].count,
     );
   const legStateKey = (model) => {
-    // Joint placement is drawn, not simulated; it never invalidates leg state.
-    const { jointBend, jointLean, jointLeanCenter, ...legs } =
+    /* Joint placement and everything under skin are drawn, never simulated,
+       so editing them keeps the feet planted. */
+    const { jointBend, jointLean, jointLeanCenter, skin, ...legs } =
       model.descriptor.legs;
     return JSON.stringify(legs);
   };
