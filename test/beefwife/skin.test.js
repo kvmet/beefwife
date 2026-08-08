@@ -15,7 +15,10 @@ const { BeefwifeLegs } = require("../../beefwife/beefwife-legs.js");
 const { BeefwifeSkin } = require("../../beefwife/beefwife-skin.js");
 
 const descriptor = JSON.parse(
-  fs.readFileSync(path.join(__dirname, "..", "..", "beefwife", "beefwife.example.json"), "utf8"),
+  fs.readFileSync(
+    path.join(__dirname, "..", "..", "beefwife", "beefwife.example.json"),
+    "utf8",
+  ),
 );
 const finite = (values) => values.every(Number.isFinite);
 const near = (before, after, tolerance = 1e-6) =>

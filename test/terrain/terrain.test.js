@@ -17,13 +17,7 @@ const WIDTH = 180;
 const HEIGHT = 140;
 const artifact = process.argv[2] || "terrain.js";
 
-const terrainPath = path.join(
-  __dirname,
-  "..",
-  "..",
-  "terrain",
-  artifact,
-);
+const terrainPath = path.join(__dirname, "..", "..", "terrain", artifact);
 const source = fs.readFileSync(terrainPath, "utf8");
 const Terrain = require(terrainPath);
 const context = {
@@ -272,9 +266,7 @@ assert.deepEqual(offset.viewport, {
   width: 80,
   height: 60,
 });
-assert.deepEqual(offset.rects, [
-  { left: 8, top: 18, right: 32, bottom: 42 },
-]);
+assert.deepEqual(offset.rects, [{ left: 8, top: 18, right: 32, bottom: 42 }]);
 assert.equal(covered(offset, land(offset, { x: 20, y: 30 })), false);
 assert.equal(offset.avoidElements().length, 2);
 offset.build();
@@ -327,8 +319,7 @@ assert.throws(
   /must return an iterable/,
 );
 assert.throws(
-  () =>
-    new Terrain({ avoid: [], viewport: () => null }).build(),
+  () => new Terrain({ avoid: [], viewport: () => null }).build(),
   /must be a rectangle/,
 );
 assert.throws(
@@ -363,13 +354,8 @@ const stationary = obstacle.route({ x: 10, y: 20 }, { x: 10, y: 20 });
 assert.deepEqual([...stationary], [{ x: 10, y: 20 }]);
 assert.equal(stationary.moved, false);
 
-const protectedMesh = build([
-  { left: 70, top: 50, right: 110, bottom: 90 },
-]);
-const protectedRoute = protectedMesh.route(
-  { x: 10, y: 70 },
-  { x: 160, y: 70 },
-);
+const protectedMesh = build([{ left: 70, top: 50, right: 110, bottom: 90 }]);
+const protectedRoute = protectedMesh.route({ x: 10, y: 70 }, { x: 160, y: 70 });
 assert.equal(protectedRoute.length > 2, true);
 const protectedCopy = protectedRoute.map((point) => ({ ...point }));
 protectedRoute[1].x = -1000;
@@ -382,21 +368,12 @@ assert.deepEqual(
 const wall = build([{ left: 80, top: -10, right: 100, bottom: 150 }]);
 assert.equal(wall.route({ x: 10, y: 70 }, { x: 170, y: 70 }), null);
 
-const verticalLine = build([
-  { left: 90, top: -10, right: 90, bottom: 150 },
-]);
+const verticalLine = build([{ left: 90, top: -10, right: 90, bottom: 150 }]);
 assert.equal(verticalLine.route({ x: 10, y: 70 }, { x: 170, y: 70 }), null);
-const horizontalLine = build([
-  { left: -10, top: 70, right: 190, bottom: 70 },
-]);
+const horizontalLine = build([{ left: -10, top: 70, right: 190, bottom: 70 }]);
 assert.equal(horizontalLine.route({ x: 90, y: 10 }, { x: 90, y: 130 }), null);
-const pointObstacle = build([
-  { left: 90, top: 70, right: 90, bottom: 70 },
-]);
-const aroundPoint = pointObstacle.route(
-  { x: 10, y: 70 },
-  { x: 170, y: 70 },
-);
+const pointObstacle = build([{ left: 90, top: 70, right: 90, bottom: 70 }]);
+const aroundPoint = pointObstacle.route({ x: 10, y: 70 }, { x: 170, y: 70 });
 assert.equal(safe(pointObstacle, aroundPoint), true);
 assert.equal(aroundPoint.length > 2, true);
 
@@ -455,8 +432,11 @@ for (let world = 0; world < 250; world++) {
     const point = { x: -20 + random() * 220, y: -20 + random() * 180 };
     if (!covered(terrain, point)) continue;
     const landed = land(terrain, point);
-    assert.equal(covered(terrain, landed), false,
-      JSON.stringify({ point, landed, rects }));
+    assert.equal(
+      covered(terrain, landed),
+      false,
+      JSON.stringify({ point, landed, rects }),
+    );
     landings++;
   }
 
@@ -495,13 +475,14 @@ for (let world = 0; world < 250; world++) {
 
       const route = terrain.route(a, b);
       if (!route) continue;
-      assert.equal(safe(terrain, route), true, JSON.stringify({ a, b, route, rects }));
+      assert.equal(
+        safe(terrain, route),
+        true,
+        JSON.stringify({ a, b, route, rects }),
+      );
       assert.equal(
         route.moved,
-        start.x !== a.x ||
-          start.y !== a.y ||
-          goal.x !== b.x ||
-          goal.y !== b.y,
+        start.x !== a.x || start.y !== a.y || goal.x !== b.x || goal.y !== b.y,
       );
       assert.equal(same(route[0], start), true);
       assert.equal(same(route[route.length - 1], goal), true);

@@ -102,7 +102,8 @@ const document = {
     );
   },
   dispatchEvent(event) {
-    for (const listener of this.listeners.get(event.type) || []) listener(event);
+    for (const listener of this.listeners.get(event.type) || [])
+      listener(event);
   },
   querySelectorAll: () => [],
 };
@@ -268,14 +269,7 @@ vm.runInContext(
   assert.equal(canvas.dataset.beefwifeState, "stopped");
   assert.deepEqual(
     calls.slice(-6).map((call) => call[0]),
-    [
-      "start",
-      "stop",
-      "setCount",
-      "setTimeScale",
-      "setDebug",
-      "refreshTerrain",
-    ],
+    ["start", "stop", "setCount", "setTimeScale", "setDebug", "refreshTerrain"],
   );
   checks += 16;
 
@@ -386,9 +380,7 @@ vm.runInContext(
     autoStart: false,
     manifest: {
       schemaVersion: 1,
-      sources: [
-        { src: "https://example.test/cast/a.json", weight: 2 },
-      ],
+      sources: [{ src: "https://example.test/cast/a.json", weight: 2 }],
     },
     sources: { src: "https://example.test/cast/b.json", weight: 3 },
     descriptors: { descriptor: { name: "c" }, weight: 4 },

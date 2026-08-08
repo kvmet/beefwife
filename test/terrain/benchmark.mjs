@@ -119,4 +119,5 @@ for (const row of rows) {
       .join(""),
   );
 }
-if (!Number.isFinite(checksum)) throw new Error("benchmark produced invalid output");
+if (!Number.isFinite(checksum))
+  throw new Error("benchmark produced invalid output");

@@ -112,9 +112,7 @@ const Beefwife = (() => {
         "options.render.pixelResolution",
       );
       if (pixelResolution <= 0)
-        throw new RangeError(
-          "options.render.pixelResolution must be positive",
-        );
+        throw new RangeError("options.render.pixelResolution must be positive");
     }
     const projection = render.kneeProjection;
     if (projection !== undefined && projection !== null) {

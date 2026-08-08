@@ -33,15 +33,13 @@ global.stepRoute = () => ({
 });
 global.window = { innerWidth: 800, innerHeight: 600 };
 
-const BeefwifeCanvasActor = require(
-  "../../beefwife-canvas/beefwife-canvas-actor.js",
-);
-const { BeefwifeCanvasRouter } = require(
-  "../../beefwife-canvas/beefwife-canvas-path.js",
-);
-const { BeefwifeCanvasTargetPolicy } = require(
-  "../../beefwife-canvas/beefwife-canvas-targeting.js",
-);
+const BeefwifeCanvasActor = require("../../beefwife-canvas/beefwife-canvas-actor.js");
+const {
+  BeefwifeCanvasRouter,
+} = require("../../beefwife-canvas/beefwife-canvas-path.js");
+const {
+  BeefwifeCanvasTargetPolicy,
+} = require("../../beefwife-canvas/beefwife-canvas-targeting.js");
 const {
   newRoute: newSteerRoute,
   stepRoute: steerRoute,
@@ -138,17 +136,44 @@ const delayedPolicy = new BeefwifeCanvasTargetPolicy(delayedRouter, "wander", {
   wanderDelay: 8,
 });
 const delayedRoute = newSteerRoute();
-steerRoute(delayedRoute, delayedPolicy, { x: 0, y: 0 }, 0, BEEFWIFE_CANVAS_ROUTE_DEFAULTS);
-steerRoute(delayedRoute, delayedPolicy, { x: 20, y: 0 }, 0, BEEFWIFE_CANVAS_ROUTE_DEFAULTS);
-steerRoute(delayedRoute, delayedPolicy, { x: 20, y: 0 }, 3.99, BEEFWIFE_CANVAS_ROUTE_DEFAULTS);
+steerRoute(
+  delayedRoute,
+  delayedPolicy,
+  { x: 0, y: 0 },
+  0,
+  BEEFWIFE_CANVAS_ROUTE_DEFAULTS,
+);
+steerRoute(
+  delayedRoute,
+  delayedPolicy,
+  { x: 20, y: 0 },
+  0,
+  BEEFWIFE_CANVAS_ROUTE_DEFAULTS,
+);
+steerRoute(
+  delayedRoute,
+  delayedPolicy,
+  { x: 20, y: 0 },
+  3.99,
+  BEEFWIFE_CANVAS_ROUTE_DEFAULTS,
+);
 assert.equal(wanderPlans, 1);
-steerRoute(delayedRoute, delayedPolicy, { x: 20, y: 0 }, 0.01, BEEFWIFE_CANVAS_ROUTE_DEFAULTS);
+steerRoute(
+  delayedRoute,
+  delayedPolicy,
+  { x: 20, y: 0 },
+  0.01,
+  BEEFWIFE_CANVAS_ROUTE_DEFAULTS,
+);
 assert.equal(wanderPlans, 2);
 checks += 5;
 
 const toleranceRoute = newSteerRoute();
 toleranceRoute.from = { x: 0, y: 0 };
-toleranceRoute.path = [{ x: 10, y: 0 }, { x: 20, y: 0 }];
+toleranceRoute.path = [
+  { x: 10, y: 0 },
+  { x: 20, y: 0 },
+];
 const passivePolicy = {
   readyToPlan: false,
   terrain: policyRouter.terrain,
@@ -569,14 +594,21 @@ const classicBoundary = async () => {
     browser.badValue = resolutionScale;
     assert.throws(
       () =>
-        vm.runInContext("new BeefwifeCanvasRuntime({ resolutionScale: badValue })", browser),
+        vm.runInContext(
+          "new BeefwifeCanvasRuntime({ resolutionScale: badValue })",
+          browser,
+        ),
       /resolutionScale/,
     );
   });
   [-1, 0.5, 241, Infinity].forEach((renderFps) => {
     browser.badValue = renderFps;
     assert.throws(
-      () => vm.runInContext("new BeefwifeCanvasRuntime({ renderFps: badValue })", browser),
+      () =>
+        vm.runInContext(
+          "new BeefwifeCanvasRuntime({ renderFps: badValue })",
+          browser,
+        ),
       /renderFps/,
     );
   });

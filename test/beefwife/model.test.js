@@ -12,7 +12,10 @@ const vm = require("node:vm");
 const BeefwifeModel = require("../../beefwife/beefwife-model.js");
 
 const source = JSON.parse(
-  fs.readFileSync(path.join(__dirname, "..", "..", "beefwife", "beefwife.example.json"), "utf8"),
+  fs.readFileSync(
+    path.join(__dirname, "..", "..", "beefwife", "beefwife.example.json"),
+    "utf8",
+  ),
 );
 const copy = (value) => JSON.parse(JSON.stringify(value));
 let checks = 0;

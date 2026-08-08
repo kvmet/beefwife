@@ -54,11 +54,9 @@ const BeefwifeCanvasRender = (() => {
     scene.debugOverlay.clear();
     if (debug.terrain) drawTerrain(scene.debugUnderlay, terrainView);
     if (debug.routes)
-      for (const actor of actors)
-        drawRoute(scene.debugOverlay, actor);
+      for (const actor of actors) drawRoute(scene.debugOverlay, actor);
     if (debug.targets)
-      for (const actor of actors)
-        drawTarget(scene.debugOverlay, actor);
+      for (const actor of actors) drawTarget(scene.debugOverlay, actor);
     scene.render();
   };
 

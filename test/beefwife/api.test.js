@@ -12,7 +12,10 @@ const vm = require("node:vm");
 const Beefwife = require("../../beefwife/beefwife.js");
 
 const example = JSON.parse(
-  fs.readFileSync(path.join(__dirname, "..", "..", "beefwife", "beefwife.example.json"), "utf8"),
+  fs.readFileSync(
+    path.join(__dirname, "..", "..", "beefwife", "beefwife.example.json"),
+    "utf8",
+  ),
 );
 const copy = (value) => JSON.parse(JSON.stringify(value));
 const finitePose = (pose) =>

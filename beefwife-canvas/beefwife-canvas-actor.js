@@ -11,7 +11,11 @@ class BeefwifeCanvasActor {
   static MAX_TIME_SCALE = 16;
 
   static timeScaleOf(value) {
-    if (!Number.isFinite(value) || value < 0 || value > BeefwifeCanvasActor.MAX_TIME_SCALE)
+    if (
+      !Number.isFinite(value) ||
+      value < 0 ||
+      value > BeefwifeCanvasActor.MAX_TIME_SCALE
+    )
       throw new RangeError(
         `timeScale must be from 0 to ${BeefwifeCanvasActor.MAX_TIME_SCALE}`,
       );
@@ -141,7 +145,9 @@ class BeefwifeCanvasActor {
 
   update(dt, timeScale) {
     if (!Number.isFinite(dt) || dt < 0 || dt > BeefwifeCanvasActor.MAX_DT)
-      throw new RangeError(`dt must be from 0 to ${BeefwifeCanvasActor.MAX_DT}`);
+      throw new RangeError(
+        `dt must be from 0 to ${BeefwifeCanvasActor.MAX_DT}`,
+      );
     BeefwifeCanvasActor.timeScaleOf(timeScale);
     const scaledDt = dt * timeScale;
     const pose = this.beefwife.getPose();

@@ -1,13 +1,18 @@
 const assert = require("node:assert/strict");
 
-const BeefwifeCanvasRender = require(
-  "../../beefwife-canvas/beefwife-canvas-render.js"
-);
+const BeefwifeCanvasRender = require("../../beefwife-canvas/beefwife-canvas-render.js");
 
 const graphics = () => {
   const calls = [];
   const target = { calls };
-  for (const method of ["circle", "clear", "lineTo", "moveTo", "rect", "stroke"])
+  for (const method of [
+    "circle",
+    "clear",
+    "lineTo",
+    "moveTo",
+    "rect",
+    "stroke",
+  ])
     target[method] = (...args) => {
       calls.push([method, ...args]);
       return target;
@@ -21,7 +26,10 @@ const actor = {
   display: { destroyed: false },
   head: { x: 1, y: 2 },
   target: { x: 12, y: 14 },
-  route: [{ x: 5, y: 6 }, { x: 9, y: 10 }],
+  route: [
+    { x: 5, y: 6 },
+    { x: 9, y: 10 },
+  ],
 };
 const host = {
   actors: [actor],
@@ -48,14 +56,21 @@ const draw = (layer) => {
 
 draw("targets");
 assert.ok(overlay.calls.some((call) => call[0] === "circle" && call[3] === 5));
-assert.equal(underlay.calls.some((call) => call[0] === "rect"), false);
+assert.equal(
+  underlay.calls.some((call) => call[0] === "rect"),
+  false,
+);
 
 draw("routes");
 assert.equal(
-  overlay.calls.filter((call) => call[0] === "circle" && call[3] === 2.5).length,
+  overlay.calls.filter((call) => call[0] === "circle" && call[3] === 2.5)
+    .length,
   2,
 );
-assert.equal(overlay.calls.some((call) => call[0] === "circle" && call[3] === 5), false);
+assert.equal(
+  overlay.calls.some((call) => call[0] === "circle" && call[3] === 5),
+  false,
+);
 
 draw("terrain");
 assert.equal(underlay.calls.filter((call) => call[0] === "rect").length, 2);

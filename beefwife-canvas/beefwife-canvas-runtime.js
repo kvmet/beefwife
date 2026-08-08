@@ -12,15 +12,13 @@ if (!RuntimeBeefwifeCanvasOptions)
 const RuntimeBeefwifeCanvasRender =
   typeof BeefwifeCanvasRender !== "undefined"
     ? BeefwifeCanvasRender
-    : canRequireBeefwifeCanvasModules &&
-      require("./beefwife-canvas-render.js");
+    : canRequireBeefwifeCanvasModules && require("./beefwife-canvas-render.js");
 if (!RuntimeBeefwifeCanvasRender)
   throw new Error("BeefwifeCanvasRender must load first");
 const RuntimeBeefwifeCanvasScene =
   typeof BeefwifeCanvasScene !== "undefined"
     ? BeefwifeCanvasScene
-    : canRequireBeefwifeCanvasModules &&
-      require("./beefwife-canvas-scene.js");
+    : canRequireBeefwifeCanvasModules && require("./beefwife-canvas-scene.js");
 if (!RuntimeBeefwifeCanvasScene)
   throw new Error("BeefwifeCanvasScene must load first");
 const RuntimeBeefwifeCanvasPopulation =
@@ -111,8 +109,7 @@ class BeefwifeCanvasRuntime {
     terrainOptions.viewport = () => this.scene.viewport;
     this.terrain = new Terrain(terrainOptions);
     this.terrainDebugOptions = {
-      edgeMargin:
-        terrainOptions.edgeMargin ?? Terrain.DEFAULTS.edgeMargin,
+      edgeMargin: terrainOptions.edgeMargin ?? Terrain.DEFAULTS.edgeMargin,
       obstaclePadding:
         terrainOptions.obstaclePadding ?? Terrain.DEFAULTS.obstaclePadding,
     };
@@ -155,10 +152,7 @@ class BeefwifeCanvasRuntime {
       if (!this.destroyed) this.scheduleRebuild();
     };
     this._onScroll = () => {
-      if (
-        !this.destroyed &&
-        this.scene.kneeProjectionCenter === "viewport"
-      )
+      if (!this.destroyed && this.scene.kneeProjectionCenter === "viewport")
         this.scheduleRebuild();
     };
     this.observer =
@@ -268,9 +262,7 @@ class BeefwifeCanvasRuntime {
     const terrainWasVisible = this.debug.terrain;
     this.debug = debugOf(flags, this.debug);
     if (!terrainWasVisible && this.debug.terrain && this.terrain.ready)
-      this._snapshotTerrain(
-        [...new Set(this.terrain.avoidElements())],
-      );
+      this._snapshotTerrain([...new Set(this.terrain.avoidElements())]);
     if (this.scene.application) this._draw();
     return this;
   }
@@ -353,7 +345,8 @@ class BeefwifeCanvasRuntime {
   }
 
   _assertActive() {
-    if (this.destroyed) throw new Error("BeefwifeCanvasRuntime has been destroyed");
+    if (this.destroyed)
+      throw new Error("BeefwifeCanvasRuntime has been destroyed");
   }
 
   _resume() {

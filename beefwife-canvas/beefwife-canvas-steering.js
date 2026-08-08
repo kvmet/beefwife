@@ -108,11 +108,8 @@ const stepRoute = (route, router, head, dt, roam, result) => {
     const point = route.path[0];
     const final = route.path.length === 1;
     const done =
-      near(
-        point,
-        head,
-        final ? roam.arrivalRadius : roam.waypointRadius,
-      ) || (!final && passed(route.from, point, head));
+      near(point, head, final ? roam.arrivalRadius : roam.waypointRadius) ||
+      (!final && passed(route.from, point, head));
     if (!done) break;
     route.from = point;
     route.path.shift();

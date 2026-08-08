@@ -46,20 +46,17 @@ try {
   )[0];
   assert.equal(packed.name, manifest.name);
   assert.equal(packed.version, manifest.version);
-  assert.deepEqual(
-    packed.files.map((file) => file.path).sort(),
-    [
-      "LICENSE",
-      "README.md",
-      "demo.html",
-      "package.json",
-      "src/mesh.mjs",
-      "src/support.mjs",
-      "src/terrain.mjs",
-      "terrain.js",
-      "terrain.min.js",
-    ],
-  );
+  assert.deepEqual(packed.files.map((file) => file.path).sort(), [
+    "LICENSE",
+    "README.md",
+    "demo.html",
+    "package.json",
+    "src/mesh.mjs",
+    "src/support.mjs",
+    "src/terrain.mjs",
+    "terrain.js",
+    "terrain.min.js",
+  ]);
 
   const consumer = join(temporary, "consumer");
   mkdirSync(consumer);

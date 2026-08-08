@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const html = readFileSync(new URL("../../terrain/demo.html", import.meta.url), "utf8");
+const html = readFileSync(
+  new URL("../../terrain/demo.html", import.meta.url),
+  "utf8",
+);
 const scripts = Array.from(
   html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g),
   (match) => match[1],

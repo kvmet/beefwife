@@ -15,7 +15,10 @@ const { BeefwifeGait } = require("../../beefwife/beefwife-drive.js");
 const { BeefwifeBody } = require("../../beefwife/beefwife-body.js");
 
 const source = JSON.parse(
-  fs.readFileSync(path.join(__dirname, "..", "..", "beefwife", "beefwife.example.json"), "utf8"),
+  fs.readFileSync(
+    path.join(__dirname, "..", "..", "beefwife", "beefwife.example.json"),
+    "utf8",
+  ),
 );
 const copy = (value) => JSON.parse(JSON.stringify(value));
 const poseOf = (body) =>
