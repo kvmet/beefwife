@@ -124,9 +124,15 @@ class BeefwifeCanvasActor {
     };
   }
 
+  /**
+   * The centroid trails the head by up to the chain's rest length, so a long
+   * creature walking in plain sight has a centroid far outside the viewport.
+   * Carrying the whole rest length recycles one only once no part of it can
+   * still be on screen.
+   */
   _lost(center) {
     const { width, height } = this.router.viewport();
-    const margin = BEEFWIFE_CANVAS_ACTOR_LOST_MARGIN;
+    const margin = BEEFWIFE_CANVAS_ACTOR_LOST_MARGIN + this.beefwife.restLength;
     return (
       center.x < -margin ||
       center.y < -margin ||

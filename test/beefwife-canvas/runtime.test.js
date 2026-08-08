@@ -242,6 +242,23 @@ actor.update(1 / 60, 1);
 assert.deepEqual(actor.heading, { x: 1, y: 0 });
 checks += 8;
 
+/* A chain longer than the viewport keeps its centroid far from its head, so
+   the lost check has to carry the rest length or it recycles the creature
+   every frame and nothing ever walks. */
+const longDescriptor = JSON.parse(JSON.stringify(descriptor));
+longDescriptor.chain.sections.trunk.chunks = 200;
+const longActor = new BeefwifeCanvasActor(terrain, router, longDescriptor);
+longActor.spawn({ x: 400, y: 300 }, { x: 1, y: 0 });
+assert.ok(longActor.beefwife.restLength > 800);
+const longBeefwife = longActor.beefwife;
+for (let frame = 0; frame < 240; frame++) longActor.update(1 / 60, 1);
+assert.equal(longActor.beefwife, longBeefwife);
+longActor.spawn({ x: 1e6, y: 1e6 }, { x: 1, y: 0 });
+const strayBeefwife = longActor.beefwife;
+longActor.update(1 / 60, 1);
+assert.notEqual(longActor.beefwife, strayBeefwife);
+checks += 4;
+
 const pixiStub = (log) => {
   class Container {
     constructor() {

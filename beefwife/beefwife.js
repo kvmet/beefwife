@@ -289,6 +289,10 @@ const Beefwife = (() => {
       return this.#model.descriptor;
     }
 
+    get restLength() {
+      return this.#model.restLength;
+    }
+
     step(rawDt, rawControls) {
       const dt = finite(rawDt, "dt");
       if (dt < 0) throw new RangeError("dt must be nonnegative");

@@ -287,6 +287,15 @@ assert.ok(
 );
 checks += 4;
 
+/* Hosts size their own bounds from the chain, so the resting arc length is
+   public and tracks the live topology. */
+assert.equal(beefwife.restLength, 312);
+assert.equal(
+  edited.restLength,
+  312 - edited.descriptor.chain.sections.head.spacing,
+);
+checks += 2;
+
 edited.step(0.05, { direction: { x: 0, y: 1 } });
 const beforeReset = copy(edited.getPose());
 edited.reset({ position: { x: 5, y: 6 } });

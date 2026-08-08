@@ -123,6 +123,12 @@ Render bounds and collision geometry are not part of schema v1. Constructor
 input and the `descriptor` getter cannot be used to mutate the instance. Random
 variation comes only from the injected random function.
 
+`restLength` is the chain's resting arc length in world pixels, summed over
+every link and averaged across section boundaries. It follows `setDescriptor`.
+A host that compares `getPose()` against its own bounds needs it: the centroid
+trails the head by up to this distance, so a viewport test without it reads a
+long creature as gone while it is still on screen.
+
 ```html
 <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.19.0/dist/pixi.min.js"></script>
 <script src="beefwife-descriptor.js"></script>
