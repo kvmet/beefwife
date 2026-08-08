@@ -1,6 +1,7 @@
 <script>
   import ControlRow from "./ControlRow.svelte";
   import ShapeEditor, { parsePolygon } from "./ShapeEditor.svelte";
+  import Tooltip from "./Tooltip.svelte";
   import {
     applyError,
     defaults,
@@ -182,7 +183,10 @@
 {#snippet partActions(kind)}
   <div class="fields">
     <label class="wide">
-      <span>Id</span>
+      <Tooltip
+        label="Name the rest of the document refers to. Renaming here updates every reference."
+        ><span>Id</span></Tooltip
+      >
       <div class="pick part-id">
         <input
           value={selection.id}
@@ -254,7 +258,10 @@
     {@const paint = paints[selection.id]}
     <div class="fields">
       <label>
-        <span>Fill</span>
+        <Tooltip
+          label="Colour inside the shape. Switch it off for an outline alone."
+          ><span>Fill</span></Tooltip
+        >
         <div class="colour">
           <div class="switch">
             <input
@@ -273,7 +280,9 @@
         </div>
       </label>
       <label>
-        <span>Stroke</span>
+        <Tooltip label="Colour of the outline. Switch it off for a fill alone."
+          ><span>Stroke</span></Tooltip
+        >
         <div class="colour">
           <div class="switch">
             <input
@@ -295,6 +304,7 @@
     <div class="rows">
       <ControlRow
         label="Stroke width"
+        tip="Thickness of the outline. Shape scale does not change it."
         unit="px"
         digits={1}
         bind:value={$descriptor.definitions.paints[selection.id].strokeWidth}
@@ -327,6 +337,7 @@
     <div class="rows">
       <ControlRow
         label="Velocity retention"
+        tip="Part of the last step's motion a chunk keeps. Low values drag it to a stop."
         digits={3}
         bind:value={
           $descriptor.definitions.materials[selection.id].velocityRetention
@@ -337,6 +348,7 @@
       />
       <ControlRow
         label="Joint correction"
+        tip="How hard a joint is pulled to the angle the bend wave asks for. 0 ignores the wave."
         bind:value={
           $descriptor.definitions.materials[selection.id].jointCorrection
         }
@@ -346,6 +358,7 @@
       />
       <ControlRow
         label="Link correction"
+        tip="How hard a link is pulled back to its target length. Low values let the body stretch."
         bind:value={
           $descriptor.definitions.materials[selection.id].linkCorrection
         }
@@ -355,6 +368,7 @@
       />
       <ControlRow
         label="Grip forward"
+        tip="Forward slide a chunk gives up while it holds the ground. 1 stops it dead."
         bind:value={
           $descriptor.definitions.materials[selection.id].grip.forward
         }
@@ -364,6 +378,7 @@
       />
       <ControlRow
         label="Grip backward"
+        tip="Backward slide a chunk gives up while it holds the ground. This is what walking pushes against."
         bind:value={
           $descriptor.definitions.materials[selection.id].grip.backward
         }
@@ -373,6 +388,7 @@
       />
       <ControlRow
         label="Grip lateral"
+        tip="Sideways slide a chunk gives up while it holds the ground. High values stop the body slipping out of its turns."
         bind:value={
           $descriptor.definitions.materials[selection.id].grip.lateral
         }

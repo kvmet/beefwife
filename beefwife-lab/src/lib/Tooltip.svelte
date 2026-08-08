@@ -111,9 +111,14 @@
       1px calc(100% - var(--frame-inset) * 2),
       1px calc(100% - var(--frame-inset) * 2);
     color: var(--screen-text);
-    font: 11px/1.35 var(--font-mono);
+    font: 12px/1.4 var(--font-mono);
     text-align: center;
     pointer-events: none;
+    /* A trigger may be a clipped one-line label. The plate is its own text
+       box, so it takes none of that. */
+    letter-spacing: normal;
+    text-transform: none;
+    white-space: normal;
   }
 
   .tip .sub {

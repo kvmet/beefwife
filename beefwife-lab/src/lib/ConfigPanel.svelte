@@ -1,5 +1,6 @@
 <script>
   import JsonPanel from "./JsonPanel.svelte";
+  import Tooltip from "./Tooltip.svelte";
   import { applyError, descriptor } from "./descriptor.js";
 
   /* The hyphen must be escaped: `pattern` compiles in unicodeSets mode, where
@@ -24,7 +25,10 @@
   <summary>Identity</summary>
   <div class="fields single-column">
     <label>
-      <span>Name</span>
+      <Tooltip
+        label="Portable identity and file name stem. Lowercase letters, digits, and hyphens, up to 64."
+        ><span>Name</span></Tooltip
+      >
       <input
         value={$descriptor.name}
         pattern={NAME_PATTERN}
@@ -34,7 +38,10 @@
       />
     </label>
     <label>
-      <span>Schema</span>
+      <Tooltip
+        label="Descriptor version this document follows. The runtime reads version 1 alone."
+        ><span>Schema</span></Tooltip
+      >
       <input value={$descriptor.schemaVersion} readonly />
     </label>
   </div>

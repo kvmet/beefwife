@@ -1,8 +1,13 @@
 <script>
+  import Tooltip from "./Tooltip.svelte";
+
   /* One editable value: a name, a typed field, and a track. `field` and
      `slider` are each [min, max, step]. They differ because the field takes
      the schema's whole range while the track covers the useful part of it. */
   export let label;
+  /* What the value does, read on the name rather than on the controls, so a
+     drag never opens one. */
+  export let tip;
   export let value;
   export let reset;
   export let field;
@@ -33,7 +38,7 @@
 
 <label class="row">
   <div class="head">
-    <span>{label}</span>
+    <Tooltip label={tip}><span>{label}</span></Tooltip>
     {#if units.length}
       <div class="unit">
         <input

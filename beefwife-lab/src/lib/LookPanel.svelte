@@ -2,6 +2,7 @@
   import ControlRow from "./ControlRow.svelte";
   import StepperRow from "./StepperRow.svelte";
   import PlacementFields, { ORNAMENT_PRESET } from "./PlacementFields.svelte";
+  import Tooltip from "./Tooltip.svelte";
   import {
     applyError,
     defaults,
@@ -107,6 +108,7 @@
   <div class="rows">
     <ControlRow
       label="Scale"
+      tip="Size of every drawn shape. The chain keeps its own spacing."
       unit="x"
       bind:value={$descriptor.appearance.scale}
       reset={defaults.appearance.scale}
@@ -115,6 +117,7 @@
     />
     <ControlRow
       label="Load scale"
+      tip="Swells each plate with the grip under its chunk. 0 keeps plates at one size."
       bind:value={$descriptor.chain.skin.loadScale}
       reset={defaults.chain.skin.loadScale}
       field={[0, 10, 0.01]}
@@ -123,7 +126,9 @@
   </div>
   <div class="fields">
     <label class="wide">
-      <span>Ribbon paint</span>
+      <Tooltip label="Paint for the ribbon drawn along the whole chain."
+        ><span>Ribbon paint</span></Tooltip
+      >
       <div class="pick">
         <select bind:value={$descriptor.chain.skin.ribbon.paint}>
           {#each paintIds as paintId}
@@ -194,6 +199,7 @@
     <div class="rows">
       <ControlRow
         label="Ribbon width start"
+        tip="Ribbon half-width at the first chunk of this section."
         unit="px"
         digits={1}
         bind:value={$descriptor.chain.sections[name].profile.ribbonWidth.start}
@@ -203,6 +209,7 @@
       />
       <ControlRow
         label="Ribbon width end"
+        tip="Ribbon half-width at the last chunk of this section."
         unit="px"
         digits={1}
         bind:value={$descriptor.chain.sections[name].profile.ribbonWidth.end}
@@ -212,6 +219,7 @@
       />
       <ControlRow
         label="Plate scale start"
+        tip="Plate size at the first chunk of this section."
         bind:value={$descriptor.chain.sections[name].profile.plateScale.start}
         reset={defaults.chain.sections[name].profile.plateScale.start}
         field={[0, 100, 0.01]}
@@ -219,6 +227,7 @@
       />
       <ControlRow
         label="Plate scale end"
+        tip="Plate size at the last chunk of this section."
         bind:value={$descriptor.chain.sections[name].profile.plateScale.end}
         reset={defaults.chain.sections[name].profile.plateScale.end}
         field={[0, 100, 0.01]}
@@ -232,7 +241,9 @@
   <summary>Legs</summary>
   <div class="fields">
     <label>
-      <span>Section</span>
+      <Tooltip label="Section the leg pairs sit on."
+        ><span>Section</span></Tooltip
+      >
       <select bind:value={$descriptor.legs.section}>
         {#each SECTION_NAMES as name}
           <option value={name}>{title(name)}</option>
@@ -243,12 +254,14 @@
   <div class="rows">
     <StepperRow
       label="Pairs"
+      tip="Leg pairs spread evenly along the section by resting distance."
       min={0}
       max={128}
       bind:value={$descriptor.legs.pairs}
     />
     <ControlRow
       label="Reach"
+      tip="Length of the forward stance window. A longer reach takes longer steps."
       unit="px"
       digits={1}
       bind:value={$descriptor.legs.reach}
@@ -258,6 +271,7 @@
     />
     <ControlRow
       label="Spread"
+      tip="Sideways distance from the body to a planted foot."
       unit="px"
       digits={1}
       bind:value={$descriptor.legs.spread}
@@ -267,6 +281,7 @@
     />
     <ControlRow
       label="Fold"
+      tip="Length of the drawn limb against its reach. Higher values fold the limb more."
       bind:value={$descriptor.legs.fold}
       reset={defaults.legs.fold}
       field={[0, 1, 0.01]}
@@ -274,6 +289,7 @@
     />
     <ControlRow
       label="Joint bend"
+      tip="Bow of the knee off the hip-to-foot line. 1 bows back and out, 0 sits on the line, -1 mirrors the bow."
       bind:value={$descriptor.legs.jointBend}
       reset={defaults.legs.jointBend}
       field={[-1, 1, 0.01]}
@@ -281,6 +297,7 @@
     />
     <ControlRow
       label="Joint lean"
+      tip="Slides each knee lengthwise, up to one limb length. Positive leans knees toward the lean center, negative away."
       bind:value={$descriptor.legs.jointLean}
       reset={defaults.legs.jointLean}
       field={[-1, 1, 0.01]}
@@ -288,6 +305,7 @@
     />
     <ControlRow
       label="Lean center"
+      tip="Where the lean starts from: the middle of the leg section at 0, its head end at -1, its tail end at 1."
       bind:value={$descriptor.legs.jointLeanCenter}
       reset={defaults.legs.jointLeanCenter}
       field={[-1, 1, 0.01]}
@@ -301,6 +319,7 @@
   <div class="rows">
     <ControlRow
       label="Side phase"
+      tip="Offsets right-foot contact by this fraction of half a cycle. 1 makes the two sides opposite."
       bind:value={$descriptor.legs.sidePhase}
       reset={defaults.legs.sidePhase}
       field={[0, 1, 0.01]}
@@ -308,6 +327,7 @@
     />
     <ControlRow
       label="Lead"
+      tip="Shifts the plant point forward inside the stance window."
       bind:value={$descriptor.legs.lead}
       reset={defaults.legs.lead}
       field={[0, 1, 0.01]}
@@ -315,6 +335,7 @@
     />
     <ControlRow
       label="Lift threshold"
+      tip="Contact level that releases a planted foot. Higher values step sooner."
       bind:value={$descriptor.legs.liftThreshold}
       reset={defaults.legs.liftThreshold}
       field={[0, 1, 0.01]}
@@ -322,6 +343,7 @@
     />
     <ControlRow
       label="Swing time"
+      tip="Time an airborne foot takes to reach its next plant."
       unit="s"
       bind:value={$descriptor.legs.swingSeconds}
       reset={defaults.legs.swingSeconds}
@@ -330,6 +352,7 @@
     />
     <ControlRow
       label="Swing arc"
+      tip="How far outward an airborne foot bows on its way to the next plant."
       unit="px"
       digits={1}
       bind:value={$descriptor.legs.swingArc}
@@ -339,6 +362,7 @@
     />
     <ControlRow
       label="Jitter"
+      tip="Random variation between legs and between steps. 0 makes the two sides exact mirrors."
       bind:value={$descriptor.legs.jitter}
       reset={defaults.legs.jitter}
       field={[0, 1, 0.01]}
@@ -351,7 +375,9 @@
   <summary>Leg skin</summary>
   <div class="fields">
     <label>
-      <span>Limb paint</span>
+      <Tooltip label="Paint for the two drawn limb segments."
+        ><span>Limb paint</span></Tooltip
+      >
       <div class="pick">
         <select bind:value={$descriptor.legs.skin.limbPaint}>
           {#each paintIds as paintId}
@@ -367,7 +393,9 @@
       </div>
     </label>
     <label>
-      <span>Foot shape</span>
+      <Tooltip label="Shape drawn at the end of every leg."
+        ><span>Foot shape</span></Tooltip
+      >
       <div class="pick">
         <select bind:value={$descriptor.legs.skin.foot.shape}>
           {#each shapeIds as shapeId}
@@ -383,7 +411,9 @@
       </div>
     </label>
     <label>
-      <span>Foot paint</span>
+      <Tooltip label="Paint for the foot shape."
+        ><span>Foot paint</span></Tooltip
+      >
       <div class="pick">
         <select bind:value={$descriptor.legs.skin.foot.paint}>
           {#each paintIds as paintId}
@@ -401,7 +431,17 @@
   </div>
   <div class="rows">
     <ControlRow
+      label="Limb width"
+      unit="px"
+      digits={1}
+      bind:value={$descriptor.legs.skin.limbWidth}
+      reset={defaults.legs.skin.limbWidth}
+      field={[0, 1000, 0.1]}
+      slider={[0, 30, 0.1]}
+    />
+    <ControlRow
       label="Foot scale"
+      tip="Size of the foot shape while the leg swings."
       unit="x"
       bind:value={$descriptor.legs.skin.foot.scale}
       reset={defaults.legs.skin.foot.scale}
@@ -410,6 +450,7 @@
     />
     <ControlRow
       label="Planted scale"
+      tip="Extra size while the foot is planted. 1 keeps it at the foot scale."
       unit="x"
       bind:value={$descriptor.legs.skin.foot.plantedScale}
       reset={defaults.legs.skin.foot.plantedScale}

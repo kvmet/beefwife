@@ -127,6 +127,7 @@
             <div class="rows">
               <ControlRow
                 label="Delay"
+                tip="Longest wait before the next wander target. Each wait is a random part of it."
                 unit="s"
                 digits={1}
                 bind:value={options.wanderDelay}
@@ -136,6 +137,7 @@
               />
               <ControlRow
                 label="Edge margin"
+                tip="Keeps wander targets this far inside the canvas edge."
                 unit="px"
                 digits={0}
                 bind:value={options.edgeMargin}
@@ -167,7 +169,9 @@
         <div class="controls">
           <div class="rows">
             <label>
-              <span>Background</span>
+              <Tooltip label="Colour of the stage behind the specimen."
+                ><span>Background</span></Tooltip
+              >
               <input type="color" bind:value={background} />
             </label>
           </div>
@@ -184,6 +188,7 @@
           <div class="rows">
             <ControlRow
               label="Physics FPS"
+              tip="Simulation steps each second. Higher costs more and settles the body harder."
               digits={0}
               bind:value={options.simulationFps}
               reset={DEFAULT_OPTIONS.simulationFps}
@@ -217,6 +222,7 @@
           <div class="rows">
             <ControlRow
               label="Res scale"
+              tip="Renderer pixels for each canvas pixel. Lower draws faster and coarser."
               unit="x"
               digits={3}
               bind:value={options.resolutionScale}
@@ -226,6 +232,7 @@
             />
             <ControlRow
               label="Draw FPS"
+              tip="Frames drawn each second. The simulation keeps its own rate."
               digits={0}
               bind:value={options.drawFps}
               reset={DEFAULT_OPTIONS.drawFps}
@@ -233,7 +240,9 @@
               slider={[1, 120, 1]}
             />
             <label>
-              <span>Filter</span>
+              <Tooltip label="Colour treatment applied over the whole canvas."
+                ><span>Filter</span></Tooltip
+              >
               <select bind:value={options.filterPreset} onchange={onremount}>
                 {#each filterPresets as preset}
                   <option>{preset}</option>
@@ -242,6 +251,7 @@
             </label>
             <ControlRow
               label="Perspective"
+              tip="Pushes each drawn knee away from the vanishing point. The shift grows with distance and knee height."
               digits={3}
               bind:value={options.kneePerspective}
               reset={DEFAULT_OPTIONS.kneePerspective}
@@ -250,6 +260,7 @@
             />
             <ControlRow
               label="Knee cap"
+              tip="Largest shift the perspective may add to one knee."
               unit="px"
               digits={0}
               bind:value={options.maxKneeOffset}
@@ -258,7 +269,10 @@
               slider={[0, 512, 8]}
             />
             <label>
-              <span>Vanishing point</span>
+              <Tooltip
+                label="Point the knees push away from: the canvas center or the viewport center."
+                ><span>Vanishing point</span></Tooltip
+              >
               <select
                 bind:value={options.kneeProjectionCenter}
                 onchange={onremount}

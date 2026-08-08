@@ -14,6 +14,7 @@
 <script>
   import ControlRow from "./ControlRow.svelte";
   import StepperRow from "./StepperRow.svelte";
+  import Tooltip from "./Tooltip.svelte";
   import { descriptor, SECTION_NAMES } from "./descriptor.js";
 
   /* Which placement these fields edit: a list in chain.skin plus an index
@@ -47,7 +48,7 @@
 
 <div class="fields">
   <label>
-    <span>Shape</span>
+    <Tooltip label="Shape drawn at this placement."><span>Shape</span></Tooltip>
     <div class="pick">
       <select bind:value={$descriptor.chain.skin[list][index].shape}>
         {#each shapeIds as shapeId}
@@ -63,7 +64,9 @@
     </div>
   </label>
   <label>
-    <span>Paint</span>
+    <Tooltip label="Fill and stroke for this placement."
+      ><span>Paint</span></Tooltip
+    >
     <div class="pick">
       <select bind:value={$descriptor.chain.skin[list][index].paint}>
         {#each paintIds as paintId}
@@ -79,7 +82,10 @@
     </div>
   </label>
   <label>
-    <span>Anchor</span>
+    <Tooltip
+      label="What the offset counts along: the whole chain or one section. Copies never leave that scope."
+      ><span>Anchor</span></Tooltip
+    >
     <select
       value={entry.at.scope}
       onchange={(event) => setScope(event.target.value)}
@@ -90,7 +96,9 @@
   </label>
   {#if entry.at.scope === "section"}
     <label>
-      <span>Section</span>
+      <Tooltip label="Section the offset counts inside."
+        ><span>Section</span></Tooltip
+      >
       <select bind:value={$descriptor.chain.skin[list][index].at.section}>
         {#each SECTION_NAMES as name}
           <option value={name}>{title(name)}</option>
@@ -99,7 +107,9 @@
     </label>
   {/if}
   <label>
-    <span>From</span>
+    <Tooltip label="End the offset counts from. Copies walk away from that end."
+      ><span>From</span></Tooltip
+    >
     <select bind:value={$descriptor.chain.skin[list][index].at.from}>
       <option value="head">Head</option>
       <option value="tail">Tail</option>
@@ -107,7 +117,10 @@
   </label>
   {#if ornament}
     <label>
-      <span>Side</span>
+      <Tooltip
+        label="Side of the body that carries the ornament. Both mirrors it."
+        ><span>Side</span></Tooltip
+      >
       <select bind:value={$descriptor.chain.skin[list][index].side}>
         <option value="both">Both</option>
         <option value="left">Left</option>
@@ -115,7 +128,9 @@
       </select>
     </label>
     <label>
-      <span>Layer</span>
+      <Tooltip label="Draws the ornament over or under the ribbon and plates."
+        ><span>Layer</span></Tooltip
+      >
       <select bind:value={$descriptor.chain.skin[list][index].layer}>
         <option value="over">Over</option>
         <option value="under">Under</option>
@@ -123,7 +138,9 @@
     </label>
   {/if}
   <label>
-    <span>Fill to end</span>
+    <Tooltip label="Repeats through the rest of the anchor's scope."
+      ><span>Fill to end</span></Tooltip
+    >
     <div class="switch">
       <input
         type="checkbox"
@@ -137,6 +154,7 @@
 <div class="rows">
   <StepperRow
     label="Offset"
+    tip="Chunks from the chosen end to the first copy. 0 is that end itself."
     min={0}
     max={255}
     bind:value={$descriptor.chain.skin[list][index].at.offset}
@@ -144,6 +162,7 @@
   {#if entry.repeat.count !== null}
     <StepperRow
       label="Count"
+      tip="Number of copies to place."
       min={1}
       max={256}
       bind:value={$descriptor.chain.skin[list][index].repeat.count}
@@ -151,12 +170,14 @@
   {/if}
   <StepperRow
     label="Step"
+    tip="Chunks between one copy and the next."
     min={1}
     max={256}
     bind:value={$descriptor.chain.skin[list][index].repeat.step}
   />
   <ControlRow
     label="Scale"
+    tip="Size of the shape at this placement, on top of the body scale."
     unit="x"
     bind:value={$descriptor.chain.skin[list][index].scale}
     reset={1}
@@ -166,6 +187,7 @@
   {#if ornament}
     <ControlRow
       label="Forward offset"
+      tip="Moves the root along the body. Positive goes toward the head."
       unit="px"
       digits={1}
       bind:value={$descriptor.chain.skin[list][index].offset.forward}
@@ -175,6 +197,7 @@
     />
     <ControlRow
       label="Outward offset"
+      tip="Moves the root away from the body, toward its own side."
       unit="px"
       digits={1}
       bind:value={$descriptor.chain.skin[list][index].offset.outward}
@@ -184,6 +207,7 @@
     />
     <ControlRow
       label="Angle"
+      tip="Turns the ornament away from the body's forward direction."
       unit="deg"
       digits={0}
       bind:value={$descriptor.chain.skin[list][index].angleDegrees}
@@ -193,6 +217,7 @@
     />
     <ControlRow
       label="Length"
+      tip="Distance held between the root and the tip after every step."
       unit="px"
       digits={1}
       bind:value={$descriptor.chain.skin[list][index].length}
@@ -202,6 +227,7 @@
     />
     <ControlRow
       label="Sweep"
+      tip="How much root motion the tip leaves behind. 0 follows the root exactly."
       bind:value={$descriptor.chain.skin[list][index].sweep}
       reset={ORNAMENT_PRESET.sweep}
       field={[0, 4, 0.05]}
@@ -209,6 +235,7 @@
     />
     <ControlRow
       label="Snap rate"
+      tip="How fast the tip returns to its rest angle."
       unit="/s"
       digits={1}
       bind:value={$descriptor.chain.skin[list][index].snapRate}
@@ -218,6 +245,7 @@
     />
     <ControlRow
       label="Damping rate"
+      tip="How fast tip motion dies away. Low values swing for longer."
       unit="/s"
       digits={1}
       bind:value={$descriptor.chain.skin[list][index].dampingRate}

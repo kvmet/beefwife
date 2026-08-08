@@ -161,7 +161,10 @@
         <div class="slim-heading">
           {#if activeTab === "Motion"}
             <label class="advanced-mode">
-              <span>Advanced mode</span>
+              <Tooltip
+                label="Shows harmonics, phases, steering, and the per-section channel scales."
+                ><span>Advanced mode</span></Tooltip
+              >
               <div class="switch">
                 <input type="checkbox" bind:checked={advancedMode} />
               </div>

@@ -1,7 +1,11 @@
 <script>
+  import Tooltip from "./Tooltip.svelte";
+
   /* One integer value: a name and a typed field between nudge buttons. For
      settings counted in ones, where a track would waste travel. */
   export let label;
+  /* What the value does, read on the name rather than on the controls. */
+  export let tip;
   export let value;
   export let min;
   export let max;
@@ -14,7 +18,7 @@
 
 <div class="row">
   <div class="head">
-    <span>{label}</span>
+    <Tooltip label={tip}><span>{label}</span></Tooltip>
     <div class="stepper">
       <button
         type="button"

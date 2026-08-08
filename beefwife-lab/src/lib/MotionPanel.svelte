@@ -1,6 +1,7 @@
 <script>
   import ControlRow from "./ControlRow.svelte";
   import StepperRow from "./StepperRow.svelte";
+  import Tooltip from "./Tooltip.svelte";
   import {
     applyError,
     defaults,
@@ -16,6 +17,14 @@
   const DEG = 180 / Math.PI;
   const CHANNEL_NAMES = ["bend", "thrust", "gather", "contact"];
   const PHASE = [-180, 180, 1];
+
+  /* Every channel carries these three rows, and they mean the same thing in
+     each one. */
+  const HARMONIC_TIP =
+    "Waves this channel runs per gait cycle. Higher values shorten the wavelength too.";
+  const PHASE_TIP = "Shifts this channel ahead of or behind the shared clock.";
+  const DUTY_TIP =
+    "Part of the cycle the pulse fills. 0.5 matches the positive half of a sine.";
 
   /* Thrust spans 0..1e6 in the schema, but bodies walk between 0 and a few
      thousand, so a linear track spends all its travel above the useful band.
@@ -61,6 +70,7 @@
   <div class="rows">
     <ControlRow
       label="Pace"
+      tip="Gait cycles each second. Every channel reads this one clock."
       unit="Hz"
       bind:value={$descriptor.gait.cyclesPerSecond}
       reset={defaults.gait.cyclesPerSecond}
@@ -69,6 +79,7 @@
     />
     <ControlRow
       label="Wave travel"
+      tip="Phase shift for each pixel along the chain. Positive values send the wave from head to tail; zero moves the body as one."
       unit={["rad", "/px"]}
       digits={3}
       bind:value={$descriptor.gait.phaseLagRadiansPerPixel}
@@ -84,6 +95,7 @@
   <div class="rows">
     <ControlRow
       label="Amplitude"
+      tip="Curve the wave puts in each joint, in radians at the trunk's resting spacing."
       bind:value={$descriptor.gait.bend.amplitude}
       reset={defaults.gait.bend.amplitude}
       field={[0, 10, 0.01]}
@@ -92,12 +104,14 @@
     {#if advanced}
       <StepperRow
         label="Harmonic"
+        tip={HARMONIC_TIP}
         min={1}
         max={8}
         bind:value={$descriptor.gait.bend.harmonic}
       />
       <ControlRow
         label="Phase"
+        tip={PHASE_TIP}
         unit="deg"
         digits={0}
         scale={DEG}
@@ -115,6 +129,7 @@
   <div class="rows">
     <ControlRow
       label="Acceleration"
+      tip="Push along the body axis at the peak of each pulse."
       unit={["px", "/s²"]}
       digits={0}
       curve={thrustCurve}
@@ -126,12 +141,14 @@
     {#if advanced}
       <StepperRow
         label="Harmonic"
+        tip={HARMONIC_TIP}
         min={1}
         max={8}
         bind:value={$descriptor.gait.thrust.harmonic}
       />
       <ControlRow
         label="Phase"
+        tip={PHASE_TIP}
         unit="deg"
         digits={0}
         scale={DEG}
@@ -142,6 +159,7 @@
       />
       <ControlRow
         label="Duty cycle"
+        tip={DUTY_TIP}
         bind:value={$descriptor.gait.thrust.dutyCycle}
         reset={defaults.gait.thrust.dutyCycle}
         field={[0.01, 1, 0.01]}
@@ -156,6 +174,7 @@
   <div class="rows">
     <ControlRow
       label="Amplitude"
+      tip="Fraction the wave shortens and lengthens the resting spacing between chunks."
       bind:value={$descriptor.gait.gather.amplitude}
       reset={defaults.gait.gather.amplitude}
       field={[0, 0.95, 0.01]}
@@ -164,12 +183,14 @@
     {#if advanced}
       <StepperRow
         label="Harmonic"
+        tip={HARMONIC_TIP}
         min={1}
         max={8}
         bind:value={$descriptor.gait.gather.harmonic}
       />
       <ControlRow
         label="Phase"
+        tip={PHASE_TIP}
         unit="deg"
         digits={0}
         scale={DEG}
@@ -187,6 +208,7 @@
   <div class="rows">
     <ControlRow
       label="Lift"
+      tip="Grip the pulse takes away. At 1 a chunk releases the ground completely at the peak."
       bind:value={$descriptor.gait.contact.lift}
       reset={defaults.gait.contact.lift}
       field={[0, 1, 0.01]}
@@ -195,12 +217,14 @@
     {#if advanced}
       <StepperRow
         label="Harmonic"
+        tip={HARMONIC_TIP}
         min={1}
         max={8}
         bind:value={$descriptor.gait.contact.harmonic}
       />
       <ControlRow
         label="Phase"
+        tip={PHASE_TIP}
         unit="deg"
         digits={0}
         scale={DEG}
@@ -211,6 +235,7 @@
       />
       <ControlRow
         label="Duty cycle"
+        tip={DUTY_TIP}
         bind:value={$descriptor.gait.contact.dutyCycle}
         reset={defaults.gait.contact.dutyCycle}
         field={[0.01, 1, 0.01]}
@@ -226,7 +251,10 @@
     {#if advanced}
       <div class="fields">
         <label class="wide">
-          <span>Material</span>
+          <Tooltip
+            label="Physics for every chunk in this section. Sections that name the same material behave alike."
+            ><span>Material</span></Tooltip
+          >
           <div class="pick">
             <select bind:value={$descriptor.chain.sections[name].material}>
               {#each materialIds as materialId}
@@ -250,6 +278,7 @@
     <div class="rows">
       <ControlRow
         label="Segment length"
+        tip="Number of chunks in this section. Head and trunk hold at least one; the tail may be empty."
         digits={0}
         bind:value={$descriptor.chain.sections[name].chunks}
         reset={defaults.chain.sections[name].chunks}
@@ -258,6 +287,7 @@
       />
       <ControlRow
         label="Link distance"
+        tip="Resting distance between two chunks of this section."
         unit="px"
         digits={1}
         bind:value={$descriptor.chain.sections[name].spacing}
@@ -270,6 +300,7 @@
         {#each CHANNEL_NAMES as channel}
           <ControlRow
             label="{title(channel)} sensitivity"
+            tip="Scales the {channel} channel in this section. 0 mutes it, 1 leaves it whole."
             bind:value={$descriptor.chain.sections[name].motionScale[channel]}
             reset={defaults.chain.sections[name].motionScale[channel]}
             field={[0, 4, 0.05]}
@@ -287,6 +318,7 @@
     <div class="rows">
       <ControlRow
         label="Gain"
+        tip="Turn the head asks for per unit of heading error. Higher values steer harder."
         bind:value={$descriptor.chain.physics.steering.gain}
         reset={defaults.chain.physics.steering.gain}
         field={[0, 100, 0.05]}
@@ -294,6 +326,7 @@
       />
       <ControlRow
         label="Limit"
+        tip="Cap on the steering bend, however far off the heading is."
         unit="deg"
         digits={0}
         scale={DEG}
@@ -304,6 +337,7 @@
       />
       <ControlRow
         label="Rate"
+        tip="Speed the steering bend follows the wanted turn. Low values answer slowly."
         unit="/s"
         digits={1}
         bind:value={$descriptor.chain.physics.steering.rate}
@@ -320,6 +354,7 @@
   <div class="rows">
     <ControlRow
       label="Amount"
+      tip="Grip taken from the chunks that push the least. 0 holds every chunk down."
       bind:value={$descriptor.chain.physics.autoLift.amount}
       reset={defaults.chain.physics.autoLift.amount}
       field={[0, 1, 0.01]}
@@ -328,6 +363,7 @@
     {#if advanced}
       <ControlRow
         label="Share"
+        tip="Fraction of the chain that may lift at one time."
         digits={3}
         bind:value={$descriptor.chain.physics.autoLift.share}
         reset={defaults.chain.physics.autoLift.share}
@@ -336,6 +372,7 @@
       />
       <ControlRow
         label="Rate"
+        tip="Speed lift builds on a chunk and fades again."
         unit="/s"
         digits={1}
         bind:value={$descriptor.chain.physics.autoLift.rate}
@@ -352,6 +389,7 @@
   <div class="rows">
     <ControlRow
       label="Breathing"
+      tip="Slow swell and shrink of the trunk links. At 1 their length changes by 10%."
       bind:value={$descriptor.chain.breathing}
       reset={defaults.chain.breathing}
       field={[0, 1, 0.01]}
