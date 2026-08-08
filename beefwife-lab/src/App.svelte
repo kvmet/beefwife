@@ -63,10 +63,8 @@
 >
   <header class="topbar">
     <a class="brand" href="/" aria-label="Beefwife Lab home">
-      <span>
-        <strong>Beefwife Lab</strong>
-        <small>Biomechanics workstation · v{version}</small>
-      </span>
+      <strong>Beefwife Lab</strong>
+      <small>v{version}</small>
     </a>
 
     <div class="top-actions">
