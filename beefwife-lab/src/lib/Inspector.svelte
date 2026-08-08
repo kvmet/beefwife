@@ -177,7 +177,11 @@
         {:else if activeTab === "Config"}
           <ConfigPanel />
         {:else if activeTab === "Motion"}
-          <MotionPanel bind:this={motionPanel} advanced={advancedMode} />
+          <MotionPanel
+            bind:this={motionPanel}
+            advanced={advancedMode}
+            oneditpart={revealPart}
+          />
         {:else if activeTab === "Parts"}
           <PartsPanel
             bind:this={partsPanel}

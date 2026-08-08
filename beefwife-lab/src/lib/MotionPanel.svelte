@@ -10,6 +10,8 @@
   } from "./descriptor.js";
 
   export let advanced = false;
+  /* Jump to a definition's editor on the Parts tab: (kind, id). */
+  export let oneditpart;
 
   const DEG = 180 / Math.PI;
   const CHANNEL_NAMES = ["bend", "thrust", "gather", "contact"];
@@ -35,6 +37,8 @@
   const title = (name) => name[0].toUpperCase() + name.slice(1);
 
   let sectionPanels = {};
+
+  $: materialIds = Object.keys($descriptor.definitions.materials);
 
   /** Open a section's panel and bring it into view. Called by the chain map. */
   export function reveal(name) {
@@ -219,6 +223,30 @@
 {#each SECTION_NAMES as name}
   <details bind:this={sectionPanels[name]} open={!advanced}>
     <summary>{title(name)}</summary>
+    {#if advanced}
+      <div class="fields">
+        <label class="wide">
+          <span>Material</span>
+          <div class="pick">
+            <select bind:value={$descriptor.chain.sections[name].material}>
+              {#each materialIds as materialId}
+                <option value={materialId}>{materialId}</option>
+              {/each}
+            </select>
+            <button
+              title="Edit on the Parts tab"
+              onclick={() =>
+                oneditpart(
+                  "material",
+                  $descriptor.chain.sections[name].material,
+                )}
+            >
+              Edit
+            </button>
+          </div>
+        </label>
+      </div>
+    {/if}
     <div class="rows">
       <ControlRow
         label="Segment length"

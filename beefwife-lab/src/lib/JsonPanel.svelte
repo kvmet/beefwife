@@ -1,30 +1,107 @@
 <script>
-  const jsonPreview = `{
-  "schema": 1,
-  "name": "Rust walker",
-  "body": {
-    "sections": ["head", "trunk", "tail"]
-  },
-  "placements": [
-    { "asset": "eyes", "section": "head", "position": 1 }
-  ]
-}`;
+  import { applyError, descriptor } from "./descriptor.js";
+
+  let draft = "";
+  let editing = false;
+  let parseError = null;
+  let copyNotice = null;
+  let picker;
+
+  /* Key order is the document's own, not the library's canonical order:
+     BeefwifeDescriptor.stringify is sealed inside the canvas bundle, which
+     exports only BeefwifeCanvas. TODO: use it once the bundle exports the
+     descriptor API. */
+  $: if (!editing) {
+    draft = JSON.stringify($descriptor, null, 2);
+    // What was copied is no longer what the panel shows.
+    copyNotice = null;
+  }
+  /* Malformed text never reaches the store, so the runtime's complaint is
+     about the last document it did accept. */
+  $: problem = parseError ?? $applyError;
+
+  /* A failed parse keeps the panel in editing, so the text the user typed
+     survives instead of being overwritten by the store's. */
+  function load(text) {
+    // Every set rebuilds the actor, so leaving the text alone must cost nothing.
+    if (text === JSON.stringify($descriptor, null, 2)) {
+      parseError = null;
+      editing = false;
+      return true;
+    }
+    try {
+      descriptor.set(JSON.parse(text));
+      parseError = null;
+      editing = false;
+      return true;
+    } catch (error) {
+      draft = text;
+      editing = true;
+      parseError = error.message;
+      return false;
+    }
+  }
+
+  /* The clipboard is refused outright under some permissions policies, and a
+     copy that quietly did nothing is worse than one that says so. */
+  function copy() {
+    navigator.clipboard.writeText(draft).then(
+      () => (copyNotice = "Copied"),
+      (error) => (copyNotice = error.message),
+    );
+  }
+
+  function exportJson() {
+    const url = URL.createObjectURL(
+      new Blob([draft], { type: "application/json" }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${$descriptor.name}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function importJson(event) {
+    const file = event.target.files[0];
+    // Clear the picker so choosing the same file twice loads it twice.
+    event.target.value = "";
+    if (file) load(await file.text());
+  }
 </script>
 
 <div class="actions">
-  <button>Import file</button>
-  <button>Copy</button>
-  <button class="export-button">Export JSON</button>
+  <button onclick={() => picker.click()}>Import file</button>
+  <button onclick={copy}>Copy</button>
+  {#if copyNotice}<span class="notice">{copyNotice}</span>{/if}
+  <button class="export-button" onclick={exportJson}>Export JSON</button>
+  <input
+    bind:this={picker}
+    class="picker"
+    type="file"
+    accept="application/json,.json"
+    onchange={importJson}
+  />
 </div>
 
 <label>
   <span class="schema-row">
-    <span>Schema 1 · generated preview</span>
-    <span class="valid-status"><i></i>Valid</span>
+    <span>Schema {$descriptor.schemaVersion} · live document</span>
+    {#if problem}
+      <span class="valid-status invalid"><i></i>Invalid</span>
+    {:else}
+      <span class="valid-status"><i></i>Valid</span>
+    {/if}
   </span>
-  <textarea readonly spellcheck="false" value={jsonPreview}></textarea>
+  <textarea
+    spellcheck="false"
+    bind:value={draft}
+    onfocus={() => (editing = true)}
+    onblur={() => load(draft)}></textarea>
 </label>
-<p>Editing will be enabled after the descriptor binding is connected.</p>
+{#if problem}
+  <p class="problem" role="alert">{problem}</p>
+{/if}
 
 <style>
   .actions {
@@ -37,6 +114,20 @@
   .actions button {
     padding: 6px 8px;
     font-size: 11px;
+  }
+
+  /* The button opens it; the input itself never shows its own control. */
+  .picker {
+    display: none;
+  }
+
+  .notice {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .valid-status {
@@ -53,6 +144,12 @@
     height: 6px;
     border-radius: 50%;
     background: var(--select);
+  }
+  .valid-status.invalid {
+    color: var(--danger);
+  }
+  .valid-status.invalid i {
+    background: var(--danger);
   }
 
   .export-button {
@@ -92,10 +189,10 @@
     tab-size: 2;
   }
 
-  p {
+  .problem {
     margin: 0;
     padding: 0 14px 20px;
-    color: var(--faint);
-    font-size: 10px;
+    color: var(--danger);
+    font-size: 11px;
   }
 </style>
