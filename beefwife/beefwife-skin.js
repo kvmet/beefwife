@@ -24,7 +24,9 @@ const BeefwifeSkin = (() => {
     return root;
   };
 
-  const jointFor = (hip, foot, arm, side, joint) => {
+  /* `bow` carries both which way the joint leaves the hip-foot line and how
+     far along it travels; at zero the joint sits on the line. */
+  const jointFor = (hip, foot, arm, bow, joint) => {
     const x = foot.x - hip.x;
     const y = foot.y - hip.y;
     const distance = magnitude(x, y);
@@ -33,8 +35,8 @@ const BeefwifeSkin = (() => {
     const halfBone = arm / 2;
     const halfSpan = Math.min(distance, arm) / 2;
     const bend = Math.sqrt(Math.max(0, halfBone ** 2 - halfSpan ** 2));
-    joint.x = hip.x + x / 2 + normalX * bend * side;
-    joint.y = hip.y + y / 2 + normalY * bend * side;
+    joint.x = hip.x + x / 2 + normalX * bend * bow;
+    joint.y = hip.y + y / 2 + normalY * bend * bow;
     return joint;
   };
 
@@ -109,21 +111,31 @@ const BeefwifeSkin = (() => {
 
       const foot = this.model.legs.skin.foot;
       const legStride = RENDER_LAYOUT.legStride;
-      const sectionMiddle = this.legs.legs.length
-        ? (this.model.chunks[this.model.legs.start].restDistance +
-            this.model.chunks[this.model.legs.end - 1].restDistance) /
-          2
+      const sectionStart = this.legs.legs.length
+        ? this.model.chunks[this.model.legs.start].restDistance
         : 0;
+      const sectionSpan = this.legs.legs.length
+        ? this.model.chunks[this.model.legs.end - 1].restDistance - sectionStart
+        : 0;
+      const { jointBend, jointLeanCenter } = this.model.legs;
       for (let index = 0; index < this.legs.legs.length; index++) {
         const leg = this.legs.legs[index];
         const hip = this.body.chunks[leg.anchor];
+        const arm = this.legs.armLength(leg);
         const joint = jointFor(
           hip,
           leg.foot,
-          this.legs.armLength(leg),
-          leg.sideSign,
+          arm,
+          leg.sideSign * jointBend,
           this.joint,
         );
+        /* -1 at the head end of the leg section, 1 at the tail end. Taken
+           from where the anchor sits, so pairs sharing one lean alike. */
+        const chainPosition = sectionSpan
+          ? (2 * (this.model.chunks[leg.anchor].restDistance - sectionStart)) /
+              sectionSpan -
+            1
+          : 0;
         const offset = index * legStride;
         state.legs[offset] = hip.x;
         state.legs[offset + 1] = hip.y;
@@ -138,9 +150,8 @@ const BeefwifeSkin = (() => {
           this.model.skin.scale *
           (leg.progress < 1 ? 1 : foot.plantedScale);
         state.legs[offset + 9] = leg.sideSign;
-        // Signed distance to the leg section middle: the reach of jointLean 1.
-        state.legs[offset + 10] =
-          this.model.chunks[leg.anchor].restDistance - sectionMiddle;
+        // How far this knee travels at jointLean 1, signed toward the head.
+        state.legs[offset + 10] = (chainPosition - jointLeanCenter) * arm;
       }
 
       const ornamentStride = RENDER_LAYOUT.ornamentStride;

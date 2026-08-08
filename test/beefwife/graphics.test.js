@@ -3,8 +3,9 @@
  * A minimal Pixi implementation is the control. Fails if feet cover limbs,
  * meshes rebuild instead of updating, invalid resources mutate the instance,
  * knee projection moves planted endpoints, pulls any knee toward view center,
- * leans end joints away from the leg section middle, scales the lean by limb
- * length, splits the joint, or destruction leaves owned display objects alive.
+ * leans end joints away from the leg section middle, scales the lean by the
+ * section's length, splits the joint, or destruction leaves owned display
+ * objects alive.
  */
 
 const assert = require("node:assert/strict");
@@ -133,6 +134,7 @@ global.PIXI = {
 
 const Beefwife = require("../../beefwife/beefwife.js");
 const BeefwifeGraphics = require("../../beefwife/beefwife-graphics.js");
+const { limbLength } = require("../../beefwife/beefwife-legs.js");
 const source = JSON.parse(
   fs.readFileSync(path.join(__dirname, "..", "..", "beefwife", "beefwife.example.json"), "utf8"),
 );
@@ -333,38 +335,87 @@ assert.ok(
 );
 assert.ok(near(firstLeftAfter.y, firstLeftBefore.y));
 assert.ok(near(lastLeftAfter.y, lastLeftBefore.y));
-const trunk = leggedSource.chain.sections.trunk;
-const leanShift = ((trunk.chunks - 1) * trunk.spacing * 0.2) / 2;
+const leanShift =
+  limbLength(bentLeggedSource.legs.reach, 1, bentLeggedSource.legs.fold) * 0.2;
 assert.ok(near(firstLeftBefore.x - firstLeftAfter.x, leanShift));
 assert.ok(near(lastLeftAfter.x - lastLeftBefore.x, leanShift));
 checks += 7;
 leaningLegs.destroy();
 
-// Lean spans the leg section, so limb length must not scale it.
-const straighterSource = copy(bentLeggedSource);
-straighterSource.legs.fold = 0.15;
-const straighterLegs = new Beefwife(straighterSource, { random: () => 0.5 });
-const straighterPositions = straighterLegs.children.find(
+// The lean reaches one limb length at the ends of the leg section, so
+// stretching that section must not change it.
+const longTrunkSource = copy(bentLeggedSource);
+longTrunkSource.chain.sections.trunk.spacing *= 3;
+const longTrunkLegs = new Beefwife(longTrunkSource, { random: () => 0.5 });
+const longTrunkPositions = longTrunkLegs.children.find(
   (child) => child instanceof Mesh,
 ).dynamicPositions;
-const straighterLeaningSource = copy(straighterSource);
-straighterLeaningSource.legs.jointLean = 0.2;
-const straighterLeaningLegs = new Beefwife(straighterLeaningSource, {
+const longTrunkLeaningSource = copy(longTrunkSource);
+longTrunkLeaningSource.legs.jointLean = 0.2;
+const longTrunkLeaningLegs = new Beefwife(longTrunkLeaningSource, {
   random: () => 0.5,
 });
-const straighterLeaningPositions = straighterLeaningLegs.children.find(
+const longTrunkLeaningPositions = longTrunkLeaningLegs.children.find(
   (child) => child instanceof Mesh,
 ).dynamicPositions;
 assert.ok(
   near(
-    segmentPoint(straighterPositions, 4).x -
-      segmentPoint(straighterLeaningPositions, 4).x,
+    segmentPoint(longTrunkPositions, 4).x -
+      segmentPoint(longTrunkLeaningPositions, 4).x,
     leanShift,
   ),
 );
 checks++;
-straighterLegs.destroy();
-straighterLeaningLegs.destroy();
+longTrunkLegs.destroy();
+longTrunkLeaningLegs.destroy();
+
+/* The lean crosses zero at its center, so moving the center to one end
+   leaves that end alone and doubles the travel at the other. */
+const offsetCenterSource = copy(bentLeggedSource);
+offsetCenterSource.legs.jointLean = 0.2;
+offsetCenterSource.legs.jointLeanCenter = -1;
+const offsetCenterLegs = new Beefwife(offsetCenterSource, {
+  random: () => 0.5,
+});
+const offsetCenterPositions = offsetCenterLegs.children.find(
+  (child) => child instanceof Mesh,
+).dynamicPositions;
+assert.ok(near(segmentPoint(offsetCenterPositions, 4).x, firstLeftBefore.x));
+assert.ok(
+  near(
+    segmentPoint(offsetCenterPositions, lastLeftOffset).x - lastLeftBefore.x,
+    leanShift * 2,
+  ),
+);
+checks += 2;
+offsetCenterLegs.destroy();
+
+/* Bend places the joint off the hip-foot line: zero puts it on the line and
+   a negative value mirrors it. */
+const straightSource = copy(bentLeggedSource);
+straightSource.legs.jointBend = 0;
+const straightLegs = new Beefwife(straightSource, { random: () => 0.5 });
+const straightPositions = straightLegs.children.find(
+  (child) => child instanceof Mesh,
+).dynamicPositions;
+const straightKnee = segmentPoint(straightPositions, 4);
+const straightHip = segmentPoint(straightPositions, 0);
+const straightFoot = segmentPoint(straightPositions, 12);
+assert.ok(near(straightKnee.x, (straightHip.x + straightFoot.x) / 2));
+assert.ok(near(straightKnee.y, (straightHip.y + straightFoot.y) / 2));
+
+const mirroredSource = copy(bentLeggedSource);
+mirroredSource.legs.jointBend = -1;
+const mirroredLegs = new Beefwife(mirroredSource, { random: () => 0.5 });
+const mirroredKnee = segmentPoint(
+  mirroredLegs.children.find((child) => child instanceof Mesh).dynamicPositions,
+  4,
+);
+assert.ok(near(mirroredKnee.x, 2 * straightKnee.x - baselineKnee.x));
+assert.ok(near(mirroredKnee.y, 2 * straightKnee.y - baselineKnee.y));
+checks += 4;
+straightLegs.destroy();
+mirroredLegs.destroy();
 baselineLegs.destroy();
 
 const invalidPaint = copy(source);

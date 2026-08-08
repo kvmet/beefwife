@@ -119,4 +119,32 @@ for (let index = 0; index < sixtyState.ornaments.length; index++) {
   checks++;
 }
 
+/* Each leg carries its own lean travel, taken from where its anchor sits in
+   the leg section. Body lengths never scale it. */
+const legged = JSON.parse(JSON.stringify(descriptor));
+legged.legs.pairs = 6;
+const leanDistances = (source) => {
+  const state = runtimeFor(source).skin.writeRenderState();
+  const stride = state.layout.legStride;
+  const distances = [];
+  for (let offset = 0; offset < state.legs.length; offset += stride)
+    distances.push(state.legs[offset + 10]);
+  return distances;
+};
+const seatedLean = leanDistances(legged);
+assert.ok(finite(seatedLean) && seatedLean.some((distance) => distance !== 0));
+checks++;
+for (const [section, key, value] of [
+  ["head", "chunks", 9],
+  ["head", "spacing", 40],
+  ["tail", "chunks", 30],
+  ["tail", "spacing", 40],
+  ["trunk", "spacing", 40],
+]) {
+  const edited = JSON.parse(JSON.stringify(legged));
+  edited.chain.sections[section][key] = value;
+  assert.deepEqual(leanDistances(edited), seatedLean);
+  checks++;
+}
+
 console.log(`beefwife skin: ${checks} renderer-neutral state checks passed`);

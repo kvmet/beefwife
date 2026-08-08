@@ -263,11 +263,19 @@ nearest chunks at even resting-distance intervals. One pair uses the section
 midpoint. More pairs than chunks may share anchors. `reach` controls the
 forward stance window, `spread` the lateral foot offset, `lead` shifts the next
 plant forward, and `fold` controls the drawn two-segment limb bend. `swingArc`
-bows an airborne foot farther outward in the body plane. `jointLean` is a signed
-ratio of each anchor's longitudinal distance from the middle of the leg section:
-`1` moves every joint the whole way to that middle, negative values lean joints
-away by the same measure, and zero preserves the solved joint position. Pairs
-sharing an anchor lean alike, and the reach never depends on limb length.
+bows an airborne foot farther outward in the body plane.
+
+Three signed ratios place the drawn joint. `jointBend` scales how far the joint
+leaves the line between hip and foot: `1` bows it behind and outward, `0` puts
+it on the line, and `-1` mirrors the bow ahead and inward. `jointLean` then
+slides the joint longitudinally by that ratio of one limb length: positive
+values lean joints toward the middle of the leg section, negative values away,
+and zero preserves the bowed position. The lean grows from nothing at its
+center to its full travel at the ends of the leg section, taken from where each
+anchor sits, so pairs sharing an anchor lean alike and no body length scales
+it. `jointLeanCenter` moves that center from the middle of the leg section
+(`0`) to its head end (`-1`) or tail end (`1`); the far end then travels up to
+twice one limb length.
 
 `sidePhase` offsets right-foot contact by that fraction of `Math.PI`; `1` makes
 the two sides opposite. `liftThreshold` releases a planted foot when its contact

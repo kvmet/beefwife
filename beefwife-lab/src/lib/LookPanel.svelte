@@ -273,9 +273,23 @@
       slider={[0, 1, 0.01]}
     />
     <ControlRow
+      label="Joint bend"
+      bind:value={$descriptor.legs.jointBend}
+      reset={defaults.legs.jointBend}
+      field={[-1, 1, 0.01]}
+      slider={[-1, 1, 0.01]}
+    />
+    <ControlRow
       label="Joint lean"
       bind:value={$descriptor.legs.jointLean}
       reset={defaults.legs.jointLean}
+      field={[-1, 1, 0.01]}
+      slider={[-1, 1, 0.01]}
+    />
+    <ControlRow
+      label="Lean center"
+      bind:value={$descriptor.legs.jointLeanCenter}
+      reset={defaults.legs.jointLeanCenter}
       field={[-1, 1, 0.01]}
       slider={[-1, 1, 0.01]}
     />

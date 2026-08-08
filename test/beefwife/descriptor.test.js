@@ -130,15 +130,17 @@ callerOwned.chain.sections.head.chunks = 99;
 assert.equal(owned.chain.sections.head.chunks, 2);
 checks++;
 
-for (const jointLean of [-1, 1]) {
-  const leaning = copy(source);
-  leaning.legs.jointLean = jointLean;
-  accepted(`joint lean ${jointLean}`, leaning);
-}
-for (const jointLean of [-1.01, 1.01]) {
-  const outsideLean = copy(source);
-  outsideLean.legs.jointLean = jointLean;
-  rejected(`joint lean ${jointLean}`, outsideLean, /between -1 and 1/);
+for (const key of ["jointBend", "jointLean", "jointLeanCenter"]) {
+  for (const value of [-1, 1]) {
+    const joint = copy(source);
+    joint.legs[key] = value;
+    accepted(`${key} ${value}`, joint);
+  }
+  for (const value of [-1.01, 1.01]) {
+    const joint = copy(source);
+    joint.legs[key] = value;
+    rejected(`${key} ${value}`, joint, /between -1 and 1/);
+  }
 }
 const maximumBreathing = copy(source);
 maximumBreathing.chain.breathing = 1;
