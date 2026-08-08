@@ -2,7 +2,7 @@
   import { onDestroy, onMount, tick } from "svelte";
   import { get } from "svelte/store";
   import Graticule from "./Graticule.svelte";
-  import StageTools from "./StageTools.svelte";
+  import StageTools, { DEFAULT_OPTIONS } from "./StageTools.svelte";
   import TargetMarker from "./TargetMarker.svelte";
   import { applyError, descriptor } from "./descriptor.js";
 
@@ -22,17 +22,7 @@
   let playing = true;
 
   /* Read once when the runtime mounts, so any edit here has to remount. */
-  let options = {
-    antialias: true,
-    pixelUpscale: false,
-    roundVertices: true,
-    resolutionScale: 0.5,
-    simulationFps: 60,
-    drawFps: 30,
-    wanderDelay: 4,
-    edgeMargin: 52,
-    filterPreset: "None",
-  };
+  let options = { ...DEFAULT_OPTIONS };
 
   $: markerVisible = showTarget && hasTarget && targetMode === "manual";
 
@@ -158,7 +148,9 @@
         targetMode: targetMode === "wander" ? "wander" : "manual",
         pointerInput: targetMode === "follow" ? "move" : "none",
         edgeMargin: Math.max(0, +options.edgeMargin || 0),
-        kneeProjectionCenter: "canvas",
+        kneePerspective: Math.max(0, +options.kneePerspective || 0),
+        maxKneeOffset: Math.max(0, +options.maxKneeOffset || 0),
+        kneeProjectionCenter: options.kneeProjectionCenter,
         filters: presetFilter(),
       });
       if (disposed || token !== mountToken) {

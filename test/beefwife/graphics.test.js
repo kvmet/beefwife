@@ -3,8 +3,8 @@
  * A minimal Pixi implementation is the control. Fails if feet cover limbs,
  * meshes rebuild instead of updating, invalid resources mutate the instance,
  * knee projection moves planted endpoints, pulls any knee toward view center,
- * leans end joints away from chain center, splits the joint, or destruction
- * leaves owned display objects alive.
+ * leans end joints away from the leg section middle, scales the lean by limb
+ * length, splits the joint, or destruction leaves owned display objects alive.
  */
 
 const assert = require("node:assert/strict");
@@ -333,8 +333,38 @@ assert.ok(
 );
 assert.ok(near(firstLeftAfter.y, firstLeftBefore.y));
 assert.ok(near(lastLeftAfter.y, lastLeftBefore.y));
-checks += 5;
+const trunk = leggedSource.chain.sections.trunk;
+const leanShift = ((trunk.chunks - 1) * trunk.spacing * 0.2) / 2;
+assert.ok(near(firstLeftBefore.x - firstLeftAfter.x, leanShift));
+assert.ok(near(lastLeftAfter.x - lastLeftBefore.x, leanShift));
+checks += 7;
 leaningLegs.destroy();
+
+// Lean spans the leg section, so limb length must not scale it.
+const straighterSource = copy(bentLeggedSource);
+straighterSource.legs.fold = 0.15;
+const straighterLegs = new Beefwife(straighterSource, { random: () => 0.5 });
+const straighterPositions = straighterLegs.children.find(
+  (child) => child instanceof Mesh,
+).dynamicPositions;
+const straighterLeaningSource = copy(straighterSource);
+straighterLeaningSource.legs.jointLean = 0.2;
+const straighterLeaningLegs = new Beefwife(straighterLeaningSource, {
+  random: () => 0.5,
+});
+const straighterLeaningPositions = straighterLeaningLegs.children.find(
+  (child) => child instanceof Mesh,
+).dynamicPositions;
+assert.ok(
+  near(
+    segmentPoint(straighterPositions, 4).x -
+      segmentPoint(straighterLeaningPositions, 4).x,
+    leanShift,
+  ),
+);
+checks++;
+straighterLegs.destroy();
+straighterLeaningLegs.destroy();
 baselineLegs.destroy();
 
 const invalidPaint = copy(source);

@@ -1,7 +1,28 @@
+<script context="module">
+  /* Everything the runtime is mounted with. The stage seeds its options from
+     these and every row resets to the same value. */
+  export const DEFAULT_OPTIONS = {
+    antialias: true,
+    pixelUpscale: false,
+    roundVertices: true,
+    resolutionScale: 0.5,
+    simulationFps: 60,
+    drawFps: 30,
+    wanderDelay: 4,
+    edgeMargin: 52,
+    filterPreset: "None",
+    kneePerspective: 0.002,
+    maxKneeOffset: 256,
+    kneeProjectionCenter: "canvas",
+  };
+</script>
+
 <script>
+  import { onDestroy, onMount } from "svelte";
+  import ControlRow from "./ControlRow.svelte";
   import Tooltip from "./Tooltip.svelte";
 
-  /* Everything the runtime is mounted with; every edit here calls onremount. */
+  /* Every edit here calls onremount. */
   export let options;
   export let showGrid;
   export let showTarget;
@@ -24,6 +45,7 @@
     "Sepia",
     "Negative",
   ];
+  const projectionCenters = ["canvas", "viewport"];
 
   let toolTab = "Target";
   let toolsOpen = true;
@@ -32,6 +54,29 @@
     options[key] = !options[key];
     onremount();
   };
+
+  /* A track reports every pixel of a drag and each mount reads its options
+     once, so the rebuild waits for the drag to settle. */
+  let mounted = false;
+  let rebuildTimer = 0;
+  $: scheduleRebuild(
+    options.wanderDelay,
+    options.edgeMargin,
+    options.simulationFps,
+    options.resolutionScale,
+    options.drawFps,
+    options.kneePerspective,
+    options.maxKneeOffset,
+  );
+
+  function scheduleRebuild() {
+    if (!mounted) return;
+    clearTimeout(rebuildTimer);
+    rebuildTimer = setTimeout(onremount, 250);
+  }
+
+  onMount(() => (mounted = true));
+  onDestroy(() => clearTimeout(rebuildTimer));
 </script>
 
 <div class="stage-tools" class:collapsed={!toolsOpen}>
@@ -78,29 +123,27 @@
           </Tooltip>
         </div>
         {#if mode === "wander"}
-          <div class="tool-fields">
-            <label>
-              <span>Delay (s)</span>
-              <input
-                type="number"
-                min="0"
-                max="30"
-                step="0.5"
+          <div class="controls">
+            <div class="rows">
+              <ControlRow
+                label="Delay"
+                unit="s"
+                digits={1}
                 bind:value={options.wanderDelay}
-                onchange={onremount}
+                reset={DEFAULT_OPTIONS.wanderDelay}
+                field={[0, 30, 0.5]}
+                slider={[0, 15, 0.5]}
               />
-            </label>
-            <label>
-              <span>Edge margin (px)</span>
-              <input
-                type="number"
-                min="0"
-                max="200"
-                step="4"
+              <ControlRow
+                label="Edge margin"
+                unit="px"
+                digits={0}
                 bind:value={options.edgeMargin}
-                onchange={onremount}
+                reset={DEFAULT_OPTIONS.edgeMargin}
+                field={[0, 200, 4]}
+                slider={[0, 200, 4]}
               />
-            </label>
+            </div>
           </div>
         {/if}
       {:else if toolTab === "Stage"}
@@ -121,11 +164,13 @@
             >
           </Tooltip>
         </div>
-        <div class="tool-fields">
-          <label>
-            <span>Background</span>
-            <input type="color" bind:value={background} />
-          </label>
+        <div class="controls">
+          <div class="rows">
+            <label>
+              <span>Background</span>
+              <input type="color" bind:value={background} />
+            </label>
+          </div>
         </div>
       {:else if toolTab === "Sim"}
         <div class="tool-row">
@@ -135,18 +180,17 @@
             >
           </Tooltip>
         </div>
-        <div class="tool-fields">
-          <label>
-            <span>Physics FPS</span>
-            <input
-              type="number"
-              min="1"
-              max="240"
-              step="1"
+        <div class="controls">
+          <div class="rows">
+            <ControlRow
+              label="Physics FPS"
+              digits={0}
               bind:value={options.simulationFps}
-              onchange={onremount}
+              reset={DEFAULT_OPTIONS.simulationFps}
+              field={[1, 240, 1]}
+              slider={[1, 120, 1]}
             />
-          </label>
+          </div>
         </div>
       {:else}
         <div class="tool-row">
@@ -169,37 +213,62 @@
             >
           </Tooltip>
         </div>
-        <div class="tool-fields">
-          <label>
-            <span>Res scale (x)</span>
-            <input
-              type="number"
-              min="0.125"
-              max="1"
-              step="0.125"
+        <div class="controls">
+          <div class="rows">
+            <ControlRow
+              label="Res scale"
+              unit="x"
+              digits={3}
               bind:value={options.resolutionScale}
-              onchange={onremount}
+              reset={DEFAULT_OPTIONS.resolutionScale}
+              field={[0.125, 1, 0.125]}
+              slider={[0.125, 1, 0.125]}
             />
-          </label>
-          <label>
-            <span>Draw FPS</span>
-            <input
-              type="number"
-              min="1"
-              max="240"
-              step="1"
+            <ControlRow
+              label="Draw FPS"
+              digits={0}
               bind:value={options.drawFps}
-              onchange={onremount}
+              reset={DEFAULT_OPTIONS.drawFps}
+              field={[1, 240, 1]}
+              slider={[1, 120, 1]}
             />
-          </label>
-          <label class="wide">
-            <span>Filter</span>
-            <select bind:value={options.filterPreset} onchange={onremount}>
-              {#each filterPresets as preset}
-                <option>{preset}</option>
-              {/each}
-            </select>
-          </label>
+            <label>
+              <span>Filter</span>
+              <select bind:value={options.filterPreset} onchange={onremount}>
+                {#each filterPresets as preset}
+                  <option>{preset}</option>
+                {/each}
+              </select>
+            </label>
+            <ControlRow
+              label="Perspective"
+              digits={3}
+              bind:value={options.kneePerspective}
+              reset={DEFAULT_OPTIONS.kneePerspective}
+              field={[0, 0.05, 0.001]}
+              slider={[0, 0.02, 0.001]}
+            />
+            <ControlRow
+              label="Knee cap"
+              unit="px"
+              digits={0}
+              bind:value={options.maxKneeOffset}
+              reset={DEFAULT_OPTIONS.maxKneeOffset}
+              field={[0, 1024, 1]}
+              slider={[0, 512, 8]}
+            />
+            <label>
+              <span>Vanishing point</span>
+              <select
+                bind:value={options.kneeProjectionCenter}
+                onchange={onremount}
+              >
+                {#each projectionCenters as center}
+                  <option value={center}>{center}</option>
+                {/each}
+              </select>
+            </label>
+          </div>
         </div>
       {/if}
     </div>
@@ -293,40 +362,13 @@
     color: var(--select-text);
   }
 
-  .tool-fields {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
+  /* The kit indents its rows under a section latch; this panel has none. */
+  .tool-body .rows {
     padding: 0 var(--bevel-width) var(--bevel-width);
   }
 
-  .tool-fields label {
-    min-width: 0;
-  }
-
-  .tool-fields label.wide {
-    grid-column: 1 / -1;
-  }
-
-  .tool-fields label > span {
-    display: block;
-    margin-bottom: 4px;
-    color: var(--muted);
-    font: var(--label-font);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-  }
-
-  .tool-fields input,
-  .tool-fields select {
-    width: 100%;
-    height: 26px;
-    padding: 0 6px;
-    font-size: 11px;
-    outline-color: var(--bevel-face-screen);
-  }
-
-  .tool-fields input[type="color"] {
+  /* The kit pads a field for typed text; a swatch fills its box instead. */
+  .tool-body input[type="color"] {
     padding: 2px;
   }
 </style>

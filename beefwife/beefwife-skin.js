@@ -3,7 +3,7 @@
 const BeefwifeSkin = (() => {
   const RENDER_LAYOUT = Object.freeze({
     chunkStride: 4,
-    legStride: 10,
+    legStride: 11,
     ornamentStride: 6,
     plateStride: 5,
   });
@@ -109,6 +109,11 @@ const BeefwifeSkin = (() => {
 
       const foot = this.model.legs.skin.foot;
       const legStride = RENDER_LAYOUT.legStride;
+      const sectionMiddle = this.legs.legs.length
+        ? (this.model.chunks[this.model.legs.start].restDistance +
+            this.model.chunks[this.model.legs.end - 1].restDistance) /
+          2
+        : 0;
       for (let index = 0; index < this.legs.legs.length; index++) {
         const leg = this.legs.legs[index];
         const hip = this.body.chunks[leg.anchor];
@@ -133,6 +138,9 @@ const BeefwifeSkin = (() => {
           this.model.skin.scale *
           (leg.progress < 1 ? 1 : foot.plantedScale);
         state.legs[offset + 9] = leg.sideSign;
+        // Signed distance to the leg section middle: the reach of jointLean 1.
+        state.legs[offset + 10] =
+          this.model.chunks[leg.anchor].restDistance - sectionMiddle;
       }
 
       const ornamentStride = RENDER_LAYOUT.ornamentStride;

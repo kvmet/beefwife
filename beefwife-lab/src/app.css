@@ -12,7 +12,7 @@
   --radius-screen: 0;
   --radius-control: 0;
   --track-label: 112px;
-  --label-font: 11px/1.2 var(--font-mono);
+  --label-font: 12px/1.2 var(--font-mono);
 
   /* Seeds: a theme repaints these; everything else derives. */
   --bg: #c0b8a7;

@@ -1,15 +1,15 @@
 <script>
   import { tick } from "svelte";
-  import AssetsPanel from "./AssetsPanel.svelte";
   import ChainMap from "./ChainMap.svelte";
   import ConfigPanel from "./ConfigPanel.svelte";
   import LookPanel from "./LookPanel.svelte";
   import MotionPanel from "./MotionPanel.svelte";
+  import PartsPanel from "./PartsPanel.svelte";
+  import PlacementMap from "./PlacementMap.svelte";
   import Tooltip from "./Tooltip.svelte";
   import WaveColumn from "./WaveColumn.svelte";
   import { descriptor, SECTION_NAMES } from "./descriptor.js";
 
-  export let selected;
   export let activeTab;
   export let ontab;
   export let onhide;
@@ -18,7 +18,10 @@
   const TAU = Math.PI * 2;
 
   let selectedSection = null;
+  let selectedPlacement = null;
+  let selectedPart = null;
   let motionPanel;
+  let partsPanel;
   let advancedMode = false;
   let chainScale = 32;
 
@@ -27,6 +30,13 @@
     if (activeTab !== "Motion") ontab("Motion");
     await tick();
     motionPanel?.reveal(name);
+  }
+
+  async function revealPart(kind, id) {
+    selectedPart = { kind, id };
+    if (activeTab !== "Parts") ontab("Parts");
+    await tick();
+    partsPanel?.reveal(kind);
   }
 
   /* At time zero a channel runs sin(offset - harmonic·lag·d) down the chain,
@@ -134,18 +144,16 @@
           row={waveRow}
         />
       {:else if activeTab === "Look"}
-        <div class="selector-column">
-          <header>Plates</header>
-          <div class="selector-screen"></div>
-        </div>
-        <div class="selector-column">
-          <header>Ornaments</header>
-          <div class="selector-screen"></div>
-        </div>
+        <PlacementMap
+          scale={chainScale}
+          row={waveRow}
+          selection={selectedPlacement}
+          onselect={(value) => (selectedPlacement = value)}
+        />
       {/if}
 
       <div
-        class="inspector-scroll"
+        class="inspector-scroll controls"
         class:motion={activeTab === "Motion"}
         role="tabpanel"
         aria-label={activeTab}
@@ -153,19 +161,29 @@
         <div class="slim-heading">
           {#if activeTab === "Motion"}
             <label class="advanced-mode">
-              <input type="checkbox" bind:checked={advancedMode} />
               <span>Advanced mode</span>
+              <div class="switch">
+                <input type="checkbox" bind:checked={advancedMode} />
+              </div>
             </label>
           {/if}
         </div>
         {#if activeTab === "Look"}
-          <LookPanel {selected} />
+          <LookPanel
+            selection={selectedPlacement}
+            onselect={(value) => (selectedPlacement = value)}
+            oneditpart={revealPart}
+          />
         {:else if activeTab === "Config"}
           <ConfigPanel />
         {:else if activeTab === "Motion"}
           <MotionPanel bind:this={motionPanel} advanced={advancedMode} />
         {:else if activeTab === "Parts"}
-          <AssetsPanel />
+          <PartsPanel
+            bind:this={partsPanel}
+            selection={selectedPart}
+            onselect={(value) => (selectedPart = value)}
+          />
         {/if}
       </div>
     </div>
@@ -292,33 +310,6 @@
     scrollbar-gutter: stable;
   }
 
-  .selector-column {
-    display: grid;
-    width: 72px;
-    min-height: 0;
-    flex: none;
-    border-right: 1px solid var(--chassis-line);
-    grid-template-rows: 26px minmax(0, 1fr);
-  }
-
-  .selector-column header {
-    overflow: hidden;
-    padding: 7px 3px 0;
-    border-bottom: 1px solid var(--chassis-line);
-    background: var(--chassis);
-    color: var(--muted);
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0;
-    text-overflow: ellipsis;
-    text-transform: uppercase;
-    white-space: nowrap;
-  }
-
-  .selector-screen {
-    background: var(--screen);
-  }
-
   /* Same 26px rule the wave column headers draw, so the strips read as one
      band across the panel. */
   .slim-heading {
@@ -333,6 +324,7 @@
     background: var(--chassis);
   }
 
+  /* The label leads the switch inside the right-riding control. */
   .advanced-mode {
     display: flex;
     align-items: center;
@@ -340,38 +332,7 @@
     margin-left: auto;
   }
 
-  .advanced-mode input {
-    flex: none;
-  }
-
-  /* Silkscreen legend: O and I flank the switch. The thrown side's glyph
-     darkens, and I takes the select ink while on. */
-  .advanced-mode::before,
-  .advanced-mode::after {
-    color: var(--faint);
-    font-size: 9px;
-    line-height: 1;
-  }
-
-  .advanced-mode::before {
-    content: "O";
-  }
-
-  .advanced-mode::after {
-    content: "I";
-  }
-
-  .advanced-mode:not(:has(input:checked))::before {
-    color: var(--muted);
-  }
-
-  .advanced-mode:has(input:checked)::after {
-    color: var(--select-text);
-  }
-
-  /* The label leads the switch inside the right-riding control. */
   .advanced-mode span {
-    order: -1;
     margin: 0 6px 6px 0;
     color: var(--text);
     font-size: 12px;

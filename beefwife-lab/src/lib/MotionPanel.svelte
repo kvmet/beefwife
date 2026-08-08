@@ -1,6 +1,6 @@
 <script>
   import ControlRow from "./ControlRow.svelte";
-  import HarmonicRow from "./HarmonicRow.svelte";
+  import StepperRow from "./StepperRow.svelte";
   import {
     applyError,
     defaults,
@@ -86,7 +86,12 @@
       slider={[0, 2, 0.01]}
     />
     {#if advanced}
-      <HarmonicRow channel="bend" />
+      <StepperRow
+        label="Harmonic"
+        min={1}
+        max={8}
+        bind:value={$descriptor.gait.bend.harmonic}
+      />
       <ControlRow
         label="Phase"
         unit="deg"
@@ -115,7 +120,12 @@
       slider={[0, 1, 0.001]}
     />
     {#if advanced}
-      <HarmonicRow channel="thrust" />
+      <StepperRow
+        label="Harmonic"
+        min={1}
+        max={8}
+        bind:value={$descriptor.gait.thrust.harmonic}
+      />
       <ControlRow
         label="Phase"
         unit="deg"
@@ -148,7 +158,12 @@
       slider={[0, 0.95, 0.01]}
     />
     {#if advanced}
-      <HarmonicRow channel="gather" />
+      <StepperRow
+        label="Harmonic"
+        min={1}
+        max={8}
+        bind:value={$descriptor.gait.gather.harmonic}
+      />
       <ControlRow
         label="Phase"
         unit="deg"
@@ -174,7 +189,12 @@
       slider={[0, 1, 0.01]}
     />
     {#if advanced}
-      <HarmonicRow channel="contact" />
+      <StepperRow
+        label="Harmonic"
+        min={1}
+        max={8}
+        bind:value={$descriptor.gait.contact.harmonic}
+      />
       <ControlRow
         label="Phase"
         unit="deg"
@@ -311,65 +331,3 @@
     />
   </div>
 </details>
-
-<details open={!advanced}>
-  <summary>Leg cycle</summary>
-  <div class="rows">
-    <ControlRow
-      label="Side phase"
-      bind:value={$descriptor.legs.sidePhase}
-      reset={defaults.legs.sidePhase}
-      field={[0, 1, 0.01]}
-      slider={[0, 1, 0.01]}
-    />
-    <ControlRow
-      label="Lead"
-      bind:value={$descriptor.legs.lead}
-      reset={defaults.legs.lead}
-      field={[0, 1, 0.01]}
-      slider={[0, 1, 0.01]}
-    />
-    <ControlRow
-      label="Lift threshold"
-      bind:value={$descriptor.legs.liftThreshold}
-      reset={defaults.legs.liftThreshold}
-      field={[0, 1, 0.01]}
-      slider={[0, 1, 0.01]}
-    />
-    <ControlRow
-      label="Swing time"
-      unit="s"
-      bind:value={$descriptor.legs.swingSeconds}
-      reset={defaults.legs.swingSeconds}
-      field={[0.001, 60, 0.01]}
-      slider={[0.001, 1, 0.005]}
-    />
-    <ControlRow
-      label="Swing arc"
-      unit="px"
-      digits={1}
-      bind:value={$descriptor.legs.swingArc}
-      reset={defaults.legs.swingArc}
-      field={[0, 1000, 0.5]}
-      slider={[0, 40, 0.5]}
-    />
-    <ControlRow
-      label="Jitter"
-      bind:value={$descriptor.legs.jitter}
-      reset={defaults.legs.jitter}
-      field={[0, 1, 0.01]}
-      slider={[0, 1, 0.01]}
-    />
-  </div>
-</details>
-
-<style>
-  .apply-error {
-    margin: 0;
-    padding: 8px 16px;
-    border-bottom: 1px solid var(--chassis-line);
-    background: var(--danger-dim);
-    color: var(--danger);
-    font-size: 11px;
-  }
-</style>

@@ -269,6 +269,7 @@ const BeefwifeGraphics = (() => {
       const width = this.model.legs.skin.limbPaint.strokeWidth;
       const stride = state.layout.legStride;
       const projection = this.options.kneeProjection ?? null;
+      const jointLean = this.model.legs.jointLean;
       for (let offset = 0; offset < legs.length; offset += stride) {
         const legIndex = offset / stride;
         const vertexOffset = legIndex * 16;
@@ -306,22 +307,8 @@ const BeefwifeGraphics = (() => {
             }
           }
         }
-        const jointLean = this.model.legs.jointLean;
         if (jointLean !== 0) {
-          const pairCount = legs.length / stride / 2;
-          const pair = Math.floor(legIndex / 2);
-          const chainPosition =
-            pairCount === 1 ? 0 : (2 * pair) / (pairCount - 1) - 1;
-          const limbLength =
-            Math.hypot(
-              legs[offset + 2] - legs[offset],
-              legs[offset + 3] - legs[offset + 1],
-            ) +
-            Math.hypot(
-              legs[offset + 4] - legs[offset + 2],
-              legs[offset + 5] - legs[offset + 3],
-            );
-          const leanOffset = chainPosition * limbLength * jointLean;
+          const leanOffset = legs[offset + 10] * jointLean;
           kneeX += legs[offset + 6] * leanOffset;
           kneeY += legs[offset + 7] * leanOffset;
         }

@@ -10,7 +10,6 @@
   $: document.documentElement.dataset.theme = theme;
 
   let activeTab = "Look";
-  let selected = "eyes";
   let sidebarOpen = true;
   let sidebarWidth = 480;
   let resizeStartX = 0;
@@ -156,7 +155,6 @@
         ondblclick={() => (sidebarWidth = 480)}
       ></div>
       <Inspector
-        {selected}
         {activeTab}
         ontab={(tab) => (activeTab = tab)}
         onhide={() => (sidebarOpen = false)}
