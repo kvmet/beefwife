@@ -23,6 +23,7 @@
   export let index;
   /* Jump to a definition's editor on the Parts tab: (kind, id). */
   export let oneditpart;
+  export let advanced = false;
 
   const title = (name) => name[0].toUpperCase() + name.slice(1);
 
@@ -81,40 +82,43 @@
       </button>
     </div>
   </label>
-  <label>
-    <Tooltip
-      label="What the offset counts along: the whole chain or one section. Copies never leave that scope."
-      ><span>Anchor</span></Tooltip
-    >
-    <select
-      value={entry.at.scope}
-      onchange={(event) => setScope(event.target.value)}
-    >
-      <option value="chain">Whole chain</option>
-      <option value="section">Section</option>
-    </select>
-  </label>
-  {#if entry.at.scope === "section"}
+  {#if advanced}
     <label>
-      <Tooltip label="Section the offset counts inside."
-        ><span>Section</span></Tooltip
+      <Tooltip
+        label="What the offset counts along: the whole chain or one section. Copies never leave that scope."
+        ><span>Anchor</span></Tooltip
       >
-      <select bind:value={$descriptor.chain.skin[list][index].at.section}>
-        {#each SECTION_NAMES as name}
-          <option value={name}>{title(name)}</option>
-        {/each}
+      <select
+        value={entry.at.scope}
+        onchange={(event) => setScope(event.target.value)}
+      >
+        <option value="chain">Whole chain</option>
+        <option value="section">Section</option>
+      </select>
+    </label>
+    {#if entry.at.scope === "section"}
+      <label>
+        <Tooltip label="Section the offset counts inside."
+          ><span>Section</span></Tooltip
+        >
+        <select bind:value={$descriptor.chain.skin[list][index].at.section}>
+          {#each SECTION_NAMES as name}
+            <option value={name}>{title(name)}</option>
+          {/each}
+        </select>
+      </label>
+    {/if}
+    <label>
+      <Tooltip
+        label="End the offset counts from. Copies walk away from that end."
+        ><span>From</span></Tooltip
+      >
+      <select bind:value={$descriptor.chain.skin[list][index].at.from}>
+        <option value="head">Head</option>
+        <option value="tail">Tail</option>
       </select>
     </label>
   {/if}
-  <label>
-    <Tooltip label="End the offset counts from. Copies walk away from that end."
-      ><span>From</span></Tooltip
-    >
-    <select bind:value={$descriptor.chain.skin[list][index].at.from}>
-      <option value="head">Head</option>
-      <option value="tail">Tail</option>
-    </select>
-  </label>
   {#if ornament}
     <label>
       <Tooltip
@@ -127,28 +131,32 @@
         <option value="right">Right</option>
       </select>
     </label>
+    {#if advanced}
+      <label>
+        <Tooltip label="Draws the ornament over or under the ribbon and plates."
+          ><span>Layer</span></Tooltip
+        >
+        <select bind:value={$descriptor.chain.skin[list][index].layer}>
+          <option value="over">Over</option>
+          <option value="under">Under</option>
+        </select>
+      </label>
+    {/if}
+  {/if}
+  {#if advanced}
     <label>
-      <Tooltip label="Draws the ornament over or under the ribbon and plates."
-        ><span>Layer</span></Tooltip
+      <Tooltip label="Repeats through the rest of the anchor's scope."
+        ><span>Fill to end</span></Tooltip
       >
-      <select bind:value={$descriptor.chain.skin[list][index].layer}>
-        <option value="over">Over</option>
-        <option value="under">Under</option>
-      </select>
+      <div class="switch">
+        <input
+          type="checkbox"
+          checked={entry.repeat.count === null}
+          onchange={(event) => setFill(event.target.checked)}
+        />
+      </div>
     </label>
   {/if}
-  <label>
-    <Tooltip label="Repeats through the rest of the anchor's scope."
-      ><span>Fill to end</span></Tooltip
-    >
-    <div class="switch">
-      <input
-        type="checkbox"
-        checked={entry.repeat.count === null}
-        onchange={(event) => setFill(event.target.checked)}
-      />
-    </div>
-  </label>
 </div>
 
 <div class="rows">
@@ -168,13 +176,15 @@
       bind:value={$descriptor.chain.skin[list][index].repeat.count}
     />
   {/if}
-  <StepperRow
-    label="Step"
-    tip="Chunks between one copy and the next."
-    min={1}
-    max={256}
-    bind:value={$descriptor.chain.skin[list][index].repeat.step}
-  />
+  {#if advanced}
+    <StepperRow
+      label="Step"
+      tip="Chunks between one copy and the next."
+      min={1}
+      max={256}
+      bind:value={$descriptor.chain.skin[list][index].repeat.step}
+    />
+  {/if}
   <ControlRow
     label="Scale"
     tip="Size of the shape at this placement, on top of the body scale."
@@ -225,33 +235,35 @@
       field={[0.000001, 10000, 0.5]}
       slider={[0.5, 60, 0.5]}
     />
-    <ControlRow
-      label="Sweep"
-      tip="How much root motion the tip leaves behind. 0 follows the root exactly."
-      bind:value={$descriptor.chain.skin[list][index].sweep}
-      reset={ORNAMENT_PRESET.sweep}
-      field={[0, 4, 0.05]}
-      slider={[0, 4, 0.05]}
-    />
-    <ControlRow
-      label="Snap rate"
-      tip="How fast the tip returns to its rest angle."
-      unit="/s"
-      digits={1}
-      bind:value={$descriptor.chain.skin[list][index].snapRate}
-      reset={ORNAMENT_PRESET.snapRate}
-      field={[0, 1000, 0.5]}
-      slider={[0, 60, 0.5]}
-    />
-    <ControlRow
-      label="Damping rate"
-      tip="How fast tip motion dies away. Low values swing for longer."
-      unit="/s"
-      digits={1}
-      bind:value={$descriptor.chain.skin[list][index].dampingRate}
-      reset={ORNAMENT_PRESET.dampingRate}
-      field={[0, 1000, 0.5]}
-      slider={[0, 60, 0.5]}
-    />
+    {#if advanced}
+      <ControlRow
+        label="Sweep"
+        tip="How much root motion the tip leaves behind. 0 follows the root exactly."
+        bind:value={$descriptor.chain.skin[list][index].sweep}
+        reset={ORNAMENT_PRESET.sweep}
+        field={[0, 4, 0.05]}
+        slider={[0, 4, 0.05]}
+      />
+      <ControlRow
+        label="Snap rate"
+        tip="How fast the tip returns to its rest angle."
+        unit="/s"
+        digits={1}
+        bind:value={$descriptor.chain.skin[list][index].snapRate}
+        reset={ORNAMENT_PRESET.snapRate}
+        field={[0, 1000, 0.5]}
+        slider={[0, 60, 0.5]}
+      />
+      <ControlRow
+        label="Damping rate"
+        tip="How fast tip motion dies away. Low values swing for longer."
+        unit="/s"
+        digits={1}
+        bind:value={$descriptor.chain.skin[list][index].dampingRate}
+        reset={ORNAMENT_PRESET.dampingRate}
+        field={[0, 1000, 0.5]}
+        slider={[0, 60, 0.5]}
+      />
+    {/if}
   {/if}
 </div>

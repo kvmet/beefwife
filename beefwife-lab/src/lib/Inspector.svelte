@@ -159,26 +159,25 @@
         aria-label={activeTab}
       >
         <div class="slim-heading">
-          {#if activeTab === "Motion"}
-            <label class="advanced-mode">
-              <Tooltip
-                label="Shows harmonics, phases, steering, and the per-section channel scales."
-                ><span>Advanced mode</span></Tooltip
-              >
-              <div class="switch">
-                <input type="checkbox" bind:checked={advancedMode} />
-              </div>
-            </label>
-          {/if}
+          <label class="advanced-mode">
+            <Tooltip
+              label="Shows harmonics, phases, steering, and the per-section channel scales."
+              ><span>Advanced mode</span></Tooltip
+            >
+            <div class="switch">
+              <input type="checkbox" bind:checked={advancedMode} />
+            </div>
+          </label>
         </div>
         {#if activeTab === "Look"}
           <LookPanel
+            advanced={advancedMode}
             selection={selectedPlacement}
             onselect={(value) => (selectedPlacement = value)}
             oneditpart={revealPart}
           />
         {:else if activeTab === "Config"}
-          <ConfigPanel />
+          <ConfigPanel advanced={advancedMode} />
         {:else if activeTab === "Motion"}
           <MotionPanel
             bind:this={motionPanel}
@@ -188,6 +187,7 @@
         {:else if activeTab === "Parts"}
           <PartsPanel
             bind:this={partsPanel}
+            advanced={advancedMode}
             selection={selectedPart}
             onselect={(value) => (selectedPart = value)}
           />

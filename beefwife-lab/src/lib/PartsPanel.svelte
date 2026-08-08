@@ -12,6 +12,7 @@
   /* Which definition is under edit: { kind, id } or null. */
   export let selection = null;
   export let onselect;
+  export let advanced = false;
 
   /* Mirrors BeefwifeDescriptor's ID_PATTERN; the validator rejects others. */
   const ID_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
@@ -317,89 +318,91 @@
   {/if}
 </details>
 
-<details open bind:this={sections.material}>
-  <summary>Materials</summary>
-  <div class="list">
-    {#each Object.keys(materials) as materialId (materialId)}
-      <button
-        aria-pressed={selection?.kind === "material" &&
-          selection.id === materialId}
-        onclick={() => onselect({ kind: "material", id: materialId })}
-      >
-        {materialId}
-      </button>
-    {/each}
-    <button onclick={() => add("material", NEW_MATERIAL)}>+ Add</button>
-  </div>
-  {#if selection?.kind === "material" && materials[selection.id]}
-    {@const reset =
-      defaults.definitions.materials[selection.id] ?? NEW_MATERIAL}
-    <div class="rows">
-      <ControlRow
-        label="Velocity retention"
-        tip="Part of the last step's motion a chunk keeps. Low values drag it to a stop."
-        digits={3}
-        bind:value={
-          $descriptor.definitions.materials[selection.id].velocityRetention
-        }
-        reset={reset.velocityRetention}
-        field={[0, 1, 0.001]}
-        slider={[0.5, 1, 0.001]}
-      />
-      <ControlRow
-        label="Joint correction"
-        tip="How hard a joint is pulled to the angle the bend wave asks for. 0 ignores the wave."
-        bind:value={
-          $descriptor.definitions.materials[selection.id].jointCorrection
-        }
-        reset={reset.jointCorrection}
-        field={[0, 1, 0.01]}
-        slider={[0, 1, 0.01]}
-      />
-      <ControlRow
-        label="Link correction"
-        tip="How hard a link is pulled back to its target length. Low values let the body stretch."
-        bind:value={
-          $descriptor.definitions.materials[selection.id].linkCorrection
-        }
-        reset={reset.linkCorrection}
-        field={[0.001, 1, 0.01]}
-        slider={[0.001, 1, 0.01]}
-      />
-      <ControlRow
-        label="Grip forward"
-        tip="Forward slide a chunk gives up while it holds the ground. 1 stops it dead."
-        bind:value={
-          $descriptor.definitions.materials[selection.id].grip.forward
-        }
-        reset={reset.grip.forward}
-        field={[0, 1, 0.01]}
-        slider={[0, 1, 0.01]}
-      />
-      <ControlRow
-        label="Grip backward"
-        tip="Backward slide a chunk gives up while it holds the ground. This is what walking pushes against."
-        bind:value={
-          $descriptor.definitions.materials[selection.id].grip.backward
-        }
-        reset={reset.grip.backward}
-        field={[0, 1, 0.01]}
-        slider={[0, 1, 0.01]}
-      />
-      <ControlRow
-        label="Grip lateral"
-        tip="Sideways slide a chunk gives up while it holds the ground. High values stop the body slipping out of its turns."
-        bind:value={
-          $descriptor.definitions.materials[selection.id].grip.lateral
-        }
-        reset={reset.grip.lateral}
-        field={[0, 1, 0.01]}
-        slider={[0, 1, 0.01]}
-      />
+{#if advanced}
+  <details open bind:this={sections.material}>
+    <summary>Materials</summary>
+    <div class="list">
+      {#each Object.keys(materials) as materialId (materialId)}
+        <button
+          aria-pressed={selection?.kind === "material" &&
+            selection.id === materialId}
+          onclick={() => onselect({ kind: "material", id: materialId })}
+        >
+          {materialId}
+        </button>
+      {/each}
+      <button onclick={() => add("material", NEW_MATERIAL)}>+ Add</button>
     </div>
-    {@render partActions("material")}
-  {/if}
-</details>
+    {#if selection?.kind === "material" && materials[selection.id]}
+      {@const reset =
+        defaults.definitions.materials[selection.id] ?? NEW_MATERIAL}
+      <div class="rows">
+        <ControlRow
+          label="Velocity retention"
+          tip="Part of the last step's motion a chunk keeps. Low values drag it to a stop."
+          digits={3}
+          bind:value={
+            $descriptor.definitions.materials[selection.id].velocityRetention
+          }
+          reset={reset.velocityRetention}
+          field={[0, 1, 0.001]}
+          slider={[0.5, 1, 0.001]}
+        />
+        <ControlRow
+          label="Joint correction"
+          tip="How hard a joint is pulled to the angle the bend wave asks for. 0 ignores the wave."
+          bind:value={
+            $descriptor.definitions.materials[selection.id].jointCorrection
+          }
+          reset={reset.jointCorrection}
+          field={[0, 1, 0.01]}
+          slider={[0, 1, 0.01]}
+        />
+        <ControlRow
+          label="Link correction"
+          tip="How hard a link is pulled back to its target length. Low values let the body stretch."
+          bind:value={
+            $descriptor.definitions.materials[selection.id].linkCorrection
+          }
+          reset={reset.linkCorrection}
+          field={[0.001, 1, 0.01]}
+          slider={[0.001, 1, 0.01]}
+        />
+        <ControlRow
+          label="Grip forward"
+          tip="Forward slide a chunk gives up while it holds the ground. 1 stops it dead."
+          bind:value={
+            $descriptor.definitions.materials[selection.id].grip.forward
+          }
+          reset={reset.grip.forward}
+          field={[0, 1, 0.01]}
+          slider={[0, 1, 0.01]}
+        />
+        <ControlRow
+          label="Grip backward"
+          tip="Backward slide a chunk gives up while it holds the ground. This is what walking pushes against."
+          bind:value={
+            $descriptor.definitions.materials[selection.id].grip.backward
+          }
+          reset={reset.grip.backward}
+          field={[0, 1, 0.01]}
+          slider={[0, 1, 0.01]}
+        />
+        <ControlRow
+          label="Grip lateral"
+          tip="Sideways slide a chunk gives up while it holds the ground. High values stop the body slipping out of its turns."
+          bind:value={
+            $descriptor.definitions.materials[selection.id].grip.lateral
+          }
+          reset={reset.grip.lateral}
+          field={[0, 1, 0.01]}
+          slider={[0, 1, 0.01]}
+        />
+      </div>
+      {@render partActions("material")}
+    {/if}
+  </details>
+{/if}
 
 <style>
   .thumb {

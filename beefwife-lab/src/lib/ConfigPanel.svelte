@@ -3,6 +3,8 @@
   import Tooltip from "./Tooltip.svelte";
   import { applyError, descriptor } from "./descriptor.js";
 
+  export let advanced = false;
+
   /* The hyphen must be escaped: `pattern` compiles in unicodeSets mode, where
      a bare one is an invalid character class, and a pattern that fails to
      compile is ignored rather than reported.
@@ -37,13 +39,15 @@
         onchange={renameOnCommit}
       />
     </label>
-    <label>
-      <Tooltip
-        label="Descriptor version this document follows. The runtime reads version 1 alone."
-        ><span>Schema</span></Tooltip
-      >
-      <input value={$descriptor.schemaVersion} readonly />
-    </label>
+    {#if advanced}
+      <label>
+        <Tooltip
+          label="Descriptor version this document follows. The runtime reads version 1 alone."
+          ><span>Schema</span></Tooltip
+        >
+        <input value={$descriptor.schemaVersion} readonly />
+      </label>
+    {/if}
   </div>
 </details>
 
