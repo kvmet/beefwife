@@ -211,7 +211,7 @@
 
   <div class="stage-heading">
     <span>Specimen monitor / live canvas</span>
-    <strong>Beefwife</strong>
+    <strong>{$descriptor.name}</strong>
   </div>
 
   <StageTools
