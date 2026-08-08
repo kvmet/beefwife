@@ -8,7 +8,7 @@
     resolutionScale: 0.25,
     simulationFps: 60,
     drawFps: 20,
-    wanderDelay: 4,
+    wanderDelay: 0,
     edgeMargin: 52,
     filterPreset: "None",
     kneePerspective: 0.002,

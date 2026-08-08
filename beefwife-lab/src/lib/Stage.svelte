@@ -11,7 +11,7 @@
   let disposed = false;
   let mountToken = 0;
 
-  let targetMode = "manual";
+  let targetMode = "wander";
   let target = { x: 62, y: 46 };
   let hasTarget = true;
 
