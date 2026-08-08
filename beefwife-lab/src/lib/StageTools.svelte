@@ -183,6 +183,9 @@
               >{playing ? "Pause" : "Play"}</button
             >
           </Tooltip>
+          <Tooltip label="Rebuild the specimen at its starting state">
+            <button onclick={onremount}>Reset</button>
+          </Tooltip>
         </div>
         <div class="controls">
           <div class="rows">
