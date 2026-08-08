@@ -339,8 +339,15 @@
     margin-left: auto;
   }
 
+  /* The panel's label rule hangs a 6px gutter under a label's span for the
+     control below it. Here the switch sits beside the text, so that gutter
+     lifts the text off the O and I. */
+  .advanced-mode > :global(.tip-host) {
+    margin-bottom: 0;
+  }
+
   .advanced-mode span {
-    margin: 0 6px 6px 0;
+    margin: 0 6px 0 0;
     color: var(--text);
     font-size: 12px;
     letter-spacing: 0.02em;
