@@ -15,7 +15,7 @@
   let target = { x: 62, y: 46 };
   let hasTarget = true;
 
-  let showGrid = false;
+  let showGrid = true;
   let showTarget = true;
   let background = "#101318";
 

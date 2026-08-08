@@ -47,7 +47,7 @@
   ];
   const projectionCenters = ["canvas", "viewport"];
 
-  let toolTab = "Target";
+  let toolTab = "Sim";
   let toolsOpen = true;
 
   const toggle = (key) => {
