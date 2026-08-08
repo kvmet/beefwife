@@ -118,7 +118,12 @@ assert.equal(
 );
 checks += 2;
 
+/* Every cast member must read and survive a round trip. Whether the file on
+   disk is already in canonical order is formatting, not behaviour, so it is
+   collected and reported at the end rather than stopping the schema checks on
+   the first stale file. `bb format-cast` rewrites them. */
 const castDir = path.join(__dirname, "..", "fixtures", "beefwives");
+const uncanonical = [];
 fs.readdirSync(castDir)
   .filter((name) => name.endsWith(".json") && name !== "index.json")
   .sort()
@@ -126,7 +131,12 @@ fs.readdirSync(castDir)
     const text = fs.readFileSync(path.join(castDir, file), "utf8");
     const descriptor = accepted(`cast/${file}`, JSON.parse(text));
     assert.equal(descriptor.name, path.basename(file, ".json"));
-    assert.equal(text, `${BeefwifeDescriptor.stringify(descriptor)}\n`);
+    assert.equal(
+      BeefwifeDescriptor.stringify(BeefwifeDescriptor.parse(text)),
+      BeefwifeDescriptor.stringify(descriptor),
+    );
+    if (text !== `${BeefwifeDescriptor.stringify(descriptor)}\n`)
+      uncanonical.push(file);
     checks += 2;
   });
 
@@ -480,5 +490,10 @@ assert.throws(() => BeefwifeDescriptor.parse("{"), /invalid JSON/);
 assert.throws(() => BeefwifeDescriptor.parse({}), /must be a string/);
 assert.throws(() => BeefwifeDescriptor.stringify(source, 11), /indentation/);
 checks += 3;
+
+if (uncanonical.length)
+  throw new Error(
+    `not in canonical form, run \`bb format-cast\`: ${uncanonical.join(", ")}`,
+  );
 
 console.log(`descriptor schema: ${checks} adversarial checks passed`);

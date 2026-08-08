@@ -55,6 +55,10 @@
   {:doc "Check and build Beefwife Lab."
    :task (shell "npm" "--prefix" "beefwife-lab" "run" "check")}
 
+  format-cast
+  {:doc "Rewrite the example and cast fixtures in canonical schema form."
+   :task (shell "node" "bb/format-cast.js")}
+
   kipple
   {:doc "Run repository hygiene checks."
    :task (load-file "bb/kipple.clj")}}}

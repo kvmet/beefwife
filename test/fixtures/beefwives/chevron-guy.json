@@ -261,13 +261,13 @@
     "jitter": 0.3,
     "skin": {
       "limbPaint": "leg",
+      "limbWidth": 9.4,
       "foot": {
         "shape": "foot",
         "paint": "foot",
         "scale": 3,
         "plantedScale": 1.35
-      },
-      "limbWidth": 9.4
+      }
     }
   }
 }

@@ -266,10 +266,7 @@ const BeefwifeCanvas = (() => {
       this.canvas.addEventListener("click", this._onClick);
       this.canvas.addEventListener("pointermove", this._onPointerMove);
       if (this.options.pauseHidden)
-        document.addEventListener(
-          "visibilitychange",
-          this._onVisibilityChange,
-        );
+        document.addEventListener("visibilitychange", this._onVisibilityChange);
       this.resizeObserver =
         typeof ResizeObserver === "undefined"
           ? null
@@ -346,8 +343,7 @@ const BeefwifeCanvas = (() => {
 
     _state(state, pauseReason = null) {
       this.canvas.dataset.beefwifeState = state;
-      if (pauseReason)
-        this.canvas.dataset.beefwifePauseReason = pauseReason;
+      if (pauseReason) this.canvas.dataset.beefwifePauseReason = pauseReason;
       else delete this.canvas.dataset.beefwifePauseReason;
     }
   }
@@ -448,6 +444,9 @@ const BeefwifeCanvas = (() => {
   else queueMicrotask(autoMount);
 
   return {
+    /* The bundle is one closure, so a page that wants to read, check, or write
+       a document has no other way to reach the schema. */
+    descriptor: BeefwifeDescriptor,
     get: (canvas) => controllers.get(canvas)?.facade || null,
     mount,
     scan: autoMount,

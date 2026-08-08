@@ -7,12 +7,19 @@
   let copyNotice = null;
   let picker;
 
-  /* Key order is the document's own, not the library's canonical order:
-     BeefwifeDescriptor.stringify is sealed inside the canvas bundle, which
-     exports only BeefwifeCanvas. TODO: use it once the bundle exports the
-     descriptor API. */
+  /* The editor writes plainly so a half-finished document still shows; only a
+     document the schema accepts can be written in canonical key order. */
+  const shown = (value) => JSON.stringify(value, null, 2);
+  const canonical = (value) => {
+    try {
+      return `${window.BeefwifeCanvas.descriptor.stringify(value)}\n`;
+    } catch {
+      return shown(value);
+    }
+  };
+
   $: if (!editing) {
-    draft = JSON.stringify($descriptor, null, 2);
+    draft = shown($descriptor);
     // What was copied is no longer what the panel shows.
     copyNotice = null;
   }
@@ -24,7 +31,7 @@
      survives instead of being overwritten by the store's. */
   function load(text) {
     // Every set rebuilds the actor, so leaving the text alone must cost nothing.
-    if (text === JSON.stringify($descriptor, null, 2)) {
+    if (text === shown($descriptor)) {
       parseError = null;
       editing = false;
       return true;
@@ -51,9 +58,11 @@
     );
   }
 
+  /* A file leaving the lab is the checked-in form, so it goes out canonical
+     however the store happens to order its keys. */
   function exportJson() {
     const url = URL.createObjectURL(
-      new Blob([draft], { type: "application/json" }),
+      new Blob([canonical($descriptor)], { type: "application/json" }),
     );
     const link = document.createElement("a");
     link.href = url;

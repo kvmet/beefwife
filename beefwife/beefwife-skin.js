@@ -220,7 +220,7 @@ const BeefwifeSkin = (() => {
         const x = tip.x - root.x;
         const y = tip.y - root.y;
         const distance = magnitude(x, y);
-        if (spec.length === 0 || distance < 1e-9) {
+        if (distance < 1e-9) {
           tip.x = targetX;
           tip.y = targetY;
           ornament.directionX = root.dx;
