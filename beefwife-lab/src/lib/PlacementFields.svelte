@@ -36,13 +36,11 @@
   $: shapeIds = Object.keys($descriptor.definitions.shapes);
   $: paintIds = Object.keys($descriptor.definitions.paints);
 
-  /* The schema pairs scope with section: chain scope demands a null section,
-     section scope a named one, so the two change together. */
+  /* A null section anchors to the whole chain; a name anchors to a section. */
   function setScope(scope) {
     $descriptor.chain.skin[list][index].at = {
       ...entry.at,
-      scope,
-      section: scope === "section" ? (entry.at.section ?? "trunk") : null,
+      section: scope === "section" ? "trunk" : null,
     };
   }
 
@@ -117,14 +115,14 @@
         ><span>Anchor</span></Tooltip
       >
       <select
-        value={entry.at.scope}
+        value={entry.at.section === null ? "chain" : "section"}
         onchange={(event) => setScope(event.target.value)}
       >
         <option value="chain">Whole chain</option>
         <option value="section">Section</option>
       </select>
     </label>
-    {#if entry.at.scope === "section"}
+    {#if entry.at.section !== null}
       <label>
         <Tooltip label="Section the offset counts inside."
           ><span>Section</span></Tooltip
@@ -215,7 +213,7 @@
   {/if}
   <ControlRow
     label="Scale"
-    tip="Size of the shape at this placement, on top of the body scale."
+    tip="Size of the shape at this placement."
     unit="x"
     bind:value={$descriptor.chain.skin[list][index].scale}
     reset={1}
@@ -250,7 +248,7 @@
       digits={0}
       bind:value={$descriptor.chain.skin[list][index].angleDegrees}
       reset={ORNAMENT_PRESET.angleDegrees}
-      field={[-3600, 3600, 1]}
+      field={[-180, 180, 1]}
       slider={[-180, 180, 1]}
     />
     <ControlRow

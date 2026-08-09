@@ -19,7 +19,7 @@ const gaitSpec = {
   },
   gather: { amplitude: 0.2, harmonic: 2, phaseOffset: Math.PI },
   contact: {
-    lift: 0.8,
+    amplitude: 0.8,
     harmonic: 1,
     phaseOffset: 0,
     dutyCycle: 0.5,

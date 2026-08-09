@@ -48,18 +48,17 @@ assert.deepEqual(
     [1, "right"],
   ],
 );
-assert.equal(
-  model.skin.ribbonPaint,
-  model.descriptor.definitions.paints.ribbon,
-);
+assert.equal(model.skin.ribbonPaint, model.paints.ribbon);
+assert.deepEqual(model.paints.ribbon, {
+  fill: "#7a1414",
+  stroke: null,
+  strokeWidth: 0,
+});
 assert.equal(
   model.skin.plates[0].shape,
   model.descriptor.definitions.shapes.headPlate,
 );
-assert.equal(
-  model.skin.ornaments[0].paint,
-  model.descriptor.definitions.paints.eye,
-);
+assert.equal(model.skin.ornaments[0].paint, model.paints.eye);
 assert.deepEqual(
   model.skin.ornaments.map(({ sideSign }) => sideSign),
   [-1, 1],
@@ -79,10 +78,25 @@ assert.equal(
 );
 assert.deepEqual([model.legs.start, model.legs.end], [2, 18]);
 assert.equal(model.legs.jointLean, 0);
+assert.equal(
+  model.legs.spread,
+  model.descriptor.legs.spread * model.descriptor.legs.reach,
+);
+assert.equal(
+  model.legs.swingArc,
+  model.descriptor.legs.swingArc * model.descriptor.legs.reach,
+);
+assert.equal(
+  model.legs.swingSeconds,
+  model.descriptor.legs.swingCycles /
+    model.descriptor.gait.cyclesPerSecond,
+);
 assert.equal(model.breathing.strain, 0);
 assert.ok(model.breathing.cyclesPerSecond >= 0.1);
 assert.ok(model.breathing.cyclesPerSecond <= 0.4);
+assert.equal(model.skin.lateralRate, 1.2 * model.restLength);
 const bendChannel = model.gait.bend;
+assert.equal(bendChannel.phaseOffset, 0);
 const bendChunk = model.chunks[10];
 const bendAngle =
   bendChannel.phaseOffset -
@@ -100,7 +114,7 @@ const gatherAngle =
 assert.ok(
   Math.abs(gatherLink.gatherPhaseCosine - Math.cos(gatherAngle)) < 1e-15,
 );
-checks += 21;
+checks += 27;
 
 source.name = "caller mutation";
 source.chain.sections.head.spacing = 99;
@@ -154,12 +168,18 @@ assert.ok(
     ),
 );
 const largerBreather = copy(breathing);
-largerBreather.chain.sections.trunk.spacing *= 4;
+largerBreather.chain.sections.trunk.chunks *= 4;
 assert.ok(
   BeefwifeModel.compile(largerBreather).breathing.cyclesPerSecond <
     breathingModel.breathing.cyclesPerSecond,
 );
-checks += 4;
+const widerBreather = copy(breathing);
+widerBreather.chain.sections.trunk.spacing *= 4;
+assert.equal(
+  BeefwifeModel.compile(widerBreather).breathing.cyclesPerSecond,
+  breathingModel.breathing.cyclesPerSecond,
+);
+checks += 5;
 
 const singleton = copy(model.descriptor);
 singleton.chain.sections.head.chunks = 1;
@@ -175,7 +195,6 @@ checks += 2;
 
 const tailward = copy(model.descriptor);
 tailward.chain.skin.ornaments[0].at = {
-  scope: "section",
   section: "tail",
   from: "tail",
   offset: 0,
@@ -190,7 +209,6 @@ checks++;
 
 const chainTailward = copy(model.descriptor);
 chainTailward.chain.skin.ornaments[0].at = {
-  scope: "chain",
   section: null,
   from: "tail",
   offset: 1,

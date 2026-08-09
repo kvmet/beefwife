@@ -110,7 +110,7 @@ checks++;
 
 const alternating = copy(exact);
 alternating.gait.contact = {
-  lift: 1,
+  amplitude: 1,
   harmonic: 1,
   phaseOffset: 0,
   dutyCycle: 0.5,
@@ -134,7 +134,7 @@ retrigger.legs.reach = 1;
 retrigger.legs.spread = 0;
 retrigger.legs.lead = 1;
 retrigger.legs.jitter = 1;
-retrigger.legs.swingSeconds = 0.001;
+retrigger.legs.swingCycles = 0.001;
 const hostileSamples = [0.5, 0, 0.5, 0.999999, 0.5, 0.5, 0.999999, 0.5];
 let hostileAt = 0;
 const hostile = build(

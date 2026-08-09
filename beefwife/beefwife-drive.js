@@ -71,7 +71,7 @@ const BeefwifeGait = (() => {
       const channel = this.gait.contact;
       return (
         1 -
-        channel.lift *
+        channel.amplitude *
           scale *
           throttle *
           this._pulseAt(distance, channel, phaseOffset)

@@ -2,6 +2,7 @@
  * Canonical JSON contract for a beefwife. Definitions are descriptor-local:
  * sections link physical materials, while visual placements link shapes and
  * paints. `read` validates and returns an owned value in canonical key order.
+ * `scale` resizes a creature by transforming every length-dimensioned field.
  */
 
 const BeefwifeDescriptor = (() => {
@@ -25,6 +26,10 @@ const BeefwifeDescriptor = (() => {
     max,
     integer,
   });
+  /* length is the field's length-dimension exponent; `scale` multiplies the
+     value by factor ** length. Untagged numbers are size-invariant. */
+  const px = (min, max) => ({ ...number(min, max), length: 1 });
+  const perPx = (min, max) => ({ ...number(min, max), length: -1 });
   const string = (minLength, maxLength, pattern = null) => ({
     kind: "string",
     minLength,
@@ -45,9 +50,13 @@ const BeefwifeDescriptor = (() => {
 
   const id = string(1, 64, ID_PATTERN);
   const ratio = number(0, 1);
-  const scale = number(0.001, 100);
-  const distance = number(1e-6, 10000);
-  const offset = number(-10000, 10000);
+  /* Placement scales carry the px dimension: shape paths are local units,
+     drawn px = path units x scale. plantedScale is a ratio on top of
+     foot.scale and stays invariant. */
+  const pxScale = px(0.001, 100);
+  const ratioScale = number(0.001, 100);
+  const distance = px(1e-6, 10000);
+  const offset = px(-10000, 10000);
   const colour = nullable(string(1, 256));
 
   const material = object({
@@ -64,16 +73,20 @@ const BeefwifeDescriptor = (() => {
   const shape = object({ path: string(1, LIMITS.path) });
   const paint = object({
     fill: colour,
-    stroke: colour,
-    strokeWidth: number(0, 1000),
+    stroke: nullable(
+      object({
+        colour: string(1, 256),
+        width: number(0, 1000),
+      }),
+    ),
   });
   const span = object({
-    start: number(0, 1000),
-    end: number(0, 1000),
+    start: px(0, 1000),
+    end: px(0, 1000),
   });
   const section = object({
     chunks: number(0, LIMITS.chunks, true),
-    spacing: number(1e-6, 1000),
+    spacing: px(1e-6, 1000),
     material: id,
     motionScale: object({
       bend: number(0, 4),
@@ -91,7 +104,6 @@ const BeefwifeDescriptor = (() => {
   });
 
   const anchor = object({
-    scope: choice("chain", "section"),
     section: nullable(choice(...SECTIONS)),
     from: choice("head", "tail"),
     offset: number(0, LIMITS.chunks - 1, true),
@@ -106,7 +118,7 @@ const BeefwifeDescriptor = (() => {
     paint: id,
     at: anchor,
     repeat,
-    scale,
+    scale: pxScale,
   });
   const ornament = object({
     id,
@@ -117,8 +129,8 @@ const BeefwifeDescriptor = (() => {
     side: choice("left", "right", "both"),
     layer: choice("under", "over"),
     offset: object({ forward: offset, outward: offset }),
-    angleDegrees: number(-3600, 3600),
-    scale,
+    angleDegrees: number(-180, 180),
+    scale: pxScale,
     source: ratio,
     react: number(-4, 4),
     recover: number(0, 1000),
@@ -128,7 +140,6 @@ const BeefwifeDescriptor = (() => {
   const schema = object({
     schemaVersion: literal(VERSION),
     name: string(1, LIMITS.name, NAME_PATTERN),
-    appearance: object({ scale: number(0.01, 100) }),
     definitions: object({
       materials: record(material, 1),
       shapes: record(shape, 1),
@@ -136,14 +147,13 @@ const BeefwifeDescriptor = (() => {
     }),
     gait: object({
       cyclesPerSecond: number(0, 100),
-      phaseLagRadiansPerPixel: number(-Math.PI, Math.PI),
+      phaseLagRadiansPerPixel: perPx(-Math.PI, Math.PI),
       bend: object({
         amplitude: number(0, 10),
         harmonic: number(1, 8, true),
-        phaseOffset: number(-Math.PI, Math.PI),
       }),
       thrust: object({
-        acceleration: number(0, 1e6),
+        acceleration: px(0, 1e6),
         harmonic: number(1, 8, true),
         phaseOffset: number(-Math.PI, Math.PI),
         dutyCycle: number(0.01, 1),
@@ -154,7 +164,7 @@ const BeefwifeDescriptor = (() => {
         phaseOffset: number(-Math.PI, Math.PI),
       }),
       contact: object({
-        lift: ratio,
+        amplitude: ratio,
         harmonic: number(1, 8, true),
         phaseOffset: number(-Math.PI, Math.PI),
         dutyCycle: number(0.01, 1),
@@ -176,7 +186,9 @@ const BeefwifeDescriptor = (() => {
       breathing: ratio,
       sections: object({ head: section, trunk: section, tail: section }),
       skin: object({
-        loadScale: number(0, 10),
+        /* -1 shrinks plates to nothing at full grip; below it they would
+           draw mirrored, so the bound is the last meaningful value. */
+        loadScale: number(-1, 10),
         ribbon: object({ paint: id }),
         plates: array(plate, LIMITS.placements),
         ornaments: array(ornament, LIMITS.placements),
@@ -186,7 +198,7 @@ const BeefwifeDescriptor = (() => {
       section: choice(...SECTIONS),
       pairs: number(0, 128, true),
       reach: distance,
-      spread: number(0, 1000),
+      spread: number(0, 4),
       lead: ratio,
       fold: ratio,
       jointBend: number(-1, 1),
@@ -194,17 +206,17 @@ const BeefwifeDescriptor = (() => {
       jointLeanCenter: number(-1, 1),
       sidePhase: ratio,
       liftThreshold: ratio,
-      swingSeconds: number(0.001, 60),
-      swingArc: number(0, 1000),
+      swingCycles: number(0.001, 60),
+      swingArc: number(0, 4),
       jitter: ratio,
       skin: object({
         limbPaint: id,
-        limbWidth: number(0, 1000),
+        limbWidth: px(0, 1000),
         foot: object({
           shape: id,
           paint: id,
-          scale,
-          plantedScale: scale,
+          scale: pxScale,
+          plantedScale: ratioScale,
         }),
       }),
     }),
@@ -353,11 +365,6 @@ const BeefwifeDescriptor = (() => {
       tail: sections.head.chunks + sections.trunk.chunks,
     };
     const section = placement.at.section;
-    if (placement.at.scope === "chain" && section !== null)
-      fail(`${path}.at.section`, "must be null for chain scope");
-    if (placement.at.scope === "section" && section === null)
-      fail(`${path}.at.section`, "must name a section for section scope");
-
     const length = section
       ? sections[section].chunks
       : SECTIONS.reduce((sum, name) => sum + sections[name].chunks, 0);
@@ -405,7 +412,7 @@ const BeefwifeDescriptor = (() => {
           `$.chain.sections.${name}.motionScale.gather`,
           "makes the gathered link length zero or negative",
         );
-      if (descriptor.gait.contact.lift * scale.contact > 1)
+      if (descriptor.gait.contact.amplitude * scale.contact > 1)
         fail(
           `$.chain.sections.${name}.motionScale.contact`,
           "makes ground contact negative",
@@ -462,19 +469,14 @@ const BeefwifeDescriptor = (() => {
       fail("$.legs.section", "cannot attach legs to an empty section");
 
     Object.entries(definitions.paints).forEach(([name, entry]) => {
-      ["fill", "stroke"].forEach((key) => {
-        if (entry[key] !== null && !entry[key].trim())
-          fail(`$.definitions.paints.${name}.${key}`, "must not be blank");
-      });
-      if (entry.fill === null && (entry.stroke === null || !entry.strokeWidth))
+      if (entry.fill !== null && !entry.fill.trim())
+        fail(`$.definitions.paints.${name}.fill`, "must not be blank");
+      if (entry.stroke !== null && !entry.stroke.colour.trim())
+        fail(`$.definitions.paints.${name}.stroke.colour`, "must not be blank");
+      if (entry.fill === null && (entry.stroke === null || !entry.stroke.width))
         fail(
           `$.definitions.paints.${name}`,
           "must draw a fill or visible stroke",
-        );
-      if (entry.stroke === null && entry.strokeWidth !== 0)
-        fail(
-          `$.definitions.paints.${name}.strokeWidth`,
-          "must be 0 without a stroke",
         );
     });
     let pathTotal = 0;
@@ -493,6 +495,38 @@ const BeefwifeDescriptor = (() => {
 
   const read = (value) => validate(readNode(schema, value, "$", new WeakSet()));
 
+  const scaleNode = (node, value, factor) => {
+    if (node.kind === "nullable")
+      return value === null ? null : scaleNode(node.item, value, factor);
+    if (node.kind === "number")
+      return node.length ? value * factor ** node.length : value;
+    if (node.kind === "object") {
+      const out = {};
+      Object.keys(node.fields).forEach((key) => {
+        out[key] = scaleNode(node.fields[key], value[key], factor);
+      });
+      return out;
+    }
+    if (node.kind === "record") {
+      const out = {};
+      Object.keys(value).forEach((key) => {
+        out[key] = scaleNode(node.item, value[key], factor);
+      });
+      return out;
+    }
+    if (node.kind === "array")
+      return value.map((item) => scaleNode(node.item, item, factor));
+    return value;
+  };
+
+  /* Resizes the creature: the pose trace scales by factor with timing
+     unchanged. Re-reading rejects any product outside its field's bounds. */
+  const scale = (descriptor, factor) => {
+    if (typeof factor !== "number" || !Number.isFinite(factor) || factor <= 0)
+      fail("$", "scale factor must be a finite number greater than 0");
+    return read(scaleNode(schema, read(descriptor), factor));
+  };
+
   const parse = (text) => {
     if (typeof text !== "string") fail("$", "JSON input must be a string");
     let value;
@@ -510,7 +544,7 @@ const BeefwifeDescriptor = (() => {
     return JSON.stringify(read(value), null, space);
   };
 
-  return Object.freeze({ VERSION, LIMITS, read, parse, stringify });
+  return Object.freeze({ VERSION, LIMITS, read, parse, stringify, scale });
 })();
 
 if (typeof module !== "undefined" && module.exports) {

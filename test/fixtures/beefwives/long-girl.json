@@ -1,13 +1,10 @@
 {
   "schemaVersion": 1,
   "name": "long-girl",
-  "appearance": {
-    "scale": 2.1
-  },
   "definitions": {
     "materials": {
       "body": {
-        "velocityRetention": 0.918,
+        "velocityRetention": 0.00003476335986130141,
         "jointCorrection": 0.22,
         "linkCorrection": 0.6,
         "grip": {
@@ -17,7 +14,7 @@
         }
       },
       "tail": {
-        "velocityRetention": 0.915,
+        "velocityRetention": 0.000023470983491231665,
         "jointCorrection": 0.17,
         "linkCorrection": 0.6,
         "grip": {
@@ -38,28 +35,32 @@
     "paints": {
       "foot": {
         "fill": "#358d2d",
-        "stroke": "#ff0000",
-        "strokeWidth": 3.1
+        "stroke": {
+          "colour": "#ff0000",
+          "width": 3.1
+        }
       },
       "leg": {
         "fill": "#cb0605",
-        "stroke": null,
-        "strokeWidth": 0
+        "stroke": null
       },
       "ornament-1": {
         "fill": "#050505",
-        "stroke": "#ffffff",
-        "strokeWidth": 3.1
+        "stroke": {
+          "colour": "#ffffff",
+          "width": 3.1
+        }
       },
       "ribbon": {
         "fill": "#ff0000",
-        "stroke": "#ff0000",
-        "strokeWidth": 0
+        "stroke": null
       },
       "shell": {
         "fill": "#ff0000",
-        "stroke": "#ff0000",
-        "strokeWidth": 3.1
+        "stroke": {
+          "colour": "#ff0000",
+          "width": 3.1
+        }
       }
     }
   },
@@ -68,8 +69,7 @@
     "phaseLagRadiansPerPixel": 0.01935483870967742,
     "bend": {
       "amplitude": 0.36,
-      "harmonic": 1,
-      "phaseOffset": 0
+      "harmonic": 1
     },
     "thrust": {
       "acceleration": 5800,
@@ -83,7 +83,7 @@
       "phaseOffset": 0
     },
     "contact": {
-      "lift": 0.55,
+      "amplitude": 0.55,
       "harmonic": 1,
       "phaseOffset": -0.05,
       "dutyCycle": 0.5
@@ -180,7 +180,6 @@
           "shape": "ornament-1",
           "paint": "ornament-1",
           "at": {
-            "scope": "chain",
             "section": null,
             "from": "head",
             "offset": 1
@@ -209,7 +208,7 @@
     "section": "trunk",
     "pairs": 11,
     "reach": 35,
-    "spread": 27.3,
+    "spread": 0.78,
     "lead": 0.62,
     "fold": 0.14,
     "jointBend": 1,
@@ -217,8 +216,8 @@
     "jointLeanCenter": 0,
     "sidePhase": 0.75,
     "liftThreshold": 0.25,
-    "swingSeconds": 0.11,
-    "swingArc": 10.5,
+    "swingCycles": 0.077,
+    "swingArc": 0.3,
     "jitter": 0.3,
     "skin": {
       "limbPaint": "leg",

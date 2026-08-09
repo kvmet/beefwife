@@ -1,13 +1,10 @@
 {
   "schemaVersion": 1,
   "name": "chevron-guy",
-  "appearance": {
-    "scale": 2.1
-  },
   "definitions": {
     "materials": {
       "body": {
-        "velocityRetention": 0.977,
+        "velocityRetention": 0.06128407653188143,
         "jointCorrection": 0.521,
         "linkCorrection": 0.6,
         "grip": {
@@ -17,7 +14,7 @@
         }
       },
       "material-1": {
-        "velocityRetention": 0.97,
+        "velocityRetention": 0.02585878480181488,
         "jointCorrection": 0.5,
         "linkCorrection": 0.5,
         "grip": {
@@ -44,28 +41,32 @@
     "paints": {
       "foot": {
         "fill": "#51252a",
-        "stroke": "#8a4845",
-        "strokeWidth": 3.1
+        "stroke": {
+          "colour": "#8a4845",
+          "width": 3.1
+        }
       },
       "leg": {
         "fill": "#876656",
-        "stroke": null,
-        "strokeWidth": 0
+        "stroke": null
       },
       "ornament-1": {
         "fill": "#f2d58f",
-        "stroke": "#17191d",
-        "strokeWidth": 3.1
+        "stroke": {
+          "colour": "#17191d",
+          "width": 3.1
+        }
       },
       "ribbon": {
         "fill": "#7c2f35",
-        "stroke": "#a8444a",
-        "strokeWidth": 0
+        "stroke": null
       },
       "shell": {
         "fill": "#a8444a",
-        "stroke": "#da7175",
-        "strokeWidth": 3.1
+        "stroke": {
+          "colour": "#da7175",
+          "width": 3.1
+        }
       }
     }
   },
@@ -74,8 +75,7 @@
     "phaseLagRadiansPerPixel": 0.036,
     "bend": {
       "amplitude": 0.21,
-      "harmonic": 1,
-      "phaseOffset": 0
+      "harmonic": 1
     },
     "thrust": {
       "acceleration": 2709,
@@ -89,7 +89,7 @@
       "phaseOffset": 0
     },
     "contact": {
-      "lift": 0.26,
+      "amplitude": 0.26,
       "harmonic": 1,
       "phaseOffset": -1.01,
       "dutyCycle": 0.5
@@ -185,7 +185,6 @@
           "shape": "plate-1",
           "paint": "ribbon",
           "at": {
-            "scope": "chain",
             "section": null,
             "from": "head",
             "offset": 2
@@ -201,7 +200,6 @@
           "shape": "plate-2",
           "paint": "shell",
           "at": {
-            "scope": "chain",
             "section": null,
             "from": "head",
             "offset": 1
@@ -219,7 +217,6 @@
           "shape": "ornament-1",
           "paint": "ornament-1",
           "at": {
-            "scope": "chain",
             "section": null,
             "from": "head",
             "offset": 1
@@ -248,7 +245,7 @@
     "section": "trunk",
     "pairs": 8,
     "reach": 77.5,
-    "spread": 45,
+    "spread": 0.5806451612903226,
     "lead": 0.28,
     "fold": 0.88,
     "jointBend": 0.24,
@@ -256,8 +253,8 @@
     "jointLeanCenter": 0,
     "sidePhase": 1,
     "liftThreshold": 0.19,
-    "swingSeconds": 0.102,
-    "swingArc": 11,
+    "swingCycles": 0.26621999999999996,
+    "swingArc": 0.14193548387096774,
     "jitter": 0.3,
     "skin": {
       "limbPaint": "leg",

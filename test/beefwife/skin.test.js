@@ -133,7 +133,7 @@ const probeSkin = (fields) => {
     {
       ...source.chain.skin.ornaments[0],
       id: "probe",
-      at: { scope: "chain", section: null, from: "head", offset: 0 },
+      at: { section: null, from: "head", offset: 0 },
       repeat: { count: 1, step: 1 },
       side: "right",
       offset: { forward: 0, outward: 0 },

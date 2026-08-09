@@ -62,6 +62,18 @@ const BeefwifeBody = (() => {
       this.liftOrder = model.chunks.map((_, index) => index);
       this.liftTargets = new Float64Array(model.chunks.length);
       this.correction = { x: 0, y: 0 };
+      this.retention = new Float64Array(model.chunks.length);
+      this._refreshRetention();
+    }
+
+    /* velocityRetention is per second; the substep factor is its dt power.
+       pow keeps the endpoints exact: 0 stops in one step, 1 is frictionless. */
+    _refreshRetention() {
+      for (let index = 0; index < this.model.chunks.length; index++)
+        this.retention[index] = Math.pow(
+          this.model.chunks[index].material.velocityRetention,
+          PHYSICS_STEP,
+        );
     }
 
     reconfigure(
@@ -75,6 +87,7 @@ const BeefwifeBody = (() => {
       this.model = model;
       this.gait = gait;
       this.breathingPhase = breathingPhase;
+      this._refreshRetention();
       this.refreshContacts(throttle);
     }
 
@@ -258,7 +271,7 @@ const BeefwifeBody = (() => {
       for (let index = 0; index < this.chunks.length; index++) {
         const chunk = this.chunks[index];
         const spec = this.model.chunks[index];
-        const retention = spec.material.velocityRetention;
+        const retention = this.retention[index];
         const velocityX = (chunk.x - chunk.px) * retention;
         const velocityY = (chunk.y - chunk.py) * retention;
         chunk.px = chunk.x;

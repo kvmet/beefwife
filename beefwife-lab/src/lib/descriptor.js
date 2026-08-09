@@ -27,8 +27,7 @@ export function placementChunks(chain, placement) {
     trunk: sections.head.chunks,
     tail: sections.head.chunks + sections.trunk.chunks,
   };
-  const name = placement.at.scope === "section" ? placement.at.section : null;
-  if (placement.at.scope === "section" && !name) return [];
+  const name = placement.at.section;
   const length = name
     ? sections[name].chunks
     : SECTION_NAMES.reduce((sum, other) => sum + sections[other].chunks, 0);

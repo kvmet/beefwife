@@ -83,8 +83,8 @@ full contact but the beefwife produces no new drive.
 Pixi's render lifecycle, so hosts only add the beefwife to a stage and render that
 stage. Feet sit below the limb mesh. Under-layer ornaments retain descriptor
 order, followed by the ribbon, plates from tail to head, and over-layer
-ornaments in descriptor order. Shape scale includes `appearance.scale`; paint
-stroke widths remain independent of local shape scale. Headless platforms may
+ornaments in descriptor order. Paint stroke widths remain independent of
+every scale. Headless platforms may
 simulate beefwives without creating display children. With Pixi loaded,
 construction and descriptor replacement reject SVG paths and colors that Pixi
 cannot parse.
@@ -151,17 +151,25 @@ JSON value with fixed fields and definition keys in canonical order. Unknown
 keys, omitted fields, non-plain objects, invalid references, and values outside
 their declared bounds are errors.
 
+Descriptor px are world pixels, and `scale(descriptor, factor)` is the one way
+to resize a creature. It returns a new descriptor with every
+length-dimensioned field transformed (px multiply, radians-per-px divide), so
+the pose trace scales by the factor with timing and feel unchanged. Paint
+stroke widths are exempt by rule. A product outside its field's bounds is an
+error, not a clamp.
+
 See [beefwife.example.json](beefwife.example.json) for the complete shape.
 
 ## Definitions and links
 
 Every reference stays inside one descriptor:
 
-- A material is physical chain response: retained velocity, joint and link
-  correction, and directional grip.
+- A material is physical chain response: velocity retention per second, joint
+  and link correction, and directional grip.
 - A shape is one SVG path in chunk-local pixels. Positive x points toward the
   head and positive y points outward.
-- A paint is a fill and stroke. At least one must be visible.
+- A paint is a nullable fill colour and a nullable `{ colour, width }` stroke.
+  At least one must be visible.
 
 Each chain section names one complete material. Sharing a material id links the
 sections; giving the tail different physics means defining another material and
@@ -200,7 +208,7 @@ one-chunk section uses the average of its two endpoint values.
 `chain.breathing` is a normalized intensity for subtle, simultaneous expansion
 and contraction of internal trunk links. At full intensity it changes their
 target length by at most 10%. Its independent cycle continues at zero throttle;
-larger resting trunks breathe more slowly. Head, tail, and section-boundary
+trunks with more chunks breathe more slowly. Head, tail, and section-boundary
 links retain their ordinary target lengths.
 
 ## Gait
@@ -214,14 +222,20 @@ All channels read one phase clock and one spatial lag:
   resting spacing.
 - Thrust is a positive pulse whose acceleration is px/s^2.
 - Gather is a signed cosine and changes resting spacing by a fraction.
-- Contact is a positive pulse whose lift removes a fraction of contact.
+- Contact is a positive pulse whose amplitude removes a fraction of contact.
 
-Each channel declares an integer harmonic and a phase offset in radians. Thrust
-and contact also declare a duty cycle. Section motion scales may attenuate or
+Each channel declares an integer harmonic. Bend is the phase reference; the
+other channels declare a phase offset in radians relative to it. Thrust and
+contact also declare a duty cycle. Section motion scales may attenuate or
 amplify channels, but validation prevents non-positive gathered lengths and
 negative contact.
 
-A channel reads `harmonic * (phase - distance * lag) + phaseOffset`. Thrust and
+The grip a chunk feels is its contact rhythm times what the adaptive ground
+lift leaves, gated by its material's directional grip; contact declares the
+rhythm, while ground lift picks up whichever chunks push the least.
+
+A channel reads `harmonic * (phase - distance * lag) + phaseOffset`, with
+bend's offset fixed at zero. Thrust and
 contact use a half-sine pulse inside the declared fraction of that channel's
 cycle and zero outside it. A duty cycle of `0.5` therefore matches the positive
 half of a sine.
@@ -234,8 +248,8 @@ library rules rather than descriptor parameters.
 An anchor addresses either the whole chain or one section:
 
 ```js
-{ scope: "chain", section: null, from: "head", offset: 1 }
-{ scope: "section", section: "tail", from: "tail", offset: 0 }
+{ section: null, from: "head", offset: 1 } // whole chain
+{ section: "tail", from: "tail", offset: 0 }
 ```
 
 Offsets are zero-based from the named end. Repetition walks away from that end:
@@ -261,8 +275,10 @@ expanded ornaments per beefwife.
 ## Legs and secondary motion
 
 Leg pairs are distributed over their named section by resting distance.
-`reach`, `spread`, and `swingArc` are px. `swingSeconds` is time per airborne
-step. Other leg timing and geometry values are bounded ratios.
+`reach` is px; `spread` and `swingArc` are fractions of `reach`.
+`swingCycles` is airborne time per step in gait cycles, so feet keep step with
+the shared clock; a stopped clock resolves against a floor of 0.01 cycles per
+second. Other leg timing and geometry values are bounded ratios.
 
 Two or more pairs include the first and last chunks of their section and choose
 nearest chunks at even resting-distance intervals. One pair uses the section
@@ -288,8 +304,8 @@ the two sides opposite. `liftThreshold` releases a planted foot when its contact
 falls below the threshold. Jitter samples permanent proportions and per-step
 timing from the instance's injected random function. A jitter of zero makes each
 pair exactly mirrored and consumes randomness without changing its geometry.
-All positional jitter scales with the larger of `reach` and `spread`; it never
-introduces a fixed world-pixel displacement.
+All positional jitter scales with the larger of `reach` and the resolved
+spread; it never introduces a fixed world-pixel displacement.
 
 A limb is one closed outline, not a stroked line: hip, knee, foot down one side
 and back up the other, with both sides sharing each knee vertex so a bend leaves
@@ -305,7 +321,9 @@ An ornament swings about its root, pivoting at its shape path's origin, so an
 off-center path pivots off-center. Two root motions can drive the swing, and
 `source` fades between them: at `0` the root's turning, which carries the body
 wave; at `1` its sideways travel through the world, which carries speed,
-thrust, and steering; between them a linear blend.
+thrust, and steering; between them a linear blend. Sideways travel is measured
+against the creature's own body length, so a resized creature keeps the same
+ornament feel.
 
 Each remaining control owns one quality of the swing. `react` is its size:
 `0` rides the root rigidly, positive trails the drive, negative leads it.

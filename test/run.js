@@ -4,6 +4,7 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const files = [
   "test/beefwife/descriptor.test.js",
+  "test/beefwife/scale.test.js",
   "test/beefwife/model.test.js",
   "test/beefwife/gait.test.js",
   "test/beefwife/body.test.js",

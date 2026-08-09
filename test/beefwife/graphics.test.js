@@ -474,8 +474,7 @@ wideLegs.destroy();
    through Graphics instead, and both passes reach the same closed outline. */
 const limbCount = bentLeggedSource.legs.pairs * 2;
 const strokedSource = copy(bentLeggedSource);
-strokedSource.definitions.paints.leg.stroke = "#ffffff";
-strokedSource.definitions.paints.leg.strokeWidth = 2;
+strokedSource.definitions.paints.leg.stroke = { colour: "#ffffff", width: 2 };
 const strokedLegs = new Beefwife(strokedSource, { random: () => 0.5 });
 const strokedLimbs = strokedLegs.children[limbCount];
 assert.ok(strokedLimbs instanceof Graphics);

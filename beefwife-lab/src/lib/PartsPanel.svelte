@@ -19,12 +19,19 @@
   const TABLE = { shape: "shapes", paint: "paints", material: "materials" };
 
   const NEW_SHAPE = { path: "M 0 -3 L 3 0 L 0 3 L -3 0 Z" };
-  const NEW_PAINT = { fill: "#a8444a", stroke: "#17191d", strokeWidth: 1 };
+  const NEW_PAINT = { fill: "#a8444a", stroke: { colour: "#17191d", width: 1 } };
   const NEW_MATERIAL = {
-    velocityRetention: 0.97,
+    velocityRetention: 0.026,
     jointCorrection: 0.5,
     linkCorrection: 0.5,
     grip: { forward: 0.1, backward: 0.4, lateral: 0.5 },
+  };
+
+  /* Retention per second spans orders of magnitude below 1, so the track
+     runs on its fourth root to keep the low end reachable. */
+  const retentionCurve = {
+    in: (value) => Math.pow(value, 0.25),
+    out: (position) => Math.pow(position, 4),
   };
 
   let sections = {};
@@ -159,14 +166,27 @@
     onselect({ kind, id: to });
   }
 
-  function setColour(field, value) {
-    $descriptor.definitions.paints[selection.id][field] = value;
+  function setFill(value) {
+    $descriptor.definitions.paints[selection.id].fill = value;
   }
 
-  function toggleColour(field, on) {
+  function toggleFill(on) {
     const fallback =
-      defaults.definitions.paints[selection.id]?.[field] ?? "#888888";
-    setColour(field, on ? fallback : null);
+      defaults.definitions.paints[selection.id]?.fill ?? "#888888";
+    setFill(on ? fallback : null);
+  }
+
+  function setStrokeColour(value) {
+    $descriptor.definitions.paints[selection.id].stroke.colour = value;
+  }
+
+  function toggleStroke(on) {
+    const fallback = defaults.definitions.paints[selection.id]?.stroke;
+    $descriptor.definitions.paints[selection.id].stroke = on
+      ? fallback
+        ? structuredClone(fallback)
+        : { colour: "#888888", width: 1 }
+      : null;
   }
 </script>
 
@@ -237,7 +257,7 @@
         <i
           class="swatch"
           style:background={paint.fill ?? "transparent"}
-          style:border-color={paint.stroke ?? "var(--chassis-line)"}
+          style:border-color={paint.stroke?.colour ?? "var(--chassis-line)"}
         ></i>
         {paintId}
       </button>
@@ -257,7 +277,7 @@
             <input
               type="checkbox"
               checked={paint.fill != null}
-              onchange={(event) => toggleColour("fill", event.target.checked)}
+              onchange={(event) => toggleFill(event.target.checked)}
             />
           </div>
           <input
@@ -265,7 +285,7 @@
             aria-label="Fill colour"
             disabled={paint.fill == null}
             value={paint.fill ?? "#000000"}
-            oninput={(event) => setColour("fill", event.target.value)}
+            oninput={(event) => setFill(event.target.value)}
           />
         </div>
       </label>
@@ -278,31 +298,33 @@
             <input
               type="checkbox"
               checked={paint.stroke != null}
-              onchange={(event) => toggleColour("stroke", event.target.checked)}
+              onchange={(event) => toggleStroke(event.target.checked)}
             />
           </div>
           <input
             type="color"
             aria-label="Stroke colour"
             disabled={paint.stroke == null}
-            value={paint.stroke ?? "#000000"}
-            oninput={(event) => setColour("stroke", event.target.value)}
+            value={paint.stroke?.colour ?? "#000000"}
+            oninput={(event) => setStrokeColour(event.target.value)}
           />
         </div>
       </label>
     </div>
-    <div class="rows">
-      <ControlRow
-        label="Stroke width"
-        tip="Thickness of the outline. Shape scale does not change it."
-        unit="px"
-        digits={1}
-        bind:value={$descriptor.definitions.paints[selection.id].strokeWidth}
-        reset={defaults.definitions.paints[selection.id]?.strokeWidth ?? 1}
-        field={[0, 1000, 0.1]}
-        slider={[0, 10, 0.1]}
-      />
-    </div>
+    {#if paint.stroke}
+      <div class="rows">
+        <ControlRow
+          label="Stroke width"
+          tip="Thickness of the outline. Shape scale does not change it."
+          unit="px"
+          digits={1}
+          bind:value={$descriptor.definitions.paints[selection.id].stroke.width}
+          reset={defaults.definitions.paints[selection.id]?.stroke?.width ?? 1}
+          field={[0, 1000, 0.1]}
+          slider={[0, 10, 0.1]}
+        />
+      </div>
+    {/if}
     {@render partActions("paint")}
   {/if}
 </details>
@@ -328,14 +350,15 @@
       <div class="rows">
         <ControlRow
           label="Velocity retention"
-          tip="Part of the last step's motion a chunk keeps. Low values drag it to a stop."
+          tip="Part of its motion a chunk keeps each second. Low values drag it to a stop."
           digits={3}
           bind:value={
             $descriptor.definitions.materials[selection.id].velocityRetention
           }
           reset={reset.velocityRetention}
           field={[0, 1, 0.001]}
-          slider={[0.5, 1, 0.001]}
+          slider={[0, 1, 0.001]}
+          curve={retentionCurve}
         />
         <ControlRow
           label="Joint correction"

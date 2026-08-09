@@ -45,6 +45,44 @@
 
   const title = (name) => name[0].toUpperCase() + name.slice(1);
 
+  /* Presentation only: the schema stores phaseLagRadiansPerPixel; the panel
+     shows it as a wavelength and a travel direction. */
+  const TAU = Math.PI * 2;
+  let lastWavelength = 200;
+  $: lag = $descriptor.gait.phaseLagRadiansPerPixel;
+  $: travelDirection = lag === 0 ? "none" : lag > 0 ? "head-tail" : "tail-head";
+  $: if (lag !== 0) lastWavelength = TAU / Math.abs(lag);
+
+  const lagFor = (direction, wavelength) =>
+    direction === "none"
+      ? 0
+      : ((direction === "head-tail" ? 1 : -1) * TAU) / wavelength;
+
+  function setTravelDirection(direction) {
+    $descriptor.gait.phaseLagRadiansPerPixel = lagFor(
+      direction,
+      lastWavelength,
+    );
+  }
+
+  function applyWavelength(px) {
+    lastWavelength = px;
+    if (travelDirection !== "none")
+      $descriptor.gait.phaseLagRadiansPerPixel = lagFor(travelDirection, px);
+  }
+
+  function commitWavelength(event) {
+    const typed = +event.target.value;
+    if (Number.isFinite(typed))
+      applyWavelength(Math.min(5000, Math.max(5, typed)));
+    event.target.value = Math.round(lastWavelength);
+  }
+
+  function resetTravel() {
+    $descriptor.gait.phaseLagRadiansPerPixel =
+      defaults.gait.phaseLagRadiansPerPixel;
+  }
+
   let sectionPanels = {};
 
   $: materialIds = Object.keys($descriptor.definitions.materials);
@@ -67,6 +105,22 @@
      switching collapses them. -->
 <details open={!advanced}>
   <summary>Gait clock</summary>
+  <div class="fields">
+    <label>
+      <Tooltip
+        label="Way the wave runs along the body. None moves the body as one."
+        ><span>Wave travel</span></Tooltip
+      >
+      <select
+        value={travelDirection}
+        onchange={(event) => setTravelDirection(event.target.value)}
+      >
+        <option value="head-tail">Head to tail</option>
+        <option value="tail-head">Tail to head</option>
+        <option value="none">None</option>
+      </select>
+    </label>
+  </div>
   <div class="rows">
     <ControlRow
       label="Pace"
@@ -77,16 +131,35 @@
       field={[0, 100, 0.01]}
       slider={[0, 10, 0.01]}
     />
-    <ControlRow
-      label="Wave travel"
-      tip="Phase shift for each pixel along the chain. Positive values send the wave from head to tail; zero moves the body as one."
-      unit={["rad", "/px"]}
-      digits={3}
-      bind:value={$descriptor.gait.phaseLagRadiansPerPixel}
-      reset={defaults.gait.phaseLagRadiansPerPixel}
-      field={[-3.14, 3.14, 0.005]}
-      slider={[-0.3, 0.3, 0.001]}
-    />
+    <label class="row">
+      <div class="head">
+        <Tooltip
+          label="Distance one full wave covers along the body. Shorter wavelengths pack in more curves."
+          ><span>Wavelength</span></Tooltip
+        >
+        <div class="unit">
+          <input
+            type="number"
+            min={5}
+            max={5000}
+            step={1}
+            value={Math.round(lastWavelength)}
+            disabled={travelDirection === "none"}
+            onchange={commitWavelength}
+          /><em>px</em>
+        </div>
+      </div>
+      <input
+        type="range"
+        min={20}
+        max={600}
+        step={1}
+        value={lastWavelength}
+        disabled={travelDirection === "none"}
+        oninput={(event) => applyWavelength(+event.target.value)}
+        ondblclick={resetTravel}
+      />
+    </label>
   </div>
 </details>
 
@@ -108,17 +181,6 @@
         min={1}
         max={8}
         bind:value={$descriptor.gait.bend.harmonic}
-      />
-      <ControlRow
-        label="Phase"
-        tip={PHASE_TIP}
-        unit="deg"
-        digits={0}
-        scale={DEG}
-        bind:value={$descriptor.gait.bend.phaseOffset}
-        reset={defaults.gait.bend.phaseOffset}
-        field={PHASE}
-        slider={PHASE}
       />
     {/if}
   </div>
@@ -207,10 +269,10 @@
   <summary>Contact</summary>
   <div class="rows">
     <ControlRow
-      label="Lift"
-      tip="Grip the pulse takes away. At 1 a chunk releases the ground completely at the peak."
-      bind:value={$descriptor.gait.contact.lift}
-      reset={defaults.gait.contact.lift}
+      label="Amplitude"
+      tip="Grip the contact rhythm takes away at its peak. At 1 a chunk fully releases the ground there."
+      bind:value={$descriptor.gait.contact.amplitude}
+      reset={defaults.gait.contact.amplitude}
       field={[0, 1, 0.01]}
       slider={[0, 1, 0.01]}
     />
@@ -354,7 +416,7 @@
   <div class="rows">
     <ControlRow
       label="Amount"
-      tip="Grip taken from the chunks that push the least. 0 holds every chunk down."
+      tip="Picks up the chunks pushing the least, whatever the contact rhythm says. 0 holds every chunk down."
       bind:value={$descriptor.chain.physics.autoLift.amount}
       reset={defaults.chain.physics.autoLift.amount}
       field={[0, 1, 0.01]}

@@ -60,7 +60,7 @@
         id,
         shape: shapeIds[0],
         paint: paintIds[0],
-        at: { scope: "chain", section: null, from: "head", offset: chunk },
+        at: { section: null, from: "head", offset: chunk },
         repeat: { count: 1, step: 1 },
         scale: 1,
       },
@@ -76,7 +76,7 @@
         id,
         shape: shapeIds[0],
         paint: paintIds[0],
-        at: { scope: "chain", section: null, from: "head", offset: 0 },
+        at: { section: null, from: "head", offset: 0 },
         repeat: { count: 1, step: 1 },
         side: "both",
         layer: "over",
@@ -99,6 +99,23 @@
     $descriptor.chain.skin[list] = skin[list].toSpliced(index, 1);
     onselect(null);
   }
+
+  let resizeFactor = 1;
+  let resizeError = null;
+
+  /* Bakes the factor into every length field via the schema transform;
+     the input returns to 1 so the next apply starts fresh. */
+  function applyResize() {
+    try {
+      descriptor.set(
+        window.BeefwifeCanvas.descriptor.scale($descriptor, resizeFactor),
+      );
+      resizeFactor = 1;
+      resizeError = null;
+    } catch (error) {
+      resizeError = error.message;
+    }
+  }
 </script>
 
 {#snippet placementThumb(entry)}
@@ -110,8 +127,8 @@
       <path
         d={shape.path}
         fill={paint.fill ?? "none"}
-        stroke={paint.stroke ?? "none"}
-        stroke-width={paint.stroke ? paint.strokeWidth : 0}
+        stroke={paint.stroke?.colour ?? "none"}
+        stroke-width={paint.stroke?.width ?? 0}
       />
     </svg>
   {/if}
@@ -124,23 +141,14 @@
 <details open>
   <summary>Body</summary>
   <div class="rows">
-    <ControlRow
-      label="Scale"
-      tip="Size of every drawn shape. The chain keeps its own spacing."
-      unit="x"
-      bind:value={$descriptor.appearance.scale}
-      reset={defaults.appearance.scale}
-      field={[0.01, 100, 0.01]}
-      slider={[0.1, 8, 0.01]}
-    />
     {#if advanced}
       <ControlRow
         label="Load scale"
-        tip="Swells each plate with the grip under its chunk. 0 keeps plates at one size."
+        tip="Swells each plate with the grip under its chunk. Negative values shrink them under grip instead; 0 keeps plates at one size."
         bind:value={$descriptor.chain.skin.loadScale}
         reset={defaults.chain.skin.loadScale}
-        field={[0, 10, 0.01]}
-        slider={[0, 2, 0.01]}
+        field={[-1, 10, 0.01]}
+        slider={[-1, 2, 0.01]}
       />
     {/if}
   </div>
@@ -163,7 +171,26 @@
         </button>
       </div>
     </label>
+    <label>
+      <Tooltip
+        label="Resizes the whole creature: every length in the descriptor is multiplied by this factor and baked in."
+        ><span>Resize</span></Tooltip
+      >
+      <div class="pick">
+        <input
+          type="number"
+          min="0.01"
+          max="100"
+          step="0.01"
+          bind:value={resizeFactor}
+        />
+        <button onclick={applyResize}>Apply</button>
+      </div>
+    </label>
   </div>
+  {#if resizeError}
+    <p class="apply-error" role="alert">{resizeError}</p>
+  {/if}
 </details>
 
 <details open>
@@ -307,13 +334,12 @@
     />
     <ControlRow
       label="Spread"
-      tip="Sideways distance from the body to a planted foot."
-      unit="px"
-      digits={1}
+      tip="Sideways distance from the body to a planted foot, as a fraction of reach."
+      unit="x"
       bind:value={$descriptor.legs.spread}
       reset={defaults.legs.spread}
-      field={[0, 1000, 0.5]}
-      slider={[0, 60, 0.5]}
+      field={[0, 4, 0.01]}
+      slider={[0, 1.5, 0.01]}
     />
     <ControlRow
       label="Fold"
@@ -381,23 +407,22 @@
         slider={[0, 1, 0.01]}
       />
       <ControlRow
-        label="Swing time"
-        tip="Time an airborne foot takes to reach its next plant."
-        unit="s"
-        bind:value={$descriptor.legs.swingSeconds}
-        reset={defaults.legs.swingSeconds}
-        field={[0.001, 60, 0.01]}
+        label="Swing cycles"
+        tip="Time an airborne foot takes to reach its next plant, in gait cycles."
+        unit="cyc"
+        bind:value={$descriptor.legs.swingCycles}
+        reset={defaults.legs.swingCycles}
+        field={[0.001, 60, 0.005]}
         slider={[0.001, 1, 0.005]}
       />
       <ControlRow
         label="Swing arc"
-        tip="How far outward an airborne foot bows on its way to the next plant."
-        unit="px"
-        digits={1}
+        tip="How far outward an airborne foot bows on its way to the next plant, as a fraction of reach."
+        unit="x"
         bind:value={$descriptor.legs.swingArc}
         reset={defaults.legs.swingArc}
-        field={[0, 1000, 0.5]}
-        slider={[0, 40, 0.5]}
+        field={[0, 4, 0.01]}
+        slider={[0, 1.5, 0.01]}
       />
       <ControlRow
         label="Jitter"

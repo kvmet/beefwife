@@ -224,7 +224,7 @@ checks++;
 const tailTip = copy(source);
 const tuft = copy(tailTip.chain.skin.ornaments[0]);
 tuft.id = "tail-tuft";
-tuft.at = { scope: "section", section: "tail", from: "tail", offset: 0 };
+tuft.at = { section: "tail", from: "tail", offset: 0 };
 tailTip.chain.skin.ornaments.push(tuft);
 accepted("tail-relative ornament", tailTip);
 
@@ -257,17 +257,9 @@ const missingMaterial = copy(source);
 missingMaterial.chain.sections.tail.material = "missing";
 rejected("missing material reference", missingMaterial, /references missing/);
 
-const scopeMismatch = copy(source);
-scopeMismatch.chain.skin.plates[1].at.section = "trunk";
-rejected("chain anchor with a section", scopeMismatch, /must be null/);
-
-const absentSection = copy(source);
-absentSection.chain.skin.ornaments[0].at.section = null;
-rejected(
-  "section anchor without a section",
-  absentSection,
-  /must name a section/,
-);
+const unknownSection = copy(source);
+unknownSection.chain.skin.plates[1].at.section = "torso";
+rejected("unknown anchor section", unknownSection, /one of head, trunk, tail/);
 
 const outsideAnchor = copy(source);
 outsideAnchor.chain.skin.ornaments[0].at.offset = 2;
@@ -283,7 +275,7 @@ collapsedGather.chain.sections.tail.motionScale.gather = 2;
 rejected("non-positive gathered link", collapsedGather, /zero or negative/);
 
 const negativeContact = copy(source);
-negativeContact.gait.contact.lift = 0.6;
+negativeContact.gait.contact.amplitude = 0.6;
 negativeContact.chain.sections.tail.motionScale.contact = 2;
 rejected("negative contact", negativeContact, /contact negative/);
 
@@ -308,16 +300,15 @@ fractionalRepeat.chain.skin.plates[0].repeat.count = 1.5;
 rejected("fractional repeat", fractionalRepeat, /integer/);
 
 const invisiblePaint = copy(source);
-invisiblePaint.definitions.paints.eye = {
-  fill: null,
-  stroke: null,
-  strokeWidth: 0,
-};
+invisiblePaint.definitions.paints.eye = { fill: null, stroke: null };
 rejected("invisible paint", invisiblePaint, /visible stroke/);
 
-const widthWithoutStroke = copy(source);
-widthWithoutStroke.definitions.paints.ribbon.strokeWidth = 1;
-rejected("width without stroke", widthWithoutStroke, /without a stroke/);
+const widthlessStroke = copy(source);
+widthlessStroke.definitions.paints.eye = {
+  fill: null,
+  stroke: { colour: "#123456", width: 0 },
+};
+rejected("stroke-only paint with no width", widthlessStroke, /visible stroke/);
 
 /* A limb draws whatever its paint draws, and a body may want bare feet, so
    the schema asks nothing of either the paint or the width. */
@@ -325,16 +316,17 @@ const outlinedLeg = copy(source);
 outlinedLeg.legs.pairs = 1;
 outlinedLeg.definitions.paints.outline = {
   fill: null,
-  stroke: "#123456",
-  strokeWidth: 2,
+  stroke: { colour: "#123456", width: 2 },
 };
 outlinedLeg.legs.skin.limbPaint = "outline";
 accepted("outline-only limb paint", outlinedLeg);
 
 const filledAndStrokedLeg = copy(source);
 filledAndStrokedLeg.legs.pairs = 1;
-filledAndStrokedLeg.definitions.paints.leg.stroke = "#ffffff";
-filledAndStrokedLeg.definitions.paints.leg.strokeWidth = 12;
+filledAndStrokedLeg.definitions.paints.leg.stroke = {
+  colour: "#ffffff",
+  width: 12,
+};
 accepted("filled and stroked limb paint", filledAndStrokedLeg);
 
 const widthlessLeg = copy(source);
@@ -400,7 +392,7 @@ tooManyOrnaments.chain.sections.trunk.chunks = 245;
 for (let i = 0; i < 9; i++) {
   const entry = copy(tooManyOrnaments.chain.skin.ornaments[0]);
   entry.id = `crowd-${i}`;
-  entry.at = { scope: "chain", section: null, from: "head", offset: 0 };
+  entry.at = { section: null, from: "head", offset: 0 };
   entry.repeat = { count: null, step: 1 };
   tooManyOrnaments.chain.skin.ornaments.push(entry);
 }
@@ -409,12 +401,7 @@ rejected("too many expanded ornaments", tooManyOrnaments, /at most 512/);
 const maximumOrnaments = copy(source);
 maximumOrnaments.chain.sections.trunk.chunks = 245;
 const repeatedOrnament = copy(maximumOrnaments.chain.skin.ornaments[0]);
-repeatedOrnament.at = {
-  scope: "chain",
-  section: null,
-  from: "head",
-  offset: 0,
-};
+repeatedOrnament.at = { section: null, from: "head", offset: 0 };
 repeatedOrnament.repeat = { count: null, step: 1 };
 repeatedOrnament.side = "both";
 maximumOrnaments.chain.skin.ornaments = [repeatedOrnament];
@@ -490,6 +477,73 @@ assert.throws(() => BeefwifeDescriptor.parse("{"), /invalid JSON/);
 assert.throws(() => BeefwifeDescriptor.parse({}), /must be a string/);
 assert.throws(() => BeefwifeDescriptor.stringify(source, 11), /indentation/);
 checks += 3;
+
+const withAppearance = copy(source);
+withAppearance.appearance = { scale: 2.1 };
+rejected("appearance key", withAppearance, /appearance: is unknown/);
+
+/* scale() transforms every length-dimensioned field by k ** length and
+   leaves everything else untouched. */
+const k = 2.5;
+const scaled = BeefwifeDescriptor.scale(source, k);
+assert.equal(
+  scaled.chain.sections.trunk.spacing,
+  canonical.chain.sections.trunk.spacing * k,
+);
+assert.equal(
+  scaled.chain.sections.tail.profile.ribbonWidth.start,
+  canonical.chain.sections.tail.profile.ribbonWidth.start * k,
+);
+assert.equal(scaled.legs.reach, canonical.legs.reach * k);
+assert.equal(scaled.legs.skin.limbWidth, canonical.legs.skin.limbWidth * k);
+assert.equal(
+  scaled.chain.skin.ornaments[0].offset.outward,
+  canonical.chain.skin.ornaments[0].offset.outward * k,
+);
+assert.equal(
+  scaled.chain.skin.plates[0].scale,
+  canonical.chain.skin.plates[0].scale * k,
+);
+assert.equal(
+  scaled.chain.skin.ornaments[0].scale,
+  canonical.chain.skin.ornaments[0].scale * k,
+);
+assert.equal(scaled.legs.skin.foot.scale, canonical.legs.skin.foot.scale * k);
+assert.equal(
+  scaled.gait.thrust.acceleration,
+  canonical.gait.thrust.acceleration * k,
+);
+assert.equal(
+  scaled.gait.phaseLagRadiansPerPixel,
+  canonical.gait.phaseLagRadiansPerPixel / k,
+);
+assert.equal(
+  scaled.legs.skin.foot.plantedScale,
+  canonical.legs.skin.foot.plantedScale,
+);
+assert.equal(scaled.legs.spread, canonical.legs.spread);
+assert.equal(scaled.legs.swingArc, canonical.legs.swingArc);
+assert.equal(scaled.legs.swingCycles, canonical.legs.swingCycles);
+assert.equal(scaled.chain.skin.loadScale, canonical.chain.skin.loadScale);
+const strokedPaint = copy(source);
+strokedPaint.definitions.paints.ribbon.stroke = {
+  colour: "#123456",
+  width: 3,
+};
+assert.equal(
+  BeefwifeDescriptor.scale(strokedPaint, k).definitions.paints.ribbon.stroke
+    .width,
+  3,
+);
+assert.deepEqual(BeefwifeDescriptor.scale(source, 1), canonical);
+for (const factor of [0, -1, NaN, Infinity, "2"])
+  assert.throws(
+    () => BeefwifeDescriptor.scale(source, factor),
+    /scale factor/,
+  );
+assert.throws(() => BeefwifeDescriptor.scale(source, 100), /between/);
+assert.throws(() => BeefwifeDescriptor.scale(source, 0.001), /between/);
+checks += 24;
 
 if (uncanonical.length)
   throw new Error(

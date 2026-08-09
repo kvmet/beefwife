@@ -7,9 +7,9 @@ const BeefwifeSkin = (() => {
     ornamentStride: 6,
     plateStride: 5,
   });
-  /* Root rates that deflect a react-1 ornament by one radian. */
+  /* Turn rate that deflects a react-1 ornament by one radian; the lateral
+     counterpart is body-relative and comes from model.skin.lateralRate. */
   const RADIAN_TURN_RATE = 13;
-  const RADIAN_LATERAL_RATE = 290;
   const MIN_DAMPING_RATIO = 0.02;
   const MAX_DEFLECTION = Math.PI / 2;
   const magnitude = (x, y) => Math.sqrt(x * x + y * y);
@@ -178,9 +178,7 @@ const BeefwifeSkin = (() => {
         state.legs[offset + 6] = hip.dx;
         state.legs[offset + 7] = hip.dy;
         state.legs[offset + 8] =
-          foot.scale *
-          this.model.skin.scale *
-          (leg.progress < 1 ? 1 : foot.plantedScale);
+          foot.scale * (leg.progress < 1 ? 1 : foot.plantedScale);
         state.legs[offset + 9] = leg.sideSign;
         // How far this knee travels at jointLean 1, signed toward the head.
         state.legs[offset + 10] = (chainPosition - jointLeanCenter) * arm;
@@ -194,8 +192,7 @@ const BeefwifeSkin = (() => {
         state.ornaments[offset + 1] = ornament.root.y;
         state.ornaments[offset + 2] = ornament.directionX;
         state.ornaments[offset + 3] = ornament.directionY;
-        state.ornaments[offset + 4] =
-          ornament.spec.scale * this.model.skin.scale;
+        state.ornaments[offset + 4] = ornament.spec.scale;
         state.ornaments[offset + 5] = ornament.spec.sideSign;
       }
 
@@ -212,7 +209,6 @@ const BeefwifeSkin = (() => {
         state.plates[offset + 4] =
           plate.scale *
           this.model.chunks[plate.chunk].plateScale *
-          this.model.skin.scale *
           (1 +
             this.model.skin.loadScale * this.body.chunks[plate.chunk].contact);
       }
@@ -251,7 +247,7 @@ const BeefwifeSkin = (() => {
           Math.max(
             -MAX_DEFLECTION,
             (spec.waveGain * -turnRate) / RADIAN_TURN_RATE +
-              (spec.physGain * -lateralRate) / RADIAN_LATERAL_RATE,
+              (spec.physGain * -lateralRate) / this.model.skin.lateralRate,
           ),
         );
 

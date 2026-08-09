@@ -47,7 +47,7 @@
     variant,
     amp,
     cycles: (-channel.harmonic * gait.phaseLagRadiansPerPixel * length) / TAU,
-    phase: channel.phaseOffset,
+    phase: channel.phaseOffset ?? 0,
     duty,
   });
 
@@ -84,7 +84,7 @@
       gait.contact,
       chainLength,
       "primary",
-      gait.contact.lift,
+      gait.contact.amplitude,
       gait.contact.dutyCycle,
     ),
   ];

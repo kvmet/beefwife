@@ -15,7 +15,13 @@ const BeefwifeModel = (() => {
     throw new Error("BeefwifeDescriptor must load before BeefwifeModel");
   const SECTION_NAMES = ["head", "trunk", "tail"];
   const MAX_BREATHING_STRAIN = 0.1;
-  const BREATHING_RATE_AT_100_PX = 0.2;
+  const BREATHING_RATE_AT_16_CHUNKS = 0.15;
+  /* Full ornament deflection at 1.2 body lengths per second of lateral root
+     speed; body-relative so a resized creature keeps the same feel. */
+  const LATERAL_LENGTHS_PER_SECOND = 1.2;
+  /* Floor for resolving swingCycles when the gait clock is stopped;
+     cyclesPerSecond 0 gives feet a 100 s cycle instead of dividing by 0. */
+  const MIN_SWING_RATE = 0.01;
 
   const freeze = (value) => {
     if (!value || typeof value !== "object" || Object.isFrozen(value))
@@ -35,8 +41,9 @@ const BeefwifeModel = (() => {
     channel.phaseOffset -
     channel.harmonic * distance * gait.phaseLagRadiansPerPixel;
 
-  const breathingRateFor = (trunkLength) =>
-    clamp(BREATHING_RATE_AT_100_PX * Math.sqrt(100 / trunkLength), 0.1, 0.4);
+  /* Chunk count, not px length: breathing timing must survive a resize. */
+  const breathingRateFor = (trunkChunks) =>
+    clamp(BREATHING_RATE_AT_16_CHUNKS * Math.sqrt(16 / trunkChunks), 0.1, 0.4);
 
   const placementChunks = (placement, sections, chunkCount) => {
     const section = placement.at.section;
@@ -58,8 +65,28 @@ const BeefwifeModel = (() => {
     );
   };
 
+  /* One shared runtime paint per id: graphics caches contexts by paint
+     object identity, so placements sharing a paint must share the object. */
+  const normalizePaints = (paints) => {
+    const out = {};
+    Object.entries(paints).forEach(([paintId, paint]) => {
+      out[paintId] = {
+        fill: paint.fill,
+        stroke: paint.stroke ? paint.stroke.colour : null,
+        strokeWidth: paint.stroke ? paint.stroke.width : 0,
+      };
+    });
+    return out;
+  };
+
   const compile = (value) => {
     const descriptor = Descriptor.read(value);
+    /* Bend is the phase reference; runtime channels all carry a phaseOffset
+       so drive stays uniform. */
+    const gait = {
+      ...descriptor.gait,
+      bend: { ...descriptor.gait.bend, phaseOffset: 0 },
+    };
     const sectionSpecs = descriptor.chain.sections;
     const sections = {};
     const chunks = [];
@@ -103,11 +130,9 @@ const BeefwifeModel = (() => {
       };
     });
 
-    const trunkLength =
-      sections.trunk.spacing * Math.max(1, sections.trunk.count - 1);
     const breathing = {
       strain: descriptor.chain.breathing * MAX_BREATHING_STRAIN,
-      cyclesPerSecond: breathingRateFor(trunkLength),
+      cyclesPerSecond: breathingRateFor(sections.trunk.count),
     };
     const links = [];
     let restDistance = 0;
@@ -145,25 +170,18 @@ const BeefwifeModel = (() => {
         sections.trunk.spacing;
     }
     chunks.forEach((chunk) => {
-      const angle = spatialAngle(
-        descriptor.gait,
-        descriptor.gait.bend,
-        chunk.restDistance,
-      );
+      const angle = spatialAngle(gait, gait.bend, chunk.restDistance);
       chunk.bendPhaseSine = Math.sin(angle);
       chunk.bendPhaseCosine = Math.cos(angle);
     });
     links.forEach((link) => {
-      const angle = spatialAngle(
-        descriptor.gait,
-        descriptor.gait.gather,
-        link.phaseDistance,
-      );
+      const angle = spatialAngle(gait, gait.gather, link.phaseDistance);
       link.gatherPhaseSine = Math.sin(angle);
       link.gatherPhaseCosine = Math.cos(angle);
     });
 
-    const { shapes, paints } = descriptor.definitions;
+    const shapes = descriptor.definitions.shapes;
+    const paints = normalizePaints(descriptor.definitions.paints);
     const plates = descriptor.chain.skin.plates.flatMap((placement) =>
       placementChunks(placement, sections, chunks.length).map((chunk) => ({
         id: placement.id,
@@ -209,11 +227,12 @@ const BeefwifeModel = (() => {
       chunks,
       links,
       restLength: restDistance,
-      gait: descriptor.gait,
+      gait,
+      paints,
       physics: descriptor.chain.physics,
       breathing,
       skin: {
-        scale: descriptor.appearance.scale,
+        lateralRate: LATERAL_LENGTHS_PER_SECOND * restDistance,
         loadScale: descriptor.chain.skin.loadScale,
         hasRibbon: chunks.some((chunk) => chunk.ribbonWidth > 0),
         ribbonPaintId: descriptor.chain.skin.ribbon.paint,
@@ -226,6 +245,11 @@ const BeefwifeModel = (() => {
       },
       legs: {
         ...descriptor.legs,
+        spread: descriptor.legs.spread * descriptor.legs.reach,
+        swingArc: descriptor.legs.swingArc * descriptor.legs.reach,
+        swingSeconds:
+          descriptor.legs.swingCycles /
+          Math.max(descriptor.gait.cyclesPerSecond, MIN_SWING_RATE),
         start: sections[descriptor.legs.section].start,
         end: sections[descriptor.legs.section].end,
         skin: {

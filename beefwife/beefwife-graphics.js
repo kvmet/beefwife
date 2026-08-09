@@ -226,16 +226,15 @@ const BeefwifeGraphics = (() => {
           throw new Error(`$.definitions.shapes.${id}.path: ${error.message}`);
         }
       }
-      for (const [id, paint] of Object.entries(
-        model.descriptor.definitions.paints,
-      )) {
+      for (const [id, paint] of Object.entries(model.paints)) {
         for (const key of ["fill", "stroke"]) {
           if (paint[key] === null) continue;
           try {
             new PIXI.Color(paint[key]);
           } catch (error) {
+            const field = key === "stroke" ? "stroke.colour" : key;
             throw new Error(
-              `$.definitions.paints.${id}.${key}: ${error.message}`,
+              `$.definitions.paints.${id}.${field}: ${error.message}`,
             );
           }
         }
@@ -400,14 +399,13 @@ const BeefwifeGraphics = (() => {
     _syncRibbon(state, pixelResolution, inversePixelResolution) {
       const chunks = state.chunks;
       const stride = state.layout.chunkStride;
-      const scale = this.model.skin.scale;
       const lastIndex = this.model.chunks.length - 1;
       if (this.ribbonIsMesh) {
         const positions = this.ribbon.dynamicPositions;
         for (let index = 0; index < this.model.chunks.length; index++) {
           const chunkOffset = index * stride;
           const vertexOffset = index * 4;
-          const width = this.model.chunks[index].ribbonWidth * scale;
+          const width = this.model.chunks[index].ribbonWidth;
           positions[vertexOffset] =
             chunks[chunkOffset] - chunks[chunkOffset + 3] * width;
           positions[vertexOffset + 1] =
@@ -438,14 +436,14 @@ const BeefwifeGraphics = (() => {
             : (value) => value;
       for (let index = 0; index < this.model.chunks.length; index++) {
         const offset = index * stride;
-        const width = this.model.chunks[index].ribbonWidth * scale;
+        const width = this.model.chunks[index].ribbonWidth;
         const x = chunks[offset] - chunks[offset + 3] * width;
         const y = chunks[offset + 1] + chunks[offset + 2] * width;
         if (index) this.ribbon.lineTo(coordinate(x), coordinate(y));
         else this.ribbon.moveTo(coordinate(x), coordinate(y));
       }
       const tailOffset = lastIndex * stride;
-      const tailWidth = this.model.chunks[lastIndex].ribbonWidth * scale;
+      const tailWidth = this.model.chunks[lastIndex].ribbonWidth;
       const tailAngle = Math.atan2(
         chunks[tailOffset + 2],
         -chunks[tailOffset + 3],
@@ -459,7 +457,7 @@ const BeefwifeGraphics = (() => {
       );
       for (let index = lastIndex; index >= 0; index--) {
         const offset = index * stride;
-        const width = this.model.chunks[index].ribbonWidth * scale;
+        const width = this.model.chunks[index].ribbonWidth;
         this.ribbon.lineTo(
           coordinate(chunks[offset] + chunks[offset + 3] * width),
           coordinate(chunks[offset + 1] - chunks[offset + 2] * width),
@@ -469,7 +467,7 @@ const BeefwifeGraphics = (() => {
       this.ribbon.arc(
         coordinate(chunks[0]),
         coordinate(chunks[1]),
-        this.model.chunks[0].ribbonWidth * scale,
+        this.model.chunks[0].ribbonWidth,
         headAngle + Math.PI,
         headAngle + Math.PI * 2,
       );

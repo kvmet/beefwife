@@ -215,7 +215,6 @@ const Beefwife = (() => {
     legStateKey(before) === legStateKey(after);
   const skinKey = (model) =>
     JSON.stringify([
-      model.descriptor.appearance,
       model.descriptor.definitions.shapes,
       model.descriptor.definitions.paints,
       model.descriptor.chain.skin,
