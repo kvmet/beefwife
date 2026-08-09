@@ -238,8 +238,8 @@
       tip="Size of the swing. 0 rides the root rigidly, positive trails, negative leads."
       bind:value={$descriptor.chain.skin[list][index].react}
       reset={ORNAMENT_PRESET.react}
-      field={[-2, 2, 0.05]}
-      slider={[-2, 2, 0.05]}
+      field={[-4, 4, 0.05]}
+      slider={[-4, 4, 0.05]}
     />
     <ControlRow
       label="Recover"

@@ -120,7 +120,7 @@ const BeefwifeDescriptor = (() => {
     angleDegrees: number(-3600, 3600),
     scale,
     source: ratio,
-    react: number(-2, 2),
+    react: number(-4, 4),
     recover: number(0, 1000),
     wobble: ratio,
   });
