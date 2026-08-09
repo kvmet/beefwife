@@ -160,7 +160,7 @@
   height: 16px;
   margin-top: -7px;
   outline: 2px outset var(--bevel-face);
-  background: var(--grip) center / 11px 11px no-repeat var(--chassis);
+  background: var(--grip) center / 16px 16px no-repeat var(--chassis);
   appearance: none;
   -webkit-appearance: none;
 }
@@ -178,7 +178,7 @@
   border: none;
   border-radius: 0;
   outline: 2px outset var(--bevel-face);
-  background: var(--grip) center / 11px 11px no-repeat var(--chassis);
+  background: var(--grip) center / 16px 16px no-repeat var(--chassis);
 }
 .controls input[type="range"]:hover::-moz-range-thumb {
   background-color: var(--chassis-high);

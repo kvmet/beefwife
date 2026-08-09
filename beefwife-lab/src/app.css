@@ -29,8 +29,8 @@
   --bevel-light: #ffffffa0;
   --bevel-shadow: #4b403048;
 
-  /* Rib grip for every draggable thumb; 1px lines on the pixel grid stay
-     crisp at 11px. --muted is baked to hex because url() cannot read custom
+  /* Rib grip for every draggable thumb, drawn at 16px so the ribs read at a
+     glance. --muted is baked to hex because url() cannot read custom
      properties. */
   --grip: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 11'%3E%3Cpath d='M3.5 2v7M5.5 2v7M7.5 2v7' fill='none' stroke='%23414e5d'/%3E%3C/svg%3E");
 
@@ -237,7 +237,7 @@ input[type="checkbox"]::before {
   width: 14px;
   height: 16px;
   outline: 2px outset var(--bevel-face);
-  background: var(--grip) center / 11px 11px no-repeat var(--chassis);
+  background: var(--grip) center / 16px 16px no-repeat var(--chassis);
   content: "";
 }
 
