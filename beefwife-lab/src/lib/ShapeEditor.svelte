@@ -55,6 +55,17 @@
     }
     return points.length >= 3 ? points : null;
   }
+
+  /** Tight viewBox around a polygon path's own extent for a list thumbnail. */
+  export function thumbBox(path) {
+    const points = parsePolygon(path);
+    if (!points) return null;
+    const xs = points.map((p) => p.x);
+    const ys = points.map((p) => p.y);
+    const minX = Math.min(...xs);
+    const minY = Math.min(...ys);
+    return `${minX - 0.5} ${minY - 0.5} ${Math.max(...xs) - minX + 1} ${Math.max(...ys) - minY + 1}`;
+  }
 </script>
 
 <script>

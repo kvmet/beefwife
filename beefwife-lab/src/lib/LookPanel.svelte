@@ -2,6 +2,7 @@
   import ControlRow from "./ControlRow.svelte";
   import StepperRow from "./StepperRow.svelte";
   import PlacementFields, { ORNAMENT_PRESET } from "./PlacementFields.svelte";
+  import { thumbBox } from "./ShapeEditor.svelte";
   import Tooltip from "./Tooltip.svelte";
   import {
     applyError,
@@ -100,6 +101,22 @@
   }
 </script>
 
+{#snippet placementThumb(entry)}
+  {@const shape = $descriptor.definitions.shapes[entry.shape]}
+  {@const paint = $descriptor.definitions.paints[entry.paint]}
+  {@const box = shape && thumbBox(shape.path)}
+  {#if box && paint}
+    <svg class="thumb" viewBox={box} aria-hidden="true">
+      <path
+        d={shape.path}
+        fill={paint.fill ?? "none"}
+        stroke={paint.stroke ?? "none"}
+        stroke-width={paint.stroke ? paint.strokeWidth : 0}
+      />
+    </svg>
+  {/if}
+{/snippet}
+
 {#if $applyError}
   <p class="apply-error" role="alert">{$applyError}</p>
 {/if}
@@ -157,13 +174,20 @@
         aria-pressed={selection?.kind === "plate" && selection.id === plate.id}
         onclick={() => onselect({ kind: "plate", id: plate.id })}
       >
+        {@render placementThumb(plate)}
         {plate.id}
       </button>
     {/each}
     <button onclick={addPlate}>+ Add</button>
   </div>
   {#if plateIndex >= 0}
-    <PlacementFields list="plates" index={plateIndex} {oneditpart} {advanced} />
+    <PlacementFields
+      list="plates"
+      index={plateIndex}
+      {oneditpart}
+      {advanced}
+      onrename={(id) => onselect({ kind: "plate", id })}
+    />
     <div class="list-actions">
       <button onclick={() => removePlacement("plates", plateIndex)}>
         Remove
@@ -181,6 +205,7 @@
           selection.id === ornament.id}
         onclick={() => onselect({ kind: "ornament", id: ornament.id })}
       >
+        {@render placementThumb(ornament)}
         {ornament.id}
       </button>
     {/each}
@@ -192,6 +217,7 @@
       index={ornamentIndex}
       {oneditpart}
       {advanced}
+      onrename={(id) => onselect({ kind: "ornament", id })}
     />
     <div class="list-actions">
       <button onclick={() => removePlacement("ornaments", ornamentIndex)}>
@@ -475,3 +501,17 @@
     {/if}
   </div>
 </details>
+
+<style>
+  .thumb {
+    width: 22px;
+    height: 16px;
+    flex: none;
+  }
+
+  .list button {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+</style>

@@ -23,9 +23,13 @@
   export let index;
   /* Jump to a definition's editor on the Parts tab: (kind, id). */
   export let oneditpart;
+  /* Tell the owner a rename landed so its selection can follow: (id). */
+  export let onrename = null;
   export let advanced = false;
 
   const title = (name) => name[0].toUpperCase() + name.slice(1);
+  /* Mirrors BeefwifeDescriptor's ID_PATTERN; the validator rejects others. */
+  const ID_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 
   $: entry = $descriptor.chain.skin[list][index];
   $: ornament = list === "ornaments";
@@ -45,9 +49,33 @@
   function setFill(filled) {
     $descriptor.chain.skin[list][index].repeat.count = filled ? null : 1;
   }
+
+  /* Ids must be unique across plates and ornaments together; an invalid or
+     taken name reverts the input to the current id. */
+  function rename(event) {
+    const from = entry.id;
+    const to = event.target.value.trim();
+    if (to === from) return;
+    const skin = $descriptor.chain.skin;
+    const taken = [...skin.plates, ...skin.ornaments].some(
+      (placement) => placement.id === to,
+    );
+    if (!ID_PATTERN.test(to) || taken) {
+      event.target.value = from;
+      return;
+    }
+    $descriptor.chain.skin[list][index].id = to;
+    onrename?.(to);
+  }
 </script>
 
 <div class="fields">
+  <label class="wide">
+    <Tooltip label="Name of this placement, unique across plates and ornaments."
+      ><span>Id</span></Tooltip
+    >
+    <input value={entry.id} onchange={rename} />
+  </label>
   <label>
     <Tooltip label="Shape drawn at this placement."><span>Shape</span></Tooltip>
     <div class="pick">

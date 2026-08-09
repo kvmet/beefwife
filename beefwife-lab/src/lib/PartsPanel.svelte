@@ -1,6 +1,6 @@
 <script>
   import ControlRow from "./ControlRow.svelte";
-  import ShapeEditor, { parsePolygon } from "./ShapeEditor.svelte";
+  import ShapeEditor, { thumbBox } from "./ShapeEditor.svelte";
   import Tooltip from "./Tooltip.svelte";
   import {
     applyError,
@@ -167,17 +167,6 @@
     const fallback =
       defaults.definitions.paints[selection.id]?.[field] ?? "#888888";
     setColour(field, on ? fallback : null);
-  }
-
-  /** Tight viewBox around a shape's own extent for its list thumbnail. */
-  function thumbBox(path) {
-    const points = parsePolygon(path);
-    if (!points) return null;
-    const xs = points.map((p) => p.x);
-    const ys = points.map((p) => p.y);
-    const minX = Math.min(...xs);
-    const minY = Math.min(...ys);
-    return `${minX - 0.5} ${minY - 0.5} ${Math.max(...xs) - minX + 1} ${Math.max(...ys) - minY + 1}`;
   }
 </script>
 
