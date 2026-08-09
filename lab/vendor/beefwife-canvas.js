@@ -629,6 +629,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Terrain;
  * Canonical JSON contract for a beefwife. Definitions are descriptor-local:
  * sections link physical materials, while visual placements link shapes and
  * paints. `read` validates and returns an owned value in canonical key order.
+ * `scale` resizes a creature by transforming every length-dimensioned field.
  */
 
 const BeefwifeDescriptor = (() => {
@@ -652,6 +653,10 @@ const BeefwifeDescriptor = (() => {
     max,
     integer,
   });
+  /* length is the field's length-dimension exponent; `scale` multiplies the
+     value by factor ** length. Untagged numbers are size-invariant. */
+  const px = (min, max) => ({ ...number(min, max), length: 1 });
+  const perPx = (min, max) => ({ ...number(min, max), length: -1 });
   const string = (minLength, maxLength, pattern = null) => ({
     kind: "string",
     minLength,
@@ -672,9 +677,13 @@ const BeefwifeDescriptor = (() => {
 
   const id = string(1, 64, ID_PATTERN);
   const ratio = number(0, 1);
-  const scale = number(0.001, 100);
-  const distance = number(1e-6, 10000);
-  const offset = number(-10000, 10000);
+  /* Placement scales carry the px dimension: shape paths are local units,
+     drawn px = path units x scale. plantedScale is a ratio on top of
+     foot.scale and stays invariant. */
+  const pxScale = px(0.001, 100);
+  const ratioScale = number(0.001, 100);
+  const distance = px(1e-6, 10000);
+  const offset = px(-10000, 10000);
   const colour = nullable(string(1, 256));
 
   const material = object({
@@ -691,16 +700,20 @@ const BeefwifeDescriptor = (() => {
   const shape = object({ path: string(1, LIMITS.path) });
   const paint = object({
     fill: colour,
-    stroke: colour,
-    strokeWidth: number(0, 1000),
+    stroke: nullable(
+      object({
+        colour: string(1, 256),
+        width: number(0, 1000),
+      }),
+    ),
   });
   const span = object({
-    start: number(0, 1000),
-    end: number(0, 1000),
+    start: px(0, 1000),
+    end: px(0, 1000),
   });
   const section = object({
     chunks: number(0, LIMITS.chunks, true),
-    spacing: number(1e-6, 1000),
+    spacing: px(1e-6, 1000),
     material: id,
     motionScale: object({
       bend: number(0, 4),
@@ -718,7 +731,6 @@ const BeefwifeDescriptor = (() => {
   });
 
   const anchor = object({
-    scope: choice("chain", "section"),
     section: nullable(choice(...SECTIONS)),
     from: choice("head", "tail"),
     offset: number(0, LIMITS.chunks - 1, true),
@@ -733,7 +745,7 @@ const BeefwifeDescriptor = (() => {
     paint: id,
     at: anchor,
     repeat,
-    scale,
+    scale: pxScale,
   });
   const ornament = object({
     id,
@@ -744,18 +756,17 @@ const BeefwifeDescriptor = (() => {
     side: choice("left", "right", "both"),
     layer: choice("under", "over"),
     offset: object({ forward: offset, outward: offset }),
-    angleDegrees: number(-3600, 3600),
-    scale,
-    length: distance,
-    sweep: number(0, 4),
-    snapRate: number(0, 1000),
-    dampingRate: number(0, 1000),
+    angleDegrees: number(-180, 180),
+    scale: pxScale,
+    source: ratio,
+    react: number(-4, 4),
+    recover: number(0, 1000),
+    wobble: ratio,
   });
 
   const schema = object({
     schemaVersion: literal(VERSION),
     name: string(1, LIMITS.name, NAME_PATTERN),
-    appearance: object({ scale: number(0.01, 100) }),
     definitions: object({
       materials: record(material, 1),
       shapes: record(shape, 1),
@@ -763,14 +774,13 @@ const BeefwifeDescriptor = (() => {
     }),
     gait: object({
       cyclesPerSecond: number(0, 100),
-      phaseLagRadiansPerPixel: number(-Math.PI, Math.PI),
+      phaseLagRadiansPerPixel: perPx(-Math.PI, Math.PI),
       bend: object({
         amplitude: number(0, 10),
         harmonic: number(1, 8, true),
-        phaseOffset: number(-Math.PI, Math.PI),
       }),
       thrust: object({
-        acceleration: number(0, 1e6),
+        acceleration: px(0, 1e6),
         harmonic: number(1, 8, true),
         phaseOffset: number(-Math.PI, Math.PI),
         dutyCycle: number(0.01, 1),
@@ -781,7 +791,7 @@ const BeefwifeDescriptor = (() => {
         phaseOffset: number(-Math.PI, Math.PI),
       }),
       contact: object({
-        lift: ratio,
+        amplitude: ratio,
         harmonic: number(1, 8, true),
         phaseOffset: number(-Math.PI, Math.PI),
         dutyCycle: number(0.01, 1),
@@ -803,7 +813,9 @@ const BeefwifeDescriptor = (() => {
       breathing: ratio,
       sections: object({ head: section, trunk: section, tail: section }),
       skin: object({
-        loadScale: number(0, 10),
+        /* -1 shrinks plates to nothing at full grip; below it they would
+           draw mirrored, so the bound is the last meaningful value. */
+        loadScale: number(-1, 10),
         ribbon: object({ paint: id }),
         plates: array(plate, LIMITS.placements),
         ornaments: array(ornament, LIMITS.placements),
@@ -813,7 +825,7 @@ const BeefwifeDescriptor = (() => {
       section: choice(...SECTIONS),
       pairs: number(0, 128, true),
       reach: distance,
-      spread: number(0, 1000),
+      spread: number(0, 4),
       lead: ratio,
       fold: ratio,
       jointBend: number(-1, 1),
@@ -821,17 +833,17 @@ const BeefwifeDescriptor = (() => {
       jointLeanCenter: number(-1, 1),
       sidePhase: ratio,
       liftThreshold: ratio,
-      swingSeconds: number(0.001, 60),
-      swingArc: number(0, 1000),
+      swingCycles: number(0.001, 60),
+      swingArc: number(0, 4),
       jitter: ratio,
       skin: object({
         limbPaint: id,
-        limbWidth: number(0, 1000),
+        limbWidth: px(0, 1000),
         foot: object({
           shape: id,
           paint: id,
-          scale,
-          plantedScale: scale,
+          scale: pxScale,
+          plantedScale: ratioScale,
         }),
       }),
     }),
@@ -980,11 +992,6 @@ const BeefwifeDescriptor = (() => {
       tail: sections.head.chunks + sections.trunk.chunks,
     };
     const section = placement.at.section;
-    if (placement.at.scope === "chain" && section !== null)
-      fail(`${path}.at.section`, "must be null for chain scope");
-    if (placement.at.scope === "section" && section === null)
-      fail(`${path}.at.section`, "must name a section for section scope");
-
     const length = section
       ? sections[section].chunks
       : SECTIONS.reduce((sum, name) => sum + sections[name].chunks, 0);
@@ -1032,7 +1039,7 @@ const BeefwifeDescriptor = (() => {
           `$.chain.sections.${name}.motionScale.gather`,
           "makes the gathered link length zero or negative",
         );
-      if (descriptor.gait.contact.lift * scale.contact > 1)
+      if (descriptor.gait.contact.amplitude * scale.contact > 1)
         fail(
           `$.chain.sections.${name}.motionScale.contact`,
           "makes ground contact negative",
@@ -1089,19 +1096,14 @@ const BeefwifeDescriptor = (() => {
       fail("$.legs.section", "cannot attach legs to an empty section");
 
     Object.entries(definitions.paints).forEach(([name, entry]) => {
-      ["fill", "stroke"].forEach((key) => {
-        if (entry[key] !== null && !entry[key].trim())
-          fail(`$.definitions.paints.${name}.${key}`, "must not be blank");
-      });
-      if (entry.fill === null && (entry.stroke === null || !entry.strokeWidth))
+      if (entry.fill !== null && !entry.fill.trim())
+        fail(`$.definitions.paints.${name}.fill`, "must not be blank");
+      if (entry.stroke !== null && !entry.stroke.colour.trim())
+        fail(`$.definitions.paints.${name}.stroke.colour`, "must not be blank");
+      if (entry.fill === null && (entry.stroke === null || !entry.stroke.width))
         fail(
           `$.definitions.paints.${name}`,
           "must draw a fill or visible stroke",
-        );
-      if (entry.stroke === null && entry.strokeWidth !== 0)
-        fail(
-          `$.definitions.paints.${name}.strokeWidth`,
-          "must be 0 without a stroke",
         );
     });
     let pathTotal = 0;
@@ -1120,6 +1122,38 @@ const BeefwifeDescriptor = (() => {
 
   const read = (value) => validate(readNode(schema, value, "$", new WeakSet()));
 
+  const scaleNode = (node, value, factor) => {
+    if (node.kind === "nullable")
+      return value === null ? null : scaleNode(node.item, value, factor);
+    if (node.kind === "number")
+      return node.length ? value * factor ** node.length : value;
+    if (node.kind === "object") {
+      const out = {};
+      Object.keys(node.fields).forEach((key) => {
+        out[key] = scaleNode(node.fields[key], value[key], factor);
+      });
+      return out;
+    }
+    if (node.kind === "record") {
+      const out = {};
+      Object.keys(value).forEach((key) => {
+        out[key] = scaleNode(node.item, value[key], factor);
+      });
+      return out;
+    }
+    if (node.kind === "array")
+      return value.map((item) => scaleNode(node.item, item, factor));
+    return value;
+  };
+
+  /* Resizes the creature: the pose trace scales by factor with timing
+     unchanged. Re-reading rejects any product outside its field's bounds. */
+  const scale = (descriptor, factor) => {
+    if (typeof factor !== "number" || !Number.isFinite(factor) || factor <= 0)
+      fail("$", "scale factor must be a finite number greater than 0");
+    return read(scaleNode(schema, read(descriptor), factor));
+  };
+
   const parse = (text) => {
     if (typeof text !== "string") fail("$", "JSON input must be a string");
     let value;
@@ -1137,7 +1171,7 @@ const BeefwifeDescriptor = (() => {
     return JSON.stringify(read(value), null, space);
   };
 
-  return Object.freeze({ VERSION, LIMITS, read, parse, stringify });
+  return Object.freeze({ VERSION, LIMITS, read, parse, stringify, scale });
 })();
 
 if (typeof module !== "undefined" && module.exports) {
@@ -1161,7 +1195,13 @@ const BeefwifeModel = (() => {
     throw new Error("BeefwifeDescriptor must load before BeefwifeModel");
   const SECTION_NAMES = ["head", "trunk", "tail"];
   const MAX_BREATHING_STRAIN = 0.1;
-  const BREATHING_RATE_AT_100_PX = 0.2;
+  const BREATHING_RATE_AT_16_CHUNKS = 0.15;
+  /* Full ornament deflection at 1.2 body lengths per second of lateral root
+     speed; body-relative so a resized creature keeps the same feel. */
+  const LATERAL_LENGTHS_PER_SECOND = 1.2;
+  /* Floor for resolving swingCycles when the gait clock is stopped;
+     cyclesPerSecond 0 gives feet a 100 s cycle instead of dividing by 0. */
+  const MIN_SWING_RATE = 0.01;
 
   const freeze = (value) => {
     if (!value || typeof value !== "object" || Object.isFrozen(value))
@@ -1181,8 +1221,9 @@ const BeefwifeModel = (() => {
     channel.phaseOffset -
     channel.harmonic * distance * gait.phaseLagRadiansPerPixel;
 
-  const breathingRateFor = (trunkLength) =>
-    clamp(BREATHING_RATE_AT_100_PX * Math.sqrt(100 / trunkLength), 0.1, 0.4);
+  /* Chunk count, not px length: breathing timing must survive a resize. */
+  const breathingRateFor = (trunkChunks) =>
+    clamp(BREATHING_RATE_AT_16_CHUNKS * Math.sqrt(16 / trunkChunks), 0.1, 0.4);
 
   const placementChunks = (placement, sections, chunkCount) => {
     const section = placement.at.section;
@@ -1204,8 +1245,28 @@ const BeefwifeModel = (() => {
     );
   };
 
+  /* One shared runtime paint per id: graphics caches contexts by paint
+     object identity, so placements sharing a paint must share the object. */
+  const normalizePaints = (paints) => {
+    const out = {};
+    Object.entries(paints).forEach(([paintId, paint]) => {
+      out[paintId] = {
+        fill: paint.fill,
+        stroke: paint.stroke ? paint.stroke.colour : null,
+        strokeWidth: paint.stroke ? paint.stroke.width : 0,
+      };
+    });
+    return out;
+  };
+
   const compile = (value) => {
     const descriptor = Descriptor.read(value);
+    /* Bend is the phase reference; runtime channels all carry a phaseOffset
+       so drive stays uniform. */
+    const gait = {
+      ...descriptor.gait,
+      bend: { ...descriptor.gait.bend, phaseOffset: 0 },
+    };
     const sectionSpecs = descriptor.chain.sections;
     const sections = {};
     const chunks = [];
@@ -1249,11 +1310,9 @@ const BeefwifeModel = (() => {
       };
     });
 
-    const trunkLength =
-      sections.trunk.spacing * Math.max(1, sections.trunk.count - 1);
     const breathing = {
       strain: descriptor.chain.breathing * MAX_BREATHING_STRAIN,
-      cyclesPerSecond: breathingRateFor(trunkLength),
+      cyclesPerSecond: breathingRateFor(sections.trunk.count),
     };
     const links = [];
     let restDistance = 0;
@@ -1291,25 +1350,18 @@ const BeefwifeModel = (() => {
         sections.trunk.spacing;
     }
     chunks.forEach((chunk) => {
-      const angle = spatialAngle(
-        descriptor.gait,
-        descriptor.gait.bend,
-        chunk.restDistance,
-      );
+      const angle = spatialAngle(gait, gait.bend, chunk.restDistance);
       chunk.bendPhaseSine = Math.sin(angle);
       chunk.bendPhaseCosine = Math.cos(angle);
     });
     links.forEach((link) => {
-      const angle = spatialAngle(
-        descriptor.gait,
-        descriptor.gait.gather,
-        link.phaseDistance,
-      );
+      const angle = spatialAngle(gait, gait.gather, link.phaseDistance);
       link.gatherPhaseSine = Math.sin(angle);
       link.gatherPhaseCosine = Math.cos(angle);
     });
 
-    const { shapes, paints } = descriptor.definitions;
+    const shapes = descriptor.definitions.shapes;
+    const paints = normalizePaints(descriptor.definitions.paints);
     const plates = descriptor.chain.skin.plates.flatMap((placement) =>
       placementChunks(placement, sections, chunks.length).map((chunk) => ({
         id: placement.id,
@@ -1340,11 +1392,10 @@ const BeefwifeModel = (() => {
               angleCosine: Math.cos(angle),
               angleSine: Math.sin(angle),
               scale: placement.scale,
-              length: placement.length,
-              sweep: placement.sweep,
-              carry: 1 / (1 + placement.sweep),
-              snapRate: placement.snapRate,
-              dampingRate: placement.dampingRate,
+              waveGain: placement.react * (1 - placement.source),
+              physGain: placement.react * placement.source,
+              recover: placement.recover,
+              wobble: placement.wobble,
             };
           }),
       );
@@ -1356,11 +1407,12 @@ const BeefwifeModel = (() => {
       chunks,
       links,
       restLength: restDistance,
-      gait: descriptor.gait,
+      gait,
+      paints,
       physics: descriptor.chain.physics,
       breathing,
       skin: {
-        scale: descriptor.appearance.scale,
+        lateralRate: LATERAL_LENGTHS_PER_SECOND * restDistance,
         loadScale: descriptor.chain.skin.loadScale,
         hasRibbon: chunks.some((chunk) => chunk.ribbonWidth > 0),
         ribbonPaintId: descriptor.chain.skin.ribbon.paint,
@@ -1373,6 +1425,11 @@ const BeefwifeModel = (() => {
       },
       legs: {
         ...descriptor.legs,
+        spread: descriptor.legs.spread * descriptor.legs.reach,
+        swingArc: descriptor.legs.swingArc * descriptor.legs.reach,
+        swingSeconds:
+          descriptor.legs.swingCycles /
+          Math.max(descriptor.gait.cyclesPerSecond, MIN_SWING_RATE),
         start: sections[descriptor.legs.section].start,
         end: sections[descriptor.legs.section].end,
         skin: {
@@ -1469,7 +1526,7 @@ const BeefwifeGait = (() => {
       const channel = this.gait.contact;
       return (
         1 -
-        channel.lift *
+        channel.amplitude *
           scale *
           throttle *
           this._pulseAt(distance, channel, phaseOffset)
@@ -1548,6 +1605,18 @@ const BeefwifeBody = (() => {
       this.liftOrder = model.chunks.map((_, index) => index);
       this.liftTargets = new Float64Array(model.chunks.length);
       this.correction = { x: 0, y: 0 };
+      this.retention = new Float64Array(model.chunks.length);
+      this._refreshRetention();
+    }
+
+    /* velocityRetention is per second; the substep factor is its dt power.
+       pow keeps the endpoints exact: 0 stops in one step, 1 is frictionless. */
+    _refreshRetention() {
+      for (let index = 0; index < this.model.chunks.length; index++)
+        this.retention[index] = Math.pow(
+          this.model.chunks[index].material.velocityRetention,
+          PHYSICS_STEP,
+        );
     }
 
     reconfigure(
@@ -1561,6 +1630,7 @@ const BeefwifeBody = (() => {
       this.model = model;
       this.gait = gait;
       this.breathingPhase = breathingPhase;
+      this._refreshRetention();
       this.refreshContacts(throttle);
     }
 
@@ -1744,7 +1814,7 @@ const BeefwifeBody = (() => {
       for (let index = 0; index < this.chunks.length; index++) {
         const chunk = this.chunks[index];
         const spec = this.model.chunks[index];
-        const retention = spec.material.velocityRetention;
+        const retention = this.retention[index];
         const velocityX = (chunk.x - chunk.px) * retention;
         const velocityY = (chunk.y - chunk.py) * retention;
         chunk.px = chunk.x;
@@ -2181,7 +2251,42 @@ const BeefwifeSkin = (() => {
     ornamentStride: 6,
     plateStride: 5,
   });
+  /* Turn rate that deflects a react-1 ornament by one radian; the lateral
+     counterpart is body-relative and comes from model.skin.lateralRate. */
+  const RADIAN_TURN_RATE = 13;
+  const MIN_DAMPING_RATIO = 0.02;
+  const MAX_DEFLECTION = Math.PI / 2;
   const magnitude = (x, y) => Math.sqrt(x * x + y * y);
+
+  /* Exact step of theta'' = rate^2 (target - theta) - 2 zeta rate theta',
+     as x' = Ax + Bv, v' = Cx + Dv on x = theta - target. Exactness keeps any
+     recover and wobble stable at any dt. */
+  const springCoefficients = (ornament, rate, zeta, dt) => {
+    const angularDt = rate * dt;
+    if (angularDt < 1e-9) {
+      ornament.positionPosition = 1;
+      ornament.positionVelocity = dt;
+      ornament.velocityPosition = 0;
+      ornament.velocityVelocity = 1;
+      return;
+    }
+    const decay = Math.exp(-zeta * angularDt);
+    if (zeta >= 1 - 1e-8) {
+      ornament.positionPosition = decay * (1 + angularDt);
+      ornament.positionVelocity = decay * dt;
+      ornament.velocityPosition = -decay * rate * angularDt;
+      ornament.velocityVelocity = decay * (1 - angularDt);
+      return;
+    }
+    const ringRate = rate * Math.sqrt(1 - zeta * zeta);
+    const cosine = Math.cos(ringRate * dt);
+    const sine = Math.sin(ringRate * dt);
+    const lean = (zeta * rate) / ringRate;
+    ornament.positionPosition = decay * (cosine + lean * sine);
+    ornament.positionVelocity = (decay * sine) / ringRate;
+    ornament.velocityPosition = (-decay * rate * rate * sine) / ringRate;
+    ornament.velocityVelocity = decay * (cosine - lean * sine);
+  };
 
   const rootFor = (ornament, body, root) => {
     const chunk = body.chunks[ornament.chunk];
@@ -2233,22 +2338,19 @@ const BeefwifeSkin = (() => {
     _buildOrnaments() {
       this.ornaments = this.model.skin.ornaments.map((spec) => {
         const root = rootFor(spec, this.body, {});
-        const tip = {
-          x: root.x + root.dx * spec.length,
-          y: root.y + root.dy * spec.length,
-          px: root.x + root.dx * spec.length,
-          py: root.y + root.dy * spec.length,
-        };
         return {
           spec,
           root,
           nextRoot: { ...root },
-          tip,
+          angle: 0,
+          velocity: 0,
           directionX: root.dx,
           directionY: root.dy,
           coefficientDt: null,
-          damping: 0,
-          snap: 0,
+          positionPosition: 1,
+          positionVelocity: 0,
+          velocityPosition: 0,
+          velocityVelocity: 1,
         };
       });
     }
@@ -2320,9 +2422,7 @@ const BeefwifeSkin = (() => {
         state.legs[offset + 6] = hip.dx;
         state.legs[offset + 7] = hip.dy;
         state.legs[offset + 8] =
-          foot.scale *
-          this.model.skin.scale *
-          (leg.progress < 1 ? 1 : foot.plantedScale);
+          foot.scale * (leg.progress < 1 ? 1 : foot.plantedScale);
         state.legs[offset + 9] = leg.sideSign;
         // How far this knee travels at jointLean 1, signed toward the head.
         state.legs[offset + 10] = (chainPosition - jointLeanCenter) * arm;
@@ -2336,8 +2436,7 @@ const BeefwifeSkin = (() => {
         state.ornaments[offset + 1] = ornament.root.y;
         state.ornaments[offset + 2] = ornament.directionX;
         state.ornaments[offset + 3] = ornament.directionY;
-        state.ornaments[offset + 4] =
-          ornament.spec.scale * this.model.skin.scale;
+        state.ornaments[offset + 4] = ornament.spec.scale;
         state.ornaments[offset + 5] = ornament.spec.sideSign;
       }
 
@@ -2354,7 +2453,6 @@ const BeefwifeSkin = (() => {
         state.plates[offset + 4] =
           plate.scale *
           this.model.chunks[plate.chunk].plateScale *
-          this.model.skin.scale *
           (1 +
             this.model.skin.loadScale * this.body.chunks[plate.chunk].contact);
       }
@@ -2364,47 +2462,63 @@ const BeefwifeSkin = (() => {
     update(dt) {
       for (let index = 0; index < this.ornaments.length; index++) {
         const ornament = this.ornaments[index];
-        const { spec, tip } = ornament;
+        const { spec } = ornament;
         const previousRoot = ornament.root;
         const root = rootFor(spec, this.body, ornament.nextRoot);
-        const carryX = (root.x - previousRoot.x) * spec.carry;
-        const carryY = (root.y - previousRoot.y) * spec.carry;
-        tip.x += carryX;
-        tip.y += carryY;
-        tip.px += carryX;
-        tip.py += carryY;
-
         if (ornament.coefficientDt !== dt) {
           ornament.coefficientDt = dt;
-          ornament.damping = Math.exp(-spec.dampingRate * dt);
-          ornament.snap = 1 - Math.exp(-spec.snapRate * dt);
+          springCoefficients(
+            ornament,
+            spec.recover,
+            1 - spec.wobble * (1 - MIN_DAMPING_RATIO),
+            dt,
+          );
         }
-        const velocityX = (tip.x - tip.px) * ornament.damping;
-        const velocityY = (tip.y - tip.py) * ornament.damping;
-        tip.px = tip.x;
-        tip.py = tip.y;
-        tip.x += velocityX;
-        tip.y += velocityY;
 
-        const targetX = root.x + root.dx * spec.length;
-        const targetY = root.y + root.dy * spec.length;
-        tip.x += (targetX - tip.x) * ornament.snap;
-        tip.y += (targetY - tip.y) * ornament.snap;
+        const turnRate =
+          Math.atan2(
+            previousRoot.dx * root.dy - previousRoot.dy * root.dx,
+            previousRoot.dx * root.dx + previousRoot.dy * root.dy,
+          ) / dt;
+        const lateralRate =
+          ((root.x - previousRoot.x) * -root.dy +
+            (root.y - previousRoot.y) * root.dx) /
+          dt;
+        /* The deviation opposes the root's motion, so positive react trails
+           and negative react leads. */
+        const target = Math.min(
+          MAX_DEFLECTION,
+          Math.max(
+            -MAX_DEFLECTION,
+            (spec.waveGain * -turnRate) / RADIAN_TURN_RATE +
+              (spec.physGain * -lateralRate) / this.model.skin.lateralRate,
+          ),
+        );
 
-        const x = tip.x - root.x;
-        const y = tip.y - root.y;
-        const distance = magnitude(x, y);
-        if (distance < 1e-9) {
-          tip.x = targetX;
-          tip.y = targetY;
-          ornament.directionX = root.dx;
-          ornament.directionY = root.dy;
-        } else {
-          ornament.directionX = x / distance;
-          ornament.directionY = y / distance;
-          tip.x = root.x + ornament.directionX * spec.length;
-          tip.y = root.y + ornament.directionY * spec.length;
+        const deviation = ornament.angle - target;
+        let angle =
+          target +
+          deviation * ornament.positionPosition +
+          ornament.velocity * ornament.positionVelocity;
+        let velocity =
+          deviation * ornament.velocityPosition +
+          ornament.velocity * ornament.velocityVelocity;
+        /* At low wobble a resonant drive can wind the spring through full
+           turns; the rail keeps the deflection readable. */
+        if (angle > MAX_DEFLECTION) {
+          angle = MAX_DEFLECTION;
+          velocity = 0;
+        } else if (angle < -MAX_DEFLECTION) {
+          angle = -MAX_DEFLECTION;
+          velocity = 0;
         }
+        ornament.angle = angle;
+        ornament.velocity = velocity;
+
+        const cosine = Math.cos(angle);
+        const sine = Math.sin(angle);
+        ornament.directionX = root.dx * cosine - root.dy * sine;
+        ornament.directionY = root.dy * cosine + root.dx * sine;
         ornament.root = root;
         ornament.nextRoot = previousRoot;
       }
@@ -2414,10 +2528,6 @@ const BeefwifeSkin = (() => {
       this.ornaments.forEach((ornament) => {
         ornament.root.x += offset.x;
         ornament.root.y += offset.y;
-        ornament.tip.x += offset.x;
-        ornament.tip.y += offset.y;
-        ornament.tip.px += offset.x;
-        ornament.tip.py += offset.y;
       });
     }
   }
@@ -2657,16 +2767,15 @@ const BeefwifeGraphics = (() => {
           throw new Error(`$.definitions.shapes.${id}.path: ${error.message}`);
         }
       }
-      for (const [id, paint] of Object.entries(
-        model.descriptor.definitions.paints,
-      )) {
+      for (const [id, paint] of Object.entries(model.paints)) {
         for (const key of ["fill", "stroke"]) {
           if (paint[key] === null) continue;
           try {
             new PIXI.Color(paint[key]);
           } catch (error) {
+            const field = key === "stroke" ? "stroke.colour" : key;
             throw new Error(
-              `$.definitions.paints.${id}.${key}: ${error.message}`,
+              `$.definitions.paints.${id}.${field}: ${error.message}`,
             );
           }
         }
@@ -2831,14 +2940,13 @@ const BeefwifeGraphics = (() => {
     _syncRibbon(state, pixelResolution, inversePixelResolution) {
       const chunks = state.chunks;
       const stride = state.layout.chunkStride;
-      const scale = this.model.skin.scale;
       const lastIndex = this.model.chunks.length - 1;
       if (this.ribbonIsMesh) {
         const positions = this.ribbon.dynamicPositions;
         for (let index = 0; index < this.model.chunks.length; index++) {
           const chunkOffset = index * stride;
           const vertexOffset = index * 4;
-          const width = this.model.chunks[index].ribbonWidth * scale;
+          const width = this.model.chunks[index].ribbonWidth;
           positions[vertexOffset] =
             chunks[chunkOffset] - chunks[chunkOffset + 3] * width;
           positions[vertexOffset + 1] =
@@ -2869,14 +2977,14 @@ const BeefwifeGraphics = (() => {
             : (value) => value;
       for (let index = 0; index < this.model.chunks.length; index++) {
         const offset = index * stride;
-        const width = this.model.chunks[index].ribbonWidth * scale;
+        const width = this.model.chunks[index].ribbonWidth;
         const x = chunks[offset] - chunks[offset + 3] * width;
         const y = chunks[offset + 1] + chunks[offset + 2] * width;
         if (index) this.ribbon.lineTo(coordinate(x), coordinate(y));
         else this.ribbon.moveTo(coordinate(x), coordinate(y));
       }
       const tailOffset = lastIndex * stride;
-      const tailWidth = this.model.chunks[lastIndex].ribbonWidth * scale;
+      const tailWidth = this.model.chunks[lastIndex].ribbonWidth;
       const tailAngle = Math.atan2(
         chunks[tailOffset + 2],
         -chunks[tailOffset + 3],
@@ -2890,7 +2998,7 @@ const BeefwifeGraphics = (() => {
       );
       for (let index = lastIndex; index >= 0; index--) {
         const offset = index * stride;
-        const width = this.model.chunks[index].ribbonWidth * scale;
+        const width = this.model.chunks[index].ribbonWidth;
         this.ribbon.lineTo(
           coordinate(chunks[offset] + chunks[offset + 3] * width),
           coordinate(chunks[offset + 1] - chunks[offset + 2] * width),
@@ -2900,7 +3008,7 @@ const BeefwifeGraphics = (() => {
       this.ribbon.arc(
         coordinate(chunks[0]),
         coordinate(chunks[1]),
-        this.model.chunks[0].ribbonWidth * scale,
+        this.model.chunks[0].ribbonWidth,
         headAngle + Math.PI,
         headAngle + Math.PI * 2,
       );
@@ -3211,7 +3319,6 @@ const Beefwife = (() => {
     legStateKey(before) === legStateKey(after);
   const skinKey = (model) =>
     JSON.stringify([
-      model.descriptor.appearance,
       model.descriptor.definitions.shapes,
       model.descriptor.definitions.paints,
       model.descriptor.chain.skin,
