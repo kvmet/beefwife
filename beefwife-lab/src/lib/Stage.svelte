@@ -210,7 +210,7 @@
   <Graticule visible={showGrid} />
 
   <div class="stage-heading">
-    <span>Specimen monitor / live canvas</span>
+    <span>Live specimen monitor</span>
     <strong>{$descriptor.name}</strong>
   </div>
 
