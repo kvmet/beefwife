@@ -30,5 +30,7 @@ function beefwifeCanvasRuntime() {
 }
 
 export default defineConfig({
+  // Relative asset URLs let the built site run from any path, such as /lab/.
+  base: "./",
   plugins: [svelte(), ...beefwifeCanvasRuntime()],
 });

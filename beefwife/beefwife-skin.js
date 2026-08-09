@@ -7,7 +7,42 @@ const BeefwifeSkin = (() => {
     ornamentStride: 6,
     plateStride: 5,
   });
+  /* Root rates that deflect a react-1 ornament by one radian. */
+  const RADIAN_TURN_RATE = 13;
+  const RADIAN_LATERAL_RATE = 290;
+  const MIN_DAMPING_RATIO = 0.02;
+  const MAX_DEFLECTION = Math.PI / 2;
   const magnitude = (x, y) => Math.sqrt(x * x + y * y);
+
+  /* Exact step of theta'' = rate^2 (target - theta) - 2 zeta rate theta',
+     as x' = Ax + Bv, v' = Cx + Dv on x = theta - target. Exactness keeps any
+     recover and wobble stable at any dt. */
+  const springCoefficients = (ornament, rate, zeta, dt) => {
+    const angularDt = rate * dt;
+    if (angularDt < 1e-9) {
+      ornament.positionPosition = 1;
+      ornament.positionVelocity = dt;
+      ornament.velocityPosition = 0;
+      ornament.velocityVelocity = 1;
+      return;
+    }
+    const decay = Math.exp(-zeta * angularDt);
+    if (zeta >= 1 - 1e-8) {
+      ornament.positionPosition = decay * (1 + angularDt);
+      ornament.positionVelocity = decay * dt;
+      ornament.velocityPosition = -decay * rate * angularDt;
+      ornament.velocityVelocity = decay * (1 - angularDt);
+      return;
+    }
+    const ringRate = rate * Math.sqrt(1 - zeta * zeta);
+    const cosine = Math.cos(ringRate * dt);
+    const sine = Math.sin(ringRate * dt);
+    const lean = (zeta * rate) / ringRate;
+    ornament.positionPosition = decay * (cosine + lean * sine);
+    ornament.positionVelocity = (decay * sine) / ringRate;
+    ornament.velocityPosition = (-decay * rate * rate * sine) / ringRate;
+    ornament.velocityVelocity = decay * (cosine - lean * sine);
+  };
 
   const rootFor = (ornament, body, root) => {
     const chunk = body.chunks[ornament.chunk];
@@ -59,22 +94,19 @@ const BeefwifeSkin = (() => {
     _buildOrnaments() {
       this.ornaments = this.model.skin.ornaments.map((spec) => {
         const root = rootFor(spec, this.body, {});
-        const tip = {
-          x: root.x + root.dx * spec.length,
-          y: root.y + root.dy * spec.length,
-          px: root.x + root.dx * spec.length,
-          py: root.y + root.dy * spec.length,
-        };
         return {
           spec,
           root,
           nextRoot: { ...root },
-          tip,
+          angle: 0,
+          velocity: 0,
           directionX: root.dx,
           directionY: root.dy,
           coefficientDt: null,
-          damping: 0,
-          snap: 0,
+          positionPosition: 1,
+          positionVelocity: 0,
+          velocityPosition: 0,
+          velocityVelocity: 1,
         };
       });
     }
@@ -190,47 +222,63 @@ const BeefwifeSkin = (() => {
     update(dt) {
       for (let index = 0; index < this.ornaments.length; index++) {
         const ornament = this.ornaments[index];
-        const { spec, tip } = ornament;
+        const { spec } = ornament;
         const previousRoot = ornament.root;
         const root = rootFor(spec, this.body, ornament.nextRoot);
-        const carryX = (root.x - previousRoot.x) * spec.carry;
-        const carryY = (root.y - previousRoot.y) * spec.carry;
-        tip.x += carryX;
-        tip.y += carryY;
-        tip.px += carryX;
-        tip.py += carryY;
-
         if (ornament.coefficientDt !== dt) {
           ornament.coefficientDt = dt;
-          ornament.damping = Math.exp(-spec.dampingRate * dt);
-          ornament.snap = 1 - Math.exp(-spec.snapRate * dt);
+          springCoefficients(
+            ornament,
+            spec.recover,
+            1 - spec.wobble * (1 - MIN_DAMPING_RATIO),
+            dt,
+          );
         }
-        const velocityX = (tip.x - tip.px) * ornament.damping;
-        const velocityY = (tip.y - tip.py) * ornament.damping;
-        tip.px = tip.x;
-        tip.py = tip.y;
-        tip.x += velocityX;
-        tip.y += velocityY;
 
-        const targetX = root.x + root.dx * spec.length;
-        const targetY = root.y + root.dy * spec.length;
-        tip.x += (targetX - tip.x) * ornament.snap;
-        tip.y += (targetY - tip.y) * ornament.snap;
+        const turnRate =
+          Math.atan2(
+            previousRoot.dx * root.dy - previousRoot.dy * root.dx,
+            previousRoot.dx * root.dx + previousRoot.dy * root.dy,
+          ) / dt;
+        const lateralRate =
+          ((root.x - previousRoot.x) * -root.dy +
+            (root.y - previousRoot.y) * root.dx) /
+          dt;
+        /* The deviation opposes the root's motion, so positive react trails
+           and negative react leads. */
+        const target = Math.min(
+          MAX_DEFLECTION,
+          Math.max(
+            -MAX_DEFLECTION,
+            (spec.waveGain * -turnRate) / RADIAN_TURN_RATE +
+              (spec.physGain * -lateralRate) / RADIAN_LATERAL_RATE,
+          ),
+        );
 
-        const x = tip.x - root.x;
-        const y = tip.y - root.y;
-        const distance = magnitude(x, y);
-        if (distance < 1e-9) {
-          tip.x = targetX;
-          tip.y = targetY;
-          ornament.directionX = root.dx;
-          ornament.directionY = root.dy;
-        } else {
-          ornament.directionX = x / distance;
-          ornament.directionY = y / distance;
-          tip.x = root.x + ornament.directionX * spec.length;
-          tip.y = root.y + ornament.directionY * spec.length;
+        const deviation = ornament.angle - target;
+        let angle =
+          target +
+          deviation * ornament.positionPosition +
+          ornament.velocity * ornament.positionVelocity;
+        let velocity =
+          deviation * ornament.velocityPosition +
+          ornament.velocity * ornament.velocityVelocity;
+        /* At low wobble a resonant drive can wind the spring through full
+           turns; the rail keeps the deflection readable. */
+        if (angle > MAX_DEFLECTION) {
+          angle = MAX_DEFLECTION;
+          velocity = 0;
+        } else if (angle < -MAX_DEFLECTION) {
+          angle = -MAX_DEFLECTION;
+          velocity = 0;
         }
+        ornament.angle = angle;
+        ornament.velocity = velocity;
+
+        const cosine = Math.cos(angle);
+        const sine = Math.sin(angle);
+        ornament.directionX = root.dx * cosine - root.dy * sine;
+        ornament.directionY = root.dy * cosine + root.dx * sine;
         ornament.root = root;
         ornament.nextRoot = previousRoot;
       }
@@ -240,10 +288,6 @@ const BeefwifeSkin = (() => {
       this.ornaments.forEach((ornament) => {
         ornament.root.x += offset.x;
         ornament.root.y += offset.y;
-        ornament.tip.x += offset.x;
-        ornament.tip.y += offset.y;
-        ornament.tip.px += offset.x;
-        ornament.tip.py += offset.y;
       });
     }
   }

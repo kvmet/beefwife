@@ -236,10 +236,10 @@
           },
           "angleDegrees": 52,
           "scale": 1.04,
-          "length": 20,
-          "sweep": 1.5,
-          "snapRate": 22,
-          "dampingRate": 11.907056323430298
+          "source": 0.4,
+          "react": 1,
+          "recover": 30,
+          "wobble": 0.85
         }
       ]
     }

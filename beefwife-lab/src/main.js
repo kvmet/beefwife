@@ -13,7 +13,7 @@ import "./controls.css";
 window.PIXI = PIXI;
 await new Promise((resolve, reject) => {
   const script = document.createElement("script");
-  script.src = "/vendor/beefwife-canvas.js";
+  script.src = `${import.meta.env.BASE_URL}vendor/beefwife-canvas.js`;
   script.onload = resolve;
   script.onerror = () => reject(new Error("Unable to load BeefwifeCanvas"));
   document.head.append(script);

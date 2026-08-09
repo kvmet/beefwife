@@ -4,10 +4,10 @@
     forward: 0,
     outward: 8,
     angleDegrees: 0,
-    length: 20,
-    sweep: 1.5,
-    snapRate: 22,
-    dampingRate: 12,
+    source: 0.4,
+    react: 1,
+    recover: 30,
+    wobble: 0.85,
   };
 </script>
 
@@ -226,44 +226,38 @@
       slider={[-180, 180, 1]}
     />
     <ControlRow
-      label="Length"
-      tip="Distance held between the root and the tip after every step."
-      unit="px"
-      digits={1}
-      bind:value={$descriptor.chain.skin[list][index].length}
-      reset={ORNAMENT_PRESET.length}
-      field={[0.000001, 10000, 0.5]}
-      slider={[0.5, 60, 0.5]}
+      label="Source"
+      tip="What drives the swing: 0 follows the body wave, 1 reacts to moving through the world."
+      bind:value={$descriptor.chain.skin[list][index].source}
+      reset={ORNAMENT_PRESET.source}
+      field={[0, 1, 0.01]}
+      slider={[0, 1, 0.01]}
     />
-    {#if advanced}
-      <ControlRow
-        label="Sweep"
-        tip="How much root motion the tip leaves behind. 0 follows the root exactly."
-        bind:value={$descriptor.chain.skin[list][index].sweep}
-        reset={ORNAMENT_PRESET.sweep}
-        field={[0, 4, 0.05]}
-        slider={[0, 4, 0.05]}
-      />
-      <ControlRow
-        label="Snap rate"
-        tip="How fast the tip returns to its rest angle."
-        unit="/s"
-        digits={1}
-        bind:value={$descriptor.chain.skin[list][index].snapRate}
-        reset={ORNAMENT_PRESET.snapRate}
-        field={[0, 1000, 0.5]}
-        slider={[0, 60, 0.5]}
-      />
-      <ControlRow
-        label="Damping rate"
-        tip="How fast tip motion dies away. Low values swing for longer."
-        unit="/s"
-        digits={1}
-        bind:value={$descriptor.chain.skin[list][index].dampingRate}
-        reset={ORNAMENT_PRESET.dampingRate}
-        field={[0, 1000, 0.5]}
-        slider={[0, 60, 0.5]}
-      />
-    {/if}
+    <ControlRow
+      label="React"
+      tip="Size of the swing. 0 rides the root rigidly, positive trails, negative leads."
+      bind:value={$descriptor.chain.skin[list][index].react}
+      reset={ORNAMENT_PRESET.react}
+      field={[-2, 2, 0.05]}
+      slider={[-2, 2, 0.05]}
+    />
+    <ControlRow
+      label="Recover"
+      tip="How fast the swing chases the drive and returns to rest."
+      unit="/s"
+      digits={1}
+      bind:value={$descriptor.chain.skin[list][index].recover}
+      reset={ORNAMENT_PRESET.recover}
+      field={[0, 1000, 0.5]}
+      slider={[0, 60, 0.5]}
+    />
+    <ControlRow
+      label="Wobble"
+      tip="Shape of the return: 0 settles clean, 1 overshoots and rings."
+      bind:value={$descriptor.chain.skin[list][index].wobble}
+      reset={ORNAMENT_PRESET.wobble}
+      field={[0, 1, 0.01]}
+      slider={[0, 1, 0.01]}
+    />
   {/if}
 </div>

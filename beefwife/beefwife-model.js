@@ -194,11 +194,10 @@ const BeefwifeModel = (() => {
               angleCosine: Math.cos(angle),
               angleSine: Math.sin(angle),
               scale: placement.scale,
-              length: placement.length,
-              sweep: placement.sweep,
-              carry: 1 / (1 + placement.sweep),
-              snapRate: placement.snapRate,
-              dampingRate: placement.dampingRate,
+              waveGain: placement.react * (1 - placement.source),
+              physGain: placement.react * placement.source,
+              recover: placement.recover,
+              wobble: placement.wobble,
             };
           }),
       );

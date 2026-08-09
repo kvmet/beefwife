@@ -85,10 +85,10 @@
         },
         angleDegrees: ORNAMENT_PRESET.angleDegrees,
         scale: 1,
-        length: ORNAMENT_PRESET.length,
-        sweep: ORNAMENT_PRESET.sweep,
-        snapRate: ORNAMENT_PRESET.snapRate,
-        dampingRate: ORNAMENT_PRESET.dampingRate,
+        source: ORNAMENT_PRESET.source,
+        react: ORNAMENT_PRESET.react,
+        recover: ORNAMENT_PRESET.recover,
+        wobble: ORNAMENT_PRESET.wobble,
       },
     ];
     onselect({ kind: "ornament", id });

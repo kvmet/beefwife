@@ -298,14 +298,22 @@ draws it as a tinted mesh; any paint that also asks for a stroke moves the limbs
 to a Graphics path and draws both passes, as the ribbon does. A `limbWidth` of
 zero draws no limbs at all, leaving the feet on their own.
 
-Ornament `length` and offsets are px, `angleDegrees` is degrees, and `snapRate`
-and `dampingRate` are per second. They are time-based so visual motion does not
-depend on frame rate.
+Ornament offsets are px, `angleDegrees` is degrees, and `recover` is per
+second. Rates are time-based so visual motion does not depend on frame rate.
 
-Root motion carries an ornament tip by `1 / (1 + sweep)` of the root's change,
-so zero sweep follows the anchor and larger values leave more motion behind.
-Snap and damping use exponential time response. The tip is constrained to its
-declared length after every fixed simulation step.
+An ornament swings about its root, pivoting at its shape path's origin, so an
+off-center path pivots off-center. Two root motions can drive the swing, and
+`source` fades between them: at `0` the root's turning, which carries the body
+wave; at `1` its sideways travel through the world, which carries speed,
+thrust, and steering; between them a linear blend.
+
+Each remaining control owns one quality of the swing. `react` is its size:
+`0` rides the root rigidly, positive trails the drive, negative leads it.
+`recover` is its tempo: how fast the deflection chases the drive and returns
+to rest, changing speed without changing size. `wobble` is its shape: `0`
+settles without overshoot, `1` overshoots and rings. The deflection is
+clamped to a quarter turn either side of rest after every fixed simulation
+step.
 
 ## Rendering extensions
 

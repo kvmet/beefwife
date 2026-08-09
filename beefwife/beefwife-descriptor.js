@@ -119,10 +119,10 @@ const BeefwifeDescriptor = (() => {
     offset: object({ forward: offset, outward: offset }),
     angleDegrees: number(-3600, 3600),
     scale,
-    length: distance,
-    sweep: number(0, 4),
-    snapRate: number(0, 1000),
-    dampingRate: number(0, 1000),
+    source: ratio,
+    react: number(-2, 2),
+    recover: number(0, 1000),
+    wobble: ratio,
   });
 
   const schema = object({

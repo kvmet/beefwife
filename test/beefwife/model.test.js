@@ -64,7 +64,10 @@ assert.deepEqual(
   model.skin.ornaments.map(({ sideSign }) => sideSign),
   [-1, 1],
 );
-assert.equal(model.skin.ornaments[0].carry, 0.4);
+assert.ok(Math.abs(model.skin.ornaments[0].waveGain - 0.6) < 1e-12);
+assert.ok(Math.abs(model.skin.ornaments[0].physGain - 0.4) < 1e-12);
+assert.equal(model.skin.ornaments[0].recover, 30);
+assert.equal(model.skin.ornaments[0].wobble, 0.85);
 assert.ok(
   Math.abs(
     model.skin.ornaments[0].angleSine + model.skin.ornaments[1].angleSine,
