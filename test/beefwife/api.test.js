@@ -501,7 +501,7 @@ const headless = vm.runInContext(
    creature.step(1 / 60);
    ({
      name: creature.descriptor.name,
-     parse: typeof Beefwife.descriptor.parse,
+     parse: typeof Beefwife.Descriptor.parse,
      onRender: creature.onRender,
      children: creature.children,
      moved: creature.getPose().head.x !== 0,

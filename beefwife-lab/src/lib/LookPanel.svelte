@@ -108,7 +108,7 @@
   function applyResize() {
     try {
       descriptor.set(
-        window.BeefwifeCanvas.descriptor.scale($descriptor, resizeFactor),
+        window.BeefwifeCanvas.Descriptor.scale($descriptor, resizeFactor),
       );
       resizeFactor = 1;
       resizeError = null;

@@ -60,7 +60,7 @@ const BeefwifeCanvasCast = (() => {
     }
     if (!Number.isFinite(weight) || weight <= 0)
       throw new RangeError(`${path}.weight must be positive`);
-    return { descriptor: Beefwife.descriptor.read(descriptor), weight };
+    return { descriptor: Beefwife.Descriptor.read(descriptor), weight };
   };
 
   const loadCast = async (options, signal) => {
@@ -90,7 +90,7 @@ const BeefwifeCanvasCast = (() => {
     }
     const fetched = await Promise.all(
       sources.map(async ({ src, weight }) => ({
-        descriptor: Beefwife.descriptor.read(await responseJson(src, signal)),
+        descriptor: Beefwife.Descriptor.read(await responseJson(src, signal)),
         weight,
       })),
     );

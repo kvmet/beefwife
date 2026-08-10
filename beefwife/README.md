@@ -26,25 +26,25 @@ Pixi is a peer dependency. The module entry imports it, so a bundler resolves
 one copy for the page and the library shares it:
 
 ```js
-import { Beefwife, descriptor } from "@kvmet/beefwife";
+import { Beefwife, Descriptor } from "@kvmet/beefwife";
 ```
 
 The classic-script build reads `window.PIXI` instead and adds one global,
-`Beefwife`, with the JSON half hanging off it as `Beefwife.descriptor`. Where
+`Beefwife`, with the JSON half hanging off it as `Beefwife.Descriptor`. Where
 that global is missing a beefwife still simulates: it builds no display children
 and leaves `onRender` null, so a headless page or a server gets the pose without
 a renderer.
 
 ## Public runtime contract
 
-The library exposes `Beefwife` for one live Pixi display object and `descriptor`
+The library exposes `Beefwife` for one live Pixi display object and `Descriptor`
 for plain JSON. Physics, gait, legs, skin, render snapshots, caches, and
 fixed-step state remain private.
 
 ```js
-import { Beefwife, descriptor } from "@kvmet/beefwife";
+import { Beefwife, Descriptor } from "@kvmet/beefwife";
 
-const chevronGuy = descriptor.parse(text);
+const chevronGuy = Descriptor.parse(text);
 const beefwife = new Beefwife(chevronGuy, {
   position: { x: 200, y: 150 }, // world px at the head
   direction: { x: 1, y: 0 },
@@ -192,8 +192,8 @@ long creature as gone while it is still on screen.
 ```
 
 ```js
-const chevronGuy = descriptor.parse(text);
-const textAgain = descriptor.stringify(chevronGuy);
+const chevronGuy = Descriptor.parse(text);
+const textAgain = Descriptor.stringify(chevronGuy);
 ```
 
 `read(value)` validates an already parsed value. It returns a deep-owned plain
@@ -213,11 +213,11 @@ Paths name fields with dots, an array item with `[]`, and a record entry with
 `*`:
 
 ```js
-descriptor.bounds("legs.pairs");
+Descriptor.bounds("legs.pairs");
 // { kind: "number", min: 0, max: 128, integer: true, nullable: false }
-descriptor.bounds("chain.skin.ornaments[].side");
+Descriptor.bounds("chain.skin.ornaments[].side");
 // { kind: "choice", values: ["left", "right", "both"], nullable: false }
-descriptor.bounds("definitions.paints.*.stroke.width");
+Descriptor.bounds("definitions.paints.*.stroke.width");
 // { kind: "number", min: 0, max: 1000, integer: false, nullable: false }
 ```
 

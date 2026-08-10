@@ -8,7 +8,7 @@ import { Legs } from "./legs.mjs";
 import { Skin } from "./skin.mjs";
 import Graphics from "./graphics.mjs";
 
-export * as descriptor from "./descriptor.mjs";
+export * as Descriptor from "./descriptor.mjs";
 
 class HeadlessContainer {
   destroy() {

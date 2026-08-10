@@ -56,8 +56,8 @@ assert.equal(typeof context.BeefwifeCanvas.mount, "function");
 assert.equal(typeof context.BeefwifeCanvas.scan, "function");
 // The one global carries the schema out with it; nothing else can reach it.
 for (const key of ["read", "parse", "stringify"])
-  assert.equal(typeof context.BeefwifeCanvas.descriptor[key], "function");
-assert.equal(context.BeefwifeCanvas.descriptor.VERSION, 1);
+  assert.equal(typeof context.BeefwifeCanvas.Descriptor[key], "function");
+assert.equal(context.BeefwifeCanvas.Descriptor.VERSION, 1);
 assert.equal(queuedMicrotasks.length, 1);
 queuedMicrotasks.shift()();
 assert.deepEqual(

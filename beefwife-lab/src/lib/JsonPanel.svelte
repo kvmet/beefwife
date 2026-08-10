@@ -12,7 +12,7 @@
   const shown = (value) => JSON.stringify(value, null, 2);
   const canonical = (value) => {
     try {
-      return `${window.BeefwifeCanvas.descriptor.stringify(value)}\n`;
+      return `${window.BeefwifeCanvas.Descriptor.stringify(value)}\n`;
     } catch {
       return shown(value);
     }

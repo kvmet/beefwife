@@ -2445,10 +2445,10 @@ pixi_js = __toESM(pixi_js, 1);
 //#region src/global.mjs
 /**
 	* Classic-script entry. A page gets one global, `Beefwife`, and reaches the
-	* JSON half through `Beefwife.descriptor`. Module consumers import both by
+	* JSON half through `Beefwife.Descriptor`. Module consumers import both by
 	* name, so the namespace is attached only here.
 	*/
-	Object.defineProperty(Beefwife, "descriptor", {
+	Object.defineProperty(Beefwife, "Descriptor", {
 		value: descriptor_exports,
 		enumerable: true
 	});

@@ -117,7 +117,7 @@ const context = {
     }
   },
   Beefwife: {
-    descriptor: {
+    Descriptor: {
       read(value) {
         if (!value || typeof value.name !== "string")
           throw new TypeError("descriptor needs a name");

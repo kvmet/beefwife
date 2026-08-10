@@ -55,14 +55,6 @@ Already mounted canvases are left alone.
 ```html
 <script src="pixi.min.js"></script>
 <script src="terrain/terrain.js"></script>
-<script src="beefwife/beefwife-descriptor.js"></script>
-<script src="beefwife/beefwife-model.js"></script>
-<script src="beefwife/beefwife-drive.js"></script>
-<script src="beefwife/beefwife-body.js"></script>
-<script src="beefwife/beefwife-legs.js"></script>
-<script src="beefwife/beefwife-skin.js"></script>
-<script src="beefwife/beefwife-geometry.js"></script>
-<script src="beefwife/beefwife-graphics.js"></script>
 <script src="beefwife/beefwife.js"></script>
 <script src="beefwife-canvas/beefwife-canvas-path.js"></script>
 <script src="beefwife-canvas/beefwife-canvas-steering.js"></script>

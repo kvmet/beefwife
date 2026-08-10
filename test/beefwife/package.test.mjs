@@ -98,9 +98,9 @@ try {
 
   writeFileSync(
     join(consumer, "module.mjs"),
-    `import { Beefwife, descriptor } from "@kvmet/beefwife";
+    `import { Beefwife, Descriptor } from "@kvmet/beefwife";
      import * as PIXI from "pixi.js";
-     const beefwife = new Beefwife(descriptor.read(${example}));
+     const beefwife = new Beefwife(Descriptor.read(${example}));
      beefwife.step(1 / 60);
      if (!(beefwife instanceof PIXI.Container))
        throw new Error("the module entry did not reach the peer renderer");
@@ -111,7 +111,7 @@ try {
   writeFileSync(
     join(consumer, "commonjs.cjs"),
     `const Beefwife = require("@kvmet/beefwife");
-     const beefwife = new Beefwife(Beefwife.descriptor.read(${example}));
+     const beefwife = new Beefwife(Beefwife.Descriptor.read(${example}));
      beefwife.step(1 / 60);
      if (beefwife.onRender !== null)
        throw new Error("the classic-script entry found a renderer it should not have");
