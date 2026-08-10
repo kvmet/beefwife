@@ -15,6 +15,7 @@ const path = require("node:path");
 const { Graphics, Mesh } = require("./pixi-mock.js");
 const Beefwife = require("../../beefwife/beefwife.js");
 const { limbLength } = require("../../beefwife/beefwife-legs.js");
+const Geometry = require("../../beefwife/beefwife-geometry.js");
 const copy = (value) => JSON.parse(JSON.stringify(value));
 let checks = 0;
 
@@ -349,6 +350,40 @@ checks += 2;
 barefootLegs.destroy();
 hiddenLegs.destroy();
 
+/* A triangle list is right when its triangles cover the outline exactly once.
+   Total area catches a missing, doubled, or misdirected triangle without
+   restating the index list. Winding is deliberately not checked: the meshes
+   render unculled, and a cap fanned from a hub at one end necessarily runs
+   opposite to the ring direction at the other. */
+const signedArea = (positions, indices) => {
+  let total = 0;
+  for (let at = 0; at < indices.length; at += 3) {
+    const [a, b, c] = [indices[at], indices[at + 1], indices[at + 2]];
+    total +=
+      ((positions[b * 2] - positions[a * 2]) *
+        (positions[c * 2 + 1] - positions[a * 2 + 1]) -
+        (positions[c * 2] - positions[a * 2]) *
+          (positions[b * 2 + 1] - positions[a * 2 + 1])) /
+      2;
+  }
+  return total;
+};
+const unsignedArea = (positions, indices) => {
+  let total = 0;
+  for (let at = 0; at < indices.length; at += 3)
+    total += Math.abs(signedArea(positions, indices.subarray(at, at + 3)));
+  return total;
+};
+const shoelace = (points) => {
+  let total = 0;
+  for (let index = 0; index < points.length; index++) {
+    const [x1, y1] = points[index];
+    const [x2, y2] = points[(index + 1) % points.length];
+    total += x1 * y2 - x2 * y1;
+  }
+  return Math.abs(total) / 2;
+};
+
 /* The ribbon splits the same way, and its stroke invents nothing: it walks the
    mesh's own edge and rim vertices, skipping each cap's hub and the two rim
    points that are already edge vertices. */
@@ -383,7 +418,18 @@ for (let at = 0; at < ribbonFill.dynamicPositions.length; at += 2)
 assert.ok(
   ribbonOutline.points.every(([x, y]) => meshVertices.has(`${x},${y}`)),
 );
-checks += 5;
+/* Walking the same vertices is not the same as covering the same area: the
+   triangle list must enclose exactly what the outline encloses, and wind one
+   way throughout, or the fill shows a hole the stroke does not. */
+const ribbonTriangles = Geometry.ribbonIndicesFor(ribbonChunks);
+const ribbonFilled = unsignedArea(ribbonFill.dynamicPositions, ribbonTriangles);
+/* The outline walks the mesh's own vertices, so this is exact bar float
+   error; a loose tolerance here hides a dropped quad at the tapered tail. */
+assert.ok(
+  Math.abs(ribbonFilled / shoelace(ribbonOutline.points) - 1) < 1e-9,
+  `fill covers ${ribbonFilled}, stroke encloses ${shoelace(ribbonOutline.points)}`,
+);
+checks += 6;
 ribbonStroked.destroy();
 
 /* Everything under legs.skin is drawn, never simulated, so editing it leaves
@@ -437,5 +483,23 @@ checks += 4;
 straightLegs.destroy();
 mirroredLegs.destroy();
 baselineLegs.destroy();
+
+// hip, knee, foot down one side and foot, knee, hip back up the other.
+const outline = [
+  [0, 1],
+  [1, 1.5],
+  [2, 1],
+  [2, -1],
+  [1, -1.5],
+  [0, -1],
+];
+const limbPositions = new Float32Array(outline.flat());
+const limbIndices = Geometry.limbIndicesFor(1);
+assert.equal(limbIndices.length, 12);
+assert.ok(
+  near(unsignedArea(limbPositions, limbIndices), shoelace(outline)),
+  "limb triangles do not cover the outline exactly once",
+);
+checks += 2;
 
 console.log(`beefwife geometry: ${checks} vertex checks passed`);

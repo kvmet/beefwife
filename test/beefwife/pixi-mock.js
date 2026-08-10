@@ -28,9 +28,14 @@ class Container {
     return child;
   }
 
+  /* Pixi drops the transform objects here, so drawing to a destroyed child
+     throws instead of quietly working. Keep that: it is what turns a
+     use-after-destroy into a failing test. */
   destroy() {
     if (this.parent) this.parent.removeChild(this);
     this.destroyed = true;
+    this.position = null;
+    this.scale = null;
   }
 }
 
@@ -104,14 +109,39 @@ class GraphicsContext {
   }
 }
 
+/* Pixi validates geometry on the GPU, where a bad index reads garbage rather
+   than throwing. These checks stand in for that: they are the only thing
+   between a wrong triangle list and a test that still passes. */
 class MeshGeometry {
   constructor(options) {
     this.positions = options.positions;
-    this.buffer = { updates: 0, update: () => this.buffer.updates++ };
+    this.indices = options.indices;
+    this.uvs = options.uvs;
+    if (this.uvs.length !== this.positions.length)
+      throw new Error(
+        `uvs length ${this.uvs.length} does not match positions ${this.positions.length}`,
+      );
+    const vertices = this.positions.length / 2;
+    if (this.indices.length % 3)
+      throw new Error(`indices length ${this.indices.length} is not triangles`);
+    for (const index of this.indices) {
+      if (!Number.isInteger(index) || index < 0 || index >= vertices)
+        throw new Error(`index ${index} outside 0 to ${vertices - 1}`);
+    }
+    this.buffers = {
+      aPosition: { updates: 0, update: () => this.buffers.aPosition.updates++ },
+      aUV: { updates: 0, update: () => this.buffers.aUV.updates++ },
+    };
   }
 
-  getBuffer() {
-    return this.buffer;
+  getBuffer(id) {
+    if (!Object.hasOwn(this.buffers, id))
+      throw new TypeError(`no buffer named ${id}`);
+    return this.buffers[id];
+  }
+
+  get buffer() {
+    return this.buffers.aPosition;
   }
 }
 

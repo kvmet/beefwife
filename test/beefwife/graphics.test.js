@@ -102,6 +102,105 @@ assert.equal(
 );
 checks += 4;
 
+/* Overlap order is the whole promise of the retained scene, and half of it is
+   invisible in a scene with no stroke and no under-layer ornament. This one
+   carries every kind at once, each in its own colour, so a swap anywhere in
+   `_arrange` moves a colour and fails. */
+const layered = copy(source);
+layered.legs.pairs = 2;
+layered.definitions.paints.leg.stroke = { colour: "#aa0001", width: 1 };
+layered.definitions.paints.ribbon.stroke = { colour: "#aa0002", width: 1 };
+layered.definitions.paints.under = { fill: "#c00001", stroke: null };
+layered.definitions.paints.over = { fill: "#c00002", stroke: null };
+layered.definitions.paints.plate = { fill: "#c00003", stroke: null };
+layered.chain.skin.plates = [
+  {
+    ...source.chain.skin.plates[0],
+    paint: "plate",
+    repeat: { count: 1, step: 1 },
+  },
+];
+const oneOrnament = { ...source.chain.skin.ornaments[0], side: "left" };
+layered.chain.skin.ornaments = [
+  { ...oneOrnament, id: "beneath", paint: "under", layer: "under" },
+  { ...oneOrnament, id: "above", paint: "over", layer: "over" },
+];
+const foot = layered.definitions.paints.foot.fill;
+const stack = new Beefwife(layered, { random: () => 0.5 });
+stack.step(1 / 60);
+stack.onRender();
+const kindOf = (child) =>
+  child instanceof Mesh
+    ? "mesh"
+    : child.points.length
+      ? "path"
+      : (child.context?.fills ?? []).join();
+assert.deepEqual(stack.children.map(kindOf), [
+  foot,
+  foot,
+  foot,
+  foot,
+  "mesh",
+  "path",
+  "#c00001",
+  "mesh",
+  "path",
+  "#c00003",
+  "#c00002",
+]);
+checks += 1;
+
+/* The order has to survive an edit that changes the cast, not just the first
+   build: `_arrange` runs again and must put everything back. */
+const restacked = copy(layered);
+restacked.legs.pairs = 3;
+stack.setDescriptor(restacked);
+stack.onRender();
+assert.deepEqual(stack.children.map(kindOf), [
+  foot,
+  foot,
+  foot,
+  foot,
+  foot,
+  foot,
+  "mesh",
+  "path",
+  "#c00001",
+  "mesh",
+  "path",
+  "#c00003",
+  "#c00002",
+]);
+checks += 1;
+
+/* Moving an ornament between layers changes the order without changing the
+   cast, so the order has to be re-settled on the layer list alone. */
+const flipped = copy(restacked);
+flipped.chain.skin.ornaments[0].layer = "over";
+stack.setDescriptor(flipped);
+stack.onRender();
+assert.deepEqual(stack.children.map(kindOf).slice(-5), [
+  "mesh",
+  "path",
+  "#c00003",
+  "#c00001",
+  "#c00002",
+]);
+checks += 1;
+
+/* A dropped child must be destroyed, not merely unparented: the scene is
+   retained, so anything left alive is a leak nothing will ever collect. */
+const fewer = copy(flipped);
+fewer.chain.skin.ornaments = [flipped.chain.skin.ornaments[1]];
+const before = [...stack.children];
+stack.setDescriptor(fewer);
+const dropped = before.filter((child) => !stack.children.includes(child));
+assert.equal(dropped.length, 1);
+assert.ok(dropped[0].destroyed);
+assert.equal(stack.children.length, before.length - 1);
+checks += 3;
+stack.destroy();
+
 // Every drawable scale the schema admits must reach the path transform.
 const tinyPlate = copy(source);
 tinyPlate.chain.skin.loadScale = 0;
