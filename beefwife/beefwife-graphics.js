@@ -31,6 +31,9 @@ const BeefwifeGraphics = (() => {
 
   const sharedContexts = new WeakMap();
 
+  // The widest a Beefwife world may be, so a knee cannot be pushed outside it.
+  const MAX_KNEE_OFFSET = 2e9;
+
   /* Pixi leaves something behind whichever kind of child this is. A Graphics
      is subscribed to its context by the context setter and `destroy` never
      unsubscribes, so a child holding a cached context stays reachable for as
@@ -355,9 +358,12 @@ const BeefwifeGraphics = (() => {
                 kneeX - (legs[offset] + legs[offset + 4]) / 2,
                 kneeY - (legs[offset + 1] + legs[offset + 5]) / 2,
               );
+              /* The policy object is live, so a host may put anything here
+                 after construction validated it. An omitted cap is the world's
+                 width, never Infinity, or the offset below can be too. */
               const maxOffset = Number.isFinite(projection.maxOffset)
                 ? Math.max(0, projection.maxOffset)
-                : Infinity;
+                : MAX_KNEE_OFFSET;
               const radialOffset = Math.min(
                 maxOffset,
                 viewDistance * elbowHeight * projection.perspective,

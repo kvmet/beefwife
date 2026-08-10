@@ -502,4 +502,28 @@ assert.ok(
 );
 checks += 2;
 
+/* The projection object stays live so a host can follow its viewport, which
+   means it can hold anything after construction validated it. An uncapped
+   offset is the one that turns knees into infinities. */
+const liveProjection = { centerX: 0, centerY: 0, perspective: 0.002 };
+const projected = new Beefwife(bentLeggedSource, {
+  random: () => 0.5,
+  render: { kneeProjection: liveProjection },
+});
+liveProjection.perspective = 1e300;
+projected.step(1 / 60);
+projected.onRender();
+const projectedVertices = projected.children.find(
+  (child) => child instanceof Mesh,
+).dynamicPositions;
+assert.ok(
+  [...projectedVertices].every(Number.isFinite),
+  "a live projection change produced non-finite vertices",
+);
+liveProjection.centerX = 1e300;
+projected.onRender();
+assert.ok([...projectedVertices].every(Number.isFinite));
+projected.destroy();
+checks += 2;
+
 console.log(`beefwife geometry: ${checks} vertex checks passed`);

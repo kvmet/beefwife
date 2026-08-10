@@ -158,6 +158,51 @@ checks += 3;
     () => beefwife.reset({ phase: null }),
     /options\.phase must be a finite number/,
   ],
+  /* Finite but absurd render policy turns finite vertices into infinities, so
+     these are rejected on the same terms as an out-of-world position. */
+  [
+    () =>
+      new Beefwife(example, {
+        render: { pixelResolution: Number.MAX_VALUE },
+      }),
+    /options\.render\.pixelResolution must be from/,
+  ],
+  [
+    () => new Beefwife(example, { render: { pixelResolution: 5e-324 } }),
+    /options\.render\.pixelResolution must be from/,
+  ],
+  [
+    () =>
+      new Beefwife(example, {
+        render: {
+          kneeProjection: { centerX: 0, centerY: 0, perspective: 1e300 },
+        },
+      }),
+    /options\.render\.kneeProjection\.perspective must be at most/,
+  ],
+  [
+    () =>
+      new Beefwife(example, {
+        render: {
+          kneeProjection: { centerX: 1e300, centerY: 0, perspective: 0.002 },
+        },
+      }),
+    /options\.render\.kneeProjection\.center coordinates must be from/,
+  ],
+  [
+    () =>
+      new Beefwife(example, {
+        render: {
+          kneeProjection: {
+            centerX: 0,
+            centerY: 0,
+            perspective: 0.002,
+            maxOffset: 1e300,
+          },
+        },
+      }),
+    /options\.render\.kneeProjection\.maxOffset must be at most/,
+  ],
 ].forEach(([act, reason]) => {
   assert.throws(act, reason);
   checks++;

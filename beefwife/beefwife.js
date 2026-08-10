@@ -52,6 +52,9 @@ const Beefwife = (() => {
     );
   const MAX_STEP_SECONDS = 0.05;
   const MAX_WORLD_COORDINATE = 1e9;
+  const MIN_PIXEL_RESOLUTION = 1e-6;
+  const MAX_PIXEL_RESOLUTION = 1e6;
+  const MAX_PERSPECTIVE = 1e6;
   const TAU = Math.PI * 2;
   const OPTION_KEYS = new Set([
     "position",
@@ -118,6 +121,16 @@ const Beefwife = (() => {
       );
       if (pixelResolution <= 0)
         throw new RangeError("options.render.pixelResolution must be positive");
+      /* Snapping multiplies a world coordinate by this and divides by it, so a
+         value outside this range turns finite vertices into infinities. Real
+         displays sit near 1. */
+      if (
+        pixelResolution < MIN_PIXEL_RESOLUTION ||
+        pixelResolution > MAX_PIXEL_RESOLUTION
+      )
+        throw new RangeError(
+          `options.render.pixelResolution must be from ${MIN_PIXEL_RESOLUTION} to ${MAX_PIXEL_RESOLUTION}`,
+        );
     }
     const projection = render.kneeProjection;
     if (projection !== undefined && projection !== null) {
@@ -126,8 +139,12 @@ const Beefwife = (() => {
         KNEE_PROJECTION_KEYS,
         "options.render.kneeProjection",
       );
-      finite(projection.centerX, "options.render.kneeProjection.centerX");
-      finite(projection.centerY, "options.render.kneeProjection.centerY");
+      // The projection center is a world point, so it lives where a body may.
+      worldPoint(
+        { x: projection.centerX, y: projection.centerY },
+        null,
+        "options.render.kneeProjection.center",
+      );
       const perspective = finite(
         projection.perspective,
         "options.render.kneeProjection.perspective",
@@ -135,6 +152,12 @@ const Beefwife = (() => {
       if (perspective < 0)
         throw new RangeError(
           "options.render.kneeProjection.perspective must be nonnegative",
+        );
+      /* The knee moves by view distance times elbow height times this, and
+         both distances span the world, so a larger factor overflows. */
+      if (perspective > MAX_PERSPECTIVE)
+        throw new RangeError(
+          `options.render.kneeProjection.perspective must be at most ${MAX_PERSPECTIVE}`,
         );
       if (projection.maxOffset !== undefined) {
         const maxOffset = finite(
@@ -144,6 +167,10 @@ const Beefwife = (() => {
         if (maxOffset < 0)
           throw new RangeError(
             "options.render.kneeProjection.maxOffset must be nonnegative",
+          );
+        if (maxOffset > MAX_WORLD_COORDINATE)
+          throw new RangeError(
+            `options.render.kneeProjection.maxOffset must be at most ${MAX_WORLD_COORDINATE}`,
           );
       }
     }

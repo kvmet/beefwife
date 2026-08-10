@@ -61,11 +61,15 @@ velocity and secondary motion are preserved.
 
 The optional `render` object is a live rendering policy with exactly three
 fields. `roundVertices` is boolean pixel snapping. `pixelResolution` is the
-positive number of output pixels per world pixel and defaults to one; snapping
-uses its output-pixel grid, and a host should update it when renderer resolution
-changes. `kneeProjection` is `null`
-or an object containing finite `centerX`, `centerY`, and nonnegative
-`perspective`, plus an optional nonnegative `maxOffset`. Projection changes only
+positive number of output pixels per world pixel from `1e-6` to `1e6`, and
+defaults to one; snapping uses its output-pixel grid, and a host should update
+it when renderer resolution changes. `kneeProjection` is `null` or an object
+containing `centerX` and `centerY` within `±Beefwife.MAX_WORLD_COORDINATE` and
+a `perspective` from zero to `1e6`, plus an optional `maxOffset` from zero to
+`Beefwife.MAX_WORLD_COORDINATE`. The ranges are wide enough for any real
+viewport and narrow enough that the projection arithmetic stays finite; a
+retained object edited past them is capped rather than rejected, since nothing
+revalidates it. Projection changes only
 the drawn knee shared by the two segments of each limb; simulated hips and
 planted feet do not move. The object is retained so a host may update its center when
 its viewport changes. Unknown render or projection fields are rejected.
