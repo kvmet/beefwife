@@ -52,4 +52,21 @@ const wavelengthAway = gait.bendAt(TAU / 0.1, 1, 1);
 assert.ok(Math.abs(here - wavelengthAway) < 1e-12);
 checks++;
 
+/* A wavelength apart is the same value in either direction, so that check
+   alone cannot see which way the wave travels. A positive lag must put the
+   distant chunk behind the head: the value there is the one the head held
+   earlier, so the wave runs head to tail and the creature swims forwards. */
+const lagged = new BeefwifeGait(gaitSpec, 0);
+const quarterWave = TAU / 4 / gaitSpec.phaseLagRadiansPerPixel;
+lagged.phase = 0;
+const headNow = lagged.bendAt(0, 1, 1);
+const downstreamNow = lagged.bendAt(quarterWave, 1, 1);
+lagged.phase = -TAU / 4;
+assert.ok(
+  Math.abs(lagged.bendAt(0, 1, 1) - downstreamNow) < 1e-12,
+  "the travelling wave runs tail to head",
+);
+assert.ok(Math.abs(headNow - downstreamNow) > 0.1, "the lag had no effect");
+checks += 2;
+
 console.log(`beefwife gait: ${checks} channel checks passed`);

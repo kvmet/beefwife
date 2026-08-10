@@ -208,30 +208,133 @@ checks += 2;
 
 /* Bend displaces chunks and a soft link pulls back only a `linkCorrection`
    share, so every material pairing has to stay bounded. Without the stretch
-   ceiling the whole lower half of this range reaches NaN within seconds. */
+   ceiling the whole lower half of this range reaches NaN within seconds.
+   A creature must never draw as more than three times its own length: that is
+   the requirement `MAX_LINK_STRETCH` serves, so it is stated here as a number
+   rather than read from the constant, which would pass at any ceiling. */
+const MAX_DRAWN_LENGTH = 3;
+let worstStretch = 0;
+let ceilingReached = 0;
 for (const linkCorrection of [0.001, 0.05, 0.2, 0.5, 1])
   for (const jointCorrection of [0, 0.5, 1]) {
     const material = copy(source);
     material.definitions.materials.body.linkCorrection = linkCorrection;
     material.definitions.materials.body.jointCorrection = jointCorrection;
-    const loose = new Beefwife(material, { random: () => 0.5 });
+    const model = BeefwifeModel.compile(material);
+    const gait = new BeefwifeGait(model.gait, 0);
+    const loose = new BeefwifeBody(model, gait);
+    loose.place({ x: 0, y: 0 }, { x: 1, y: 0 });
     for (let frame = 0; frame < 20 * 60; frame++)
-      loose.step(1 / 60, {
-        direction: { x: Math.cos(frame / 300), y: Math.sin(frame / 300) },
-      });
-    const pose = loose.getPose();
+      loose.step(
+        1 / 60,
+        1,
+        { x: Math.cos(frame / 300), y: Math.sin(frame / 300) },
+        () => {},
+      );
     const label = `linkCorrection ${linkCorrection}, jointCorrection ${jointCorrection}`;
+    let arc = 0;
+    let rest = 0;
+    for (let index = 0; index < model.links.length; index++) {
+      const link = model.links[index];
+      const from = loose.chunks[link.from];
+      const to = loose.chunks[link.to];
+      const span = Math.hypot(to.x - from.x, to.y - from.y);
+      assert.ok(Number.isFinite(span), `${label} reached a non-finite pose`);
+      const stretch = span / loose.linkTargets[index];
+      if (stretch > worstStretch) worstStretch = stretch;
+      if (stretch > BeefwifeBody.MAX_LINK_STRETCH * 0.999) ceilingReached++;
+      arc += span;
+      rest += loose.linkTargets[index];
+    }
     assert.ok(
-      Number.isFinite(pose.head.x) && Number.isFinite(pose.head.y),
-      `${label} reached a non-finite pose`,
-    );
-    assert.ok(
-      distance(pose.head, pose.center) <
-        loose.restLength * BeefwifeBody.MAX_LINK_STRETCH,
-      `${label} scattered wider than its clamped arc length`,
+      arc < rest * MAX_DRAWN_LENGTH,
+      `${label} drew ${(arc / rest).toFixed(2)} times its own length`,
     );
     checks++;
   }
+/* No link may pass the ceiling, and the softest materials must reach it, or
+   the clamp is dead code and this whole sweep proves nothing. */
+assert.ok(
+  worstStretch <= BeefwifeBody.MAX_LINK_STRETCH * (1 + 1e-9),
+  `a link stretched to ${worstStretch}`,
+);
+assert.ok(ceilingReached > 0, "no link ever reached the ceiling");
+checks += 2;
+
+/* Growing a section seeds the chunks the old chain never had. A middle
+   section interpolates between its surviving neighbours; growing past the tail
+   extrapolates along the chain's own direction. Both are silent when wrong:
+   the creature simply settles from the wrong place, so check the seeded pose
+   directly rather than the pose it converges to. */
+const grown = (edit) => {
+  const before = copy(source);
+  before.chain.sections.head.chunks = 2;
+  before.chain.sections.trunk.chunks = 6;
+  before.chain.sections.tail.chunks = 3;
+  const model = BeefwifeModel.compile(before);
+  const gait = new BeefwifeGait(model.gait, 0);
+  const settled = new BeefwifeBody(model, gait);
+  settled.place({ x: 0, y: 0 }, { x: 1, y: 0 });
+  for (let frame = 0; frame < 120; frame++)
+    settled.step(1 / 60, 1, { x: 1, y: 0 }, () => {});
+  const after = copy(before);
+  edit(after);
+  const nextModel = BeefwifeModel.compile(after);
+  const next = new BeefwifeBody(nextModel, new BeefwifeGait(nextModel.gait, 0));
+  next.adopt(settled);
+  return { settled, next, model, nextModel };
+};
+
+const midGrown = grown((d) => (d.chain.sections.trunk.chunks = 8));
+/* trunk:6 and tail:0.. survive, so the two added trunk chunks sit between
+   trunk:5 and the first tail chunk and must land on the segment joining them. */
+const seededMiddle = midGrown.nextModel.chunks
+  .map((spec, index) => ({ spec, index }))
+  .filter(({ spec }) => spec.section === "trunk" && spec.localIndex >= 6);
+assert.equal(seededMiddle.length, 2);
+for (const { index } of seededMiddle) {
+  const chunk = midGrown.next.chunks[index];
+  const start = midGrown.next.chunks[index - 1];
+  const end = midGrown.next.chunks[seededMiddle.at(-1).index + 1];
+  const along = Math.hypot(chunk.x - start.x, chunk.y - start.y);
+  const span = Math.hypot(end.x - start.x, end.y - start.y);
+  const off =
+    Math.abs(
+      (end.x - start.x) * (start.y - chunk.y) -
+        (start.x - chunk.x) * (end.y - start.y),
+    ) / span;
+  assert.ok(off < 1e-9, `seeded chunk sits ${off}px off the segment`);
+  assert.ok(along > 0 && along < span, "seeded chunk is outside the gap");
+  // An interpolated chunk inherits the motion around it, never a dead stop.
+  assert.ok(
+    Math.hypot(chunk.x - chunk.px, chunk.y - chunk.py) > 1e-9,
+    "seeded chunk was given no velocity",
+  );
+  checks += 3;
+}
+
+const tailGrown = grown((d) => (d.chain.sections.tail.chunks = 5));
+const oldTail = tailGrown.next.chunks[tailGrown.model.chunks.length - 1];
+const tailHead = tailGrown.next.chunks[tailGrown.model.chunks.length - 2];
+const headward = {
+  x: tailHead.x - oldTail.x,
+  y: tailHead.y - oldTail.y,
+};
+for (
+  let index = tailGrown.model.chunks.length;
+  index < tailGrown.nextModel.chunks.length;
+  index++
+) {
+  const chunk = tailGrown.next.chunks[index];
+  const away = { x: chunk.x - oldTail.x, y: chunk.y - oldTail.y };
+  assert.ok(
+    away.x * headward.x + away.y * headward.y < 0,
+    "a chunk added past the tail was placed on the head side",
+  );
+  assert.equal(chunk.px, chunk.x);
+  assert.equal(chunk.py, chunk.y);
+  checks += 3;
+}
 
 /* selectLowest is a hand-rolled quickselect whose comparator breaks ties on
    index; ties are where a partition goes wrong, so the gains are randomized
@@ -260,7 +363,8 @@ for (const share of [0, 0.1, 0.33, 0.5, 0.9, 1]) {
     const expected = selection.chunks
       .map((chunk, index) => ({ gain: chunk.gain, index }))
       .sort(
-        (before, after) => before.gain - after.gain || before.index - after.index,
+        (before, after) =>
+          before.gain - after.gain || before.index - after.index,
       )
       .slice(0, lifted)
       .map(({ index }) => index)
