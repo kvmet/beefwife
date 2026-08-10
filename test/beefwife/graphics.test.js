@@ -19,6 +19,8 @@ const source = JSON.parse(
   ),
 );
 const copy = (value) => JSON.parse(JSON.stringify(value));
+// The creature's own parts, which are one container down from the Beefwife.
+const partsOf = (beefwife) => beefwife.children[0].children;
 let checks = 0;
 
 const beefwife = new Beefwife(source, { random: () => 0.5 });
@@ -28,7 +30,7 @@ assert.equal(typeof beefwife.onRender, "function");
 checks += 3;
 
 const footCount = source.legs.pairs * 2;
-const meshIndexes = beefwife.children
+const meshIndexes = partsOf(beefwife)
   .map((child, index) => (child instanceof Mesh ? index : -1))
   .filter((index) => index >= 0);
 assert.equal(meshIndexes[0], footCount);
@@ -36,12 +38,12 @@ assert.equal(meshIndexes.length, 2);
 assert.ok(meshIndexes[1] > meshIndexes[0]);
 checks += 3;
 
-const meshes = beefwife.children.filter((child) => child instanceof Mesh);
+const meshes = partsOf(beefwife).filter((child) => child instanceof Mesh);
 const buffers = meshes.map((mesh) => mesh.geometry.buffer);
-const children = [...beefwife.children];
+const children = [...partsOf(beefwife)];
 beefwife.step(1 / 60);
 beefwife.onRender();
-assert.deepEqual(beefwife.children, children);
+assert.deepEqual(partsOf(beefwife), children);
 assert.ok(buffers.every((buffer) => buffer.updates >= 2));
 checks += 2;
 
@@ -61,9 +63,9 @@ recolored.definitions.paints.shell.fill = "#123456";
 beefwife.setDescriptor(recolored);
 assert.equal(beefwife.descriptor.definitions.paints.shell.fill, "#123456");
 assert.ok(children.every((child) => !child.destroyed));
-assert.ok(beefwife.children.every((child, index) => child === children[index]));
+assert.ok(partsOf(beefwife).every((child, index) => child === children[index]));
 assert.ok(
-  beefwife.children
+  partsOf(beefwife)
     .filter((child) => child.context)
     .flatMap((child) => child.context.fills)
     .includes("#123456"),
@@ -73,18 +75,20 @@ checks += 4;
 /* Changing what the scene is made of keeps every part that still fits, so a
    chunk count edit replaces the ribbon mesh and leaves the limbs and feet. */
 const meshesOf = () =>
-  beefwife.children.filter((child) => child instanceof Mesh);
+  partsOf(beefwife).filter((child) => child instanceof Mesh);
 const feet = children.slice(0, footCount);
 const restructured = copy(recolored);
 restructured.chain.sections.tail.chunks += 1;
 restructured.chain.skin.plates[1].repeat.count = null;
 beefwife.setDescriptor(restructured);
-assert.ok(feet.every((foot) => !foot.destroyed && foot.parent === beefwife));
+assert.ok(
+  feet.every((foot) => !foot.destroyed && foot.parent === beefwife.children[0]),
+);
 assert.equal(meshesOf()[0], meshes[0]);
 assert.ok(meshes[1].destroyed);
-assert.equal(beefwife.children.indexOf(meshes[1]), -1);
-assert.ok(beefwife.children.every((child) => !child.destroyed));
-assert.equal(beefwife.children.indexOf(meshesOf()[0]), footCount);
+assert.equal(partsOf(beefwife).indexOf(meshes[1]), -1);
+assert.ok(partsOf(beefwife).every((child) => !child.destroyed));
+assert.equal(partsOf(beefwife).indexOf(meshesOf()[0]), footCount);
 checks += 6;
 
 /* A leg pair is one strip of the limb mesh, so adding one replaces that mesh
@@ -97,7 +101,7 @@ assert.ok(!keptRibbon.destroyed);
 assert.equal(meshesOf()[1], keptRibbon);
 assert.ok(meshes[0].destroyed);
 assert.equal(
-  beefwife.children.indexOf(meshesOf()[0]),
+  partsOf(beefwife).indexOf(meshesOf()[0]),
   morePairs.legs.pairs * 2,
 );
 checks += 4;
@@ -135,7 +139,7 @@ const kindOf = (child) =>
     : child.points.length
       ? "path"
       : (child.context?.fills ?? []).join();
-assert.deepEqual(stack.children.map(kindOf), [
+assert.deepEqual(partsOf(stack).map(kindOf), [
   foot,
   foot,
   foot,
@@ -156,7 +160,7 @@ const restacked = copy(layered);
 restacked.legs.pairs = 3;
 stack.setDescriptor(restacked);
 stack.onRender();
-assert.deepEqual(stack.children.map(kindOf), [
+assert.deepEqual(partsOf(stack).map(kindOf), [
   foot,
   foot,
   foot,
@@ -179,7 +183,7 @@ const flipped = copy(restacked);
 flipped.chain.skin.ornaments[0].layer = "over";
 stack.setDescriptor(flipped);
 stack.onRender();
-assert.deepEqual(stack.children.map(kindOf).slice(-5), [
+assert.deepEqual(partsOf(stack).map(kindOf).slice(-5), [
   "mesh",
   "path",
   "#c00003",
@@ -192,13 +196,26 @@ checks += 1;
    retained, so anything left alive is a leak nothing will ever collect. */
 const fewer = copy(flipped);
 fewer.chain.skin.ornaments = [flipped.chain.skin.ornaments[1]];
-const before = [...stack.children];
+const before = [...partsOf(stack)];
 stack.setDescriptor(fewer);
-const dropped = before.filter((child) => !stack.children.includes(child));
+const dropped = before.filter((child) => !partsOf(stack).includes(child));
 assert.equal(dropped.length, 1);
 assert.ok(dropped[0].destroyed);
-assert.equal(stack.children.length, before.length - 1);
+assert.equal(partsOf(stack).length, before.length - 1);
 checks += 3;
+
+/* A host may add its own children to a Beefwife, and settling the parts' draw
+   order re-adds every one of them, which would move each past a marker that
+   was already there. The parts hold a container of their own so that the
+   marker keeps the place the host gave it. */
+const marker = stack.addChild(new Container());
+const markerIndex = stack.children.indexOf(marker);
+const recast = copy(fewer);
+recast.legs.pairs = 4;
+stack.setDescriptor(recast);
+assert.equal(stack.children.indexOf(marker), markerIndex);
+assert.equal(marker.parent, stack);
+checks += 2;
 stack.destroy();
 
 // Every drawable scale the schema admits must reach the path transform.
@@ -208,7 +225,7 @@ tinyPlate.chain.skin.plates = [tinyPlate.chain.skin.plates[0]];
 tinyPlate.chain.skin.plates[0].scale = 0.002;
 tinyPlate.chain.sections.head.profile.plateScale = { start: 1, end: 1 };
 const tiny = new Beefwife(tinyPlate, { random: () => 0.5 });
-const drawnScales = tiny.children
+const drawnScales = partsOf(tiny)
   .filter((child) => child.context?.drawnPath)
   .map((child) => child.context.drawnPath.matrix.a);
 assert.ok(drawnScales.every((scale) => scale > 0));
@@ -221,15 +238,17 @@ checks += 2;
    buffers until an idle sweep. */
 const regeometried = copy(source);
 regeometried.chain.sections.tail.chunks += 2;
-const oldGeometry = beefwife.children.find((child) => child instanceof Mesh)
-  ? beefwife.children.filter((child) => child instanceof Mesh).at(-1).geometry
+const oldGeometry = partsOf(beefwife).find((child) => child instanceof Mesh)
+  ? partsOf(beefwife)
+      .filter((child) => child instanceof Mesh)
+      .at(-1).geometry
   : null;
 assert.ok(oldGeometry);
 beefwife.setDescriptor(regeometried);
 assert.ok(oldGeometry.destroyed, "a replaced mesh left its geometry behind");
 checks += 2;
 
-const owned = [...beefwife.children];
+const owned = [...partsOf(beefwife)];
 const contexts = new Set(owned.map((child) => child.context).filter(Boolean));
 beefwife.destroy();
 assert.equal(beefwife.destroyed, true);

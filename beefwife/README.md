@@ -84,15 +84,21 @@ inputs are rejected rather than clamped. Throttle linearly scales gait phase
 rate, channel amplitude, and steering. At zero, existing velocity settles under
 full contact but the beefwife produces no new drive.
 
-`Beefwife` extends `PIXI.Container`. Its retained display children refresh through
-Pixi's render lifecycle, so hosts only add the beefwife to a stage and render that
-stage. Feet sit below the limb mesh. Under-layer ornaments retain descriptor
-order, followed by the ribbon, plates from tail to head, and over-layer
-ornaments in descriptor order. Paint stroke widths remain independent of
-every scale. Headless platforms may
+`Beefwife` extends `PIXI.Container`. Its retained display children refresh
+through Pixi's render lifecycle, so hosts only add the beefwife to a stage and
+render that stage. The creature's own parts hold a container of their own one
+level down, so a child a host adds to a beefwife keeps the place the host gave
+it however the creature is edited. Feet sit below the limb mesh. Under-layer
+ornaments retain descriptor order, followed by the ribbon, plates from tail to
+head, and over-layer ornaments in descriptor order. Headless platforms may
 simulate beefwives without creating display children. With Pixi loaded,
 construction and descriptor replacement reject SVG paths and colors that Pixi
 cannot parse.
+
+Two inherited container properties belong to the library. `label` carries the
+descriptor's `name` and is rewritten on every `setDescriptor`. `onRender` is
+how a beefwife draws itself, and `destroy` clears it. A host that wants its own
+label or its own per-frame callback puts them on a parent or a sibling.
 
 `setDescriptor` validates replacement resources before changing the instance.
 Invalid input changes nothing about the object definition; a rejected call may

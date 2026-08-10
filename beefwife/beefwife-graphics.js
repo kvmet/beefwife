@@ -171,8 +171,12 @@ const BeefwifeGraphics = (() => {
       }
     }
 
-    constructor(parent, state, options = null) {
-      this.parent = parent;
+    constructor(host, state, options = null) {
+      /* The parts hold a container of their own. Settling their draw order
+         re-adds every one of them, which moves each to the end of its parent's
+         children, so anything the host added to the Beefwife would sink
+         underneath the creature on the next edit that changes the cast. */
+      this.parent = host.addChild(new PIXI.Container());
       this.model = state.model;
       this.options = options || {};
       this.feet = [];
@@ -583,6 +587,7 @@ const BeefwifeGraphics = (() => {
       for (const child of children) {
         if (child !== null) discard(this.parent, child);
       }
+      this.parent.destroy();
     }
   }
 

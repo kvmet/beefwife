@@ -17,6 +17,8 @@ const Beefwife = require("../../beefwife/beefwife.js");
 const { limbLength } = require("../../beefwife/beefwife-legs.js");
 const Geometry = require("../../beefwife/beefwife-geometry.js");
 const copy = (value) => JSON.parse(JSON.stringify(value));
+// The creature's own parts, which are one container down from the Beefwife.
+const partsOf = (beefwife) => beefwife.children[0].children;
 let checks = 0;
 
 const leggedSource = JSON.parse(
@@ -29,7 +31,7 @@ const bentLeggedSource = copy(leggedSource);
 bentLeggedSource.legs.fold = 0.75;
 bentLeggedSource.legs.jointLean = 0;
 const baselineLegs = new Beefwife(bentLeggedSource, { random: () => 0.5 });
-const baselinePositions = baselineLegs.children.find(
+const baselinePositions = partsOf(baselineLegs).find(
   (child) => child instanceof Mesh,
 ).dynamicPositions;
 /* One limb is six vertices wound hip, knee, foot, foot, knee, hip, so a
@@ -61,7 +63,7 @@ const projectedLegs = new Beefwife(bentLeggedSource, {
   random: () => 0.5,
   render: { kneeProjection: localProjection },
 });
-const projectedPositions = projectedLegs.children.find(
+const projectedPositions = partsOf(projectedLegs).find(
   (child) => child instanceof Mesh,
 ).dynamicPositions;
 for (const part of ["hip", "foot"]) {
@@ -119,7 +121,7 @@ const roundedLegs = new Beefwife(bentLeggedSource, {
   random: () => 0.5,
   render: { roundVertices: true },
 });
-const roundedMeshes = roundedLegs.children.filter(
+const roundedMeshes = partsOf(roundedLegs).filter(
   (child) => child instanceof Mesh,
 );
 assert.ok(
@@ -135,7 +137,7 @@ const reducedLegs = new Beefwife(bentLeggedSource, {
   random: () => 0.5,
   render: reducedRender,
 });
-const reducedPositions = reducedLegs.children.find(
+const reducedPositions = partsOf(reducedLegs).find(
   (child) => child instanceof Mesh,
 ).dynamicPositions;
 assert.deepEqual(
@@ -162,7 +164,7 @@ const centeredLegs = new Beefwife(bentLeggedSource, {
     },
   },
 });
-const centeredPositions = centeredLegs.children.find(
+const centeredPositions = partsOf(centeredLegs).find(
   (child) => child instanceof Mesh,
 ).dynamicPositions;
 const centeredKnee = limbPoint(centeredPositions, 0, "knee");
@@ -182,7 +184,7 @@ const cappedLegs = new Beefwife(bentLeggedSource, {
     },
   },
 });
-const cappedPositions = cappedLegs.children.find(
+const cappedPositions = partsOf(cappedLegs).find(
   (child) => child instanceof Mesh,
 ).dynamicPositions;
 const cappedKnee = limbPoint(cappedPositions, 0, "knee");
@@ -198,7 +200,7 @@ cappedLegs.destroy();
 const leaningSource = copy(bentLeggedSource);
 leaningSource.legs.jointLean = 0.2;
 const leaningLegs = new Beefwife(leaningSource, { random: () => 0.5 });
-const leaningPositions = leaningLegs.children.find(
+const leaningPositions = partsOf(leaningLegs).find(
   (child) => child instanceof Mesh,
 ).dynamicPositions;
 const legCount = baselinePositions.length / LIMB_FLOATS;
@@ -230,7 +232,7 @@ leaningLegs.destroy();
 const longTrunkSource = copy(bentLeggedSource);
 longTrunkSource.chain.sections.trunk.spacing *= 3;
 const longTrunkLegs = new Beefwife(longTrunkSource, { random: () => 0.5 });
-const longTrunkPositions = longTrunkLegs.children.find(
+const longTrunkPositions = partsOf(longTrunkLegs).find(
   (child) => child instanceof Mesh,
 ).dynamicPositions;
 const longTrunkLeaningSource = copy(longTrunkSource);
@@ -238,7 +240,7 @@ longTrunkLeaningSource.legs.jointLean = 0.2;
 const longTrunkLeaningLegs = new Beefwife(longTrunkLeaningSource, {
   random: () => 0.5,
 });
-const longTrunkLeaningPositions = longTrunkLeaningLegs.children.find(
+const longTrunkLeaningPositions = partsOf(longTrunkLeaningLegs).find(
   (child) => child instanceof Mesh,
 ).dynamicPositions;
 assert.ok(
@@ -260,7 +262,7 @@ offsetCenterSource.legs.jointLeanCenter = -1;
 const offsetCenterLegs = new Beefwife(offsetCenterSource, {
   random: () => 0.5,
 });
-const offsetCenterPositions = offsetCenterLegs.children.find(
+const offsetCenterPositions = partsOf(offsetCenterLegs).find(
   (child) => child instanceof Mesh,
 ).dynamicPositions;
 assert.ok(
@@ -294,7 +296,7 @@ assert.ok(
 const wideSource = copy(bentLeggedSource);
 wideSource.legs.skin.limbWidth *= 2;
 const wideLegs = new Beefwife(wideSource, { random: () => 0.5 });
-const widePositions = wideLegs.children.find(
+const widePositions = partsOf(wideLegs).find(
   (child) => child instanceof Mesh,
 ).dynamicPositions;
 assert.ok(
@@ -304,7 +306,7 @@ assert.ok(
   ),
 );
 assert.equal(
-  baselineLegs.children.find((child) => child instanceof Mesh).tint,
+  partsOf(baselineLegs).find((child) => child instanceof Mesh).tint,
   bentLeggedSource.definitions.paints.leg.fill,
 );
 checks += 3;
@@ -316,8 +318,8 @@ const limbCount = bentLeggedSource.legs.pairs * 2;
 const strokedSource = copy(bentLeggedSource);
 strokedSource.definitions.paints.leg.stroke = { colour: "#ffffff", width: 2 };
 const strokedLegs = new Beefwife(strokedSource, { random: () => 0.5 });
-const strokedFill = strokedLegs.children[limbCount];
-const strokedOutline = strokedLegs.children[limbCount + 1];
+const strokedFill = partsOf(strokedLegs)[limbCount];
+const strokedOutline = partsOf(strokedLegs)[limbCount + 1];
 assert.ok(strokedFill instanceof Mesh);
 assert.equal(strokedFill.tint, strokedSource.definitions.paints.leg.fill);
 assert.ok(strokedOutline instanceof Graphics);
@@ -337,13 +339,13 @@ strokedLegs.destroy();
 const barefootSource = copy(strokedSource);
 barefootSource.legs.skin.limbWidth = 0;
 const barefootLegs = new Beefwife(barefootSource, { random: () => 0.5 });
-assert.deepEqual(barefootLegs.children[limbCount + 1].points, []);
+assert.deepEqual(partsOf(barefootLegs)[limbCount + 1].points, []);
 const hiddenSource = copy(bentLeggedSource);
 hiddenSource.legs.skin.limbWidth = 0;
 const hiddenLegs = new Beefwife(hiddenSource, { random: () => 0.5 });
 assert.ok(
   Array.from(
-    hiddenLegs.children.find((child) => child instanceof Mesh).dynamicPositions,
+    partsOf(hiddenLegs).find((child) => child instanceof Mesh).dynamicPositions,
   ).every((value) => value === 0),
 );
 checks += 2;
@@ -395,12 +397,12 @@ ribbonStrokeSource.definitions.paints.ribbon.stroke = {
   width: 3,
 };
 const ribbonStroked = new Beefwife(ribbonStrokeSource, { random: () => 0.5 });
-const ribbonMeshes = ribbonStroked.children.filter(
+const ribbonMeshes = partsOf(ribbonStroked).filter(
   (child) => child instanceof Mesh,
 );
 const ribbonFill = ribbonMeshes[ribbonMeshes.length - 1];
 const ribbonOutline =
-  ribbonStroked.children[ribbonStroked.children.indexOf(ribbonFill) + 1];
+  partsOf(ribbonStroked)[partsOf(ribbonStroked).indexOf(ribbonFill) + 1];
 assert.ok(ribbonOutline instanceof Graphics);
 assert.deepEqual(ribbonOutline.fills, []);
 assert.equal(ribbonOutline.strokes[0].color, "#00ff00");
@@ -438,7 +440,7 @@ const plantedLegs = new Beefwife(bentLeggedSource, { random: () => 0.5 });
 for (let frame = 0; frame < 30; frame++) plantedLegs.step(1 / 60);
 plantedLegs.onRender();
 const walkedLimbs = [
-  ...plantedLegs.children.find((child) => child instanceof Mesh)
+  ...partsOf(plantedLegs).find((child) => child instanceof Mesh)
     .dynamicPositions,
 ];
 const rescaledFoot = copy(bentLeggedSource);
@@ -447,7 +449,7 @@ plantedLegs.setDescriptor(rescaledFoot);
 plantedLegs.onRender();
 assert.deepEqual(
   [
-    ...plantedLegs.children.find((child) => child instanceof Mesh)
+    ...partsOf(plantedLegs).find((child) => child instanceof Mesh)
       .dynamicPositions,
   ],
   walkedLimbs,
@@ -460,7 +462,7 @@ plantedLegs.destroy();
 const straightSource = copy(bentLeggedSource);
 straightSource.legs.jointBend = 0;
 const straightLegs = new Beefwife(straightSource, { random: () => 0.5 });
-const straightPositions = straightLegs.children.find(
+const straightPositions = partsOf(straightLegs).find(
   (child) => child instanceof Mesh,
 ).dynamicPositions;
 const straightKnee = limbPoint(straightPositions, 0, "knee");
@@ -473,7 +475,7 @@ const mirroredSource = copy(bentLeggedSource);
 mirroredSource.legs.jointBend = -1;
 const mirroredLegs = new Beefwife(mirroredSource, { random: () => 0.5 });
 const mirroredKnee = limbPoint(
-  mirroredLegs.children.find((child) => child instanceof Mesh).dynamicPositions,
+  partsOf(mirroredLegs).find((child) => child instanceof Mesh).dynamicPositions,
   0,
   "knee",
 );
@@ -513,7 +515,7 @@ const projected = new Beefwife(bentLeggedSource, {
 liveProjection.perspective = 1e300;
 projected.step(1 / 60);
 projected.onRender();
-const projectedVertices = projected.children.find(
+const projectedVertices = partsOf(projected).find(
   (child) => child instanceof Mesh,
 ).dynamicPositions;
 assert.ok(
