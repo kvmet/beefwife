@@ -484,6 +484,7 @@ vm.runInContext(
   "beefwife-legs.js",
   "beefwife-skin.js",
   "beefwife-geometry.js",
+  "beefwife-display.js",
   "beefwife-graphics.js",
   "beefwife.js",
 ].forEach((name) =>
