@@ -206,6 +206,74 @@ assert.ok(tunedTravel > 100);
 assert.ok(dampedTravel < tunedTravel * 0.1);
 checks += 2;
 
+/* Bend displaces chunks and a soft link pulls back only a `linkCorrection`
+   share, so every material pairing has to stay bounded. Without the stretch
+   ceiling the whole lower half of this range reaches NaN within seconds. */
+for (const linkCorrection of [0.001, 0.05, 0.2, 0.5, 1])
+  for (const jointCorrection of [0, 0.5, 1]) {
+    const material = copy(source);
+    material.definitions.materials.body.linkCorrection = linkCorrection;
+    material.definitions.materials.body.jointCorrection = jointCorrection;
+    const loose = new Beefwife(material, { random: () => 0.5 });
+    for (let frame = 0; frame < 20 * 60; frame++)
+      loose.step(1 / 60, {
+        direction: { x: Math.cos(frame / 300), y: Math.sin(frame / 300) },
+      });
+    const pose = loose.getPose();
+    const label = `linkCorrection ${linkCorrection}, jointCorrection ${jointCorrection}`;
+    assert.ok(
+      Number.isFinite(pose.head.x) && Number.isFinite(pose.head.y),
+      `${label} reached a non-finite pose`,
+    );
+    assert.ok(
+      distance(pose.head, pose.center) <
+        loose.restLength * BeefwifeBody.MAX_LINK_STRETCH,
+      `${label} scattered wider than its clamped arc length`,
+    );
+    checks++;
+  }
+
+/* selectLowest is a hand-rolled quickselect whose comparator breaks ties on
+   index; ties are where a partition goes wrong, so the gains are randomized
+   over a spread narrow enough to force them and every lift share is tried. */
+let selectionSeed = 20260810;
+const nextSample = () => {
+  selectionSeed = (selectionSeed * 1103515245 + 12345) % 2147483648;
+  return selectionSeed / 2147483648;
+};
+for (const share of [0, 0.1, 0.33, 0.5, 0.9, 1]) {
+  const shared = copy(source);
+  shared.chain.physics.autoLift.share = share;
+  const shareModel = BeefwifeModel.compile(shared);
+  const selection = new BeefwifeBody(
+    shareModel,
+    new BeefwifeGait(shareModel.gait),
+  );
+  selection.place({ x: 0, y: 0 }, { x: 1, y: 0 });
+  selection.refreshContacts(0.75);
+  const lifted = Math.round(share * selection.chunks.length);
+  for (let trial = 0; trial < 40; trial++) {
+    const spread = 1 + Math.floor(nextSample() * 8);
+    selection.chunks.forEach((chunk) => {
+      chunk.gain = Math.floor(nextSample() * spread) - spread / 2;
+    });
+    const expected = selection.chunks
+      .map((chunk, index) => ({ gain: chunk.gain, index }))
+      .sort(
+        (before, after) => before.gain - after.gain || before.index - after.index,
+      )
+      .slice(0, lifted)
+      .map(({ index }) => index)
+      .sort((before, after) => before - after);
+    selection._applyAutoLift(1 / 120, 0.75);
+    const actual = Array.from(selection.liftTargets)
+      .flatMap((target, index) => (target ? [index] : []))
+      .sort((before, after) => before - after);
+    assert.deepEqual(actual, expected, `share ${share}, spread ${spread}`);
+  }
+  checks++;
+}
+
 console.log(
   `beefwife body: ${checks} motion checks passed, ${(maximumLinkError * 100).toFixed(1)}% maximum link error`,
 );

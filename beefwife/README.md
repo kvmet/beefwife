@@ -179,8 +179,10 @@ changing its reference. There is no material inheritance or partial override.
 Material response belongs to chunks. The link joining two chunks averages their
 `linkCorrection`, including links across section boundaries. Boundary resting
 spacing and gather response are likewise the averages of their adjacent chunks.
-Link correction is always positive; schema v1 does not admit disconnected body
-points whose separation can grow without bound.
+Link correction is always positive, and every link is held to at most three
+times its current target length however soft its material, so separation cannot
+grow without bound. The ceiling sits well above ordinary motion and engages
+only on a chain that would otherwise run away.
 
 Visual placements name one shape and one paint. Geometry and paint never refer
 to each other, and definitions cannot refer outside their descriptor.

@@ -5,6 +5,12 @@ const BeefwifeBody = (() => {
   const PHYSICS_STEP = 1 / 120;
   const RELAX_PASSES = 4;
   const AXIS_RATE = 1.5;
+  /* Bend displaces a chunk and relaxation pulls back only a `linkCorrection`
+     share, so a soft material lets each substep add more than it removes and
+     the chain scatters without bound. This is the hard ceiling every link is
+     held to whatever its material says. The widest stretch any shipped
+     descriptor reaches is 1.63, so it engages only on a chain running away. */
+  const MAX_LINK_STRETCH = 3;
   const magnitude = (x, y) => Math.sqrt(x * x + y * y);
   const compareGain = (chunks, before, after) =>
     chunks[before].gain - chunks[after].gain || before - after;
@@ -110,6 +116,72 @@ const BeefwifeBody = (() => {
       this.refreshContacts(1);
     }
 
+    /* Carries chunk state onto a chain whose section counts changed. A chunk
+       the descriptor still names keeps its position and velocity; an added one
+       is seeded from its neighbours. The creature settles from where it was
+       rather than snapping straight, and since head always holds a chunk the
+       new chain always has something to carry. */
+    adopt(previous) {
+      const source = new Map();
+      previous.model.chunks.forEach((spec, index) =>
+        source.set(`${spec.section}:${spec.localIndex}`, previous.chunks[index]),
+      );
+      const carried = this.model.chunks.map((spec, index) => {
+        const from = source.get(`${spec.section}:${spec.localIndex}`);
+        if (!from) return false;
+        const chunk = this.chunks[index];
+        chunk.x = from.x;
+        chunk.y = from.y;
+        chunk.px = from.px;
+        chunk.py = from.py;
+        chunk.dx = from.dx;
+        chunk.dy = from.dy;
+        chunk.idle = from.idle;
+        chunk.gain = from.gain;
+        return true;
+      });
+      for (let index = 0; index < this.chunks.length; index++) {
+        if (carried[index]) continue;
+        let before = index - 1;
+        while (before >= 0 && !carried[before]) before--;
+        let after = index + 1;
+        while (after < this.chunks.length && !carried[after]) after++;
+        const chunk = this.chunks[index];
+        if (before >= 0 && after < this.chunks.length) {
+          const start = this.chunks[before];
+          const end = this.chunks[after];
+          const along = (index - before) / (after - before);
+          chunk.x = start.x + (end.x - start.x) * along;
+          chunk.y = start.y + (end.y - start.y) * along;
+          chunk.px = start.px + (end.px - start.px) * along;
+          chunk.py = start.py + (end.py - start.py) * along;
+          chunk.dx = start.dx;
+          chunk.dy = start.dy;
+        } else {
+          /* dx points headward, so a chunk added past the tail extends the
+             other way. A chunk that did not exist carries no velocity. */
+          const anchorIndex = before >= 0 ? before : after;
+          const anchor = this.chunks[anchorIndex];
+          const heading = before >= 0 ? -1 : 1;
+          const link = this.model.links[before >= 0 ? index - 1 : index];
+          const reach =
+            (link ? link.restLength : 0) * Math.abs(index - anchorIndex);
+          chunk.x = anchor.x + anchor.dx * heading * reach;
+          chunk.y = anchor.y + anchor.dy * heading * reach;
+          chunk.px = chunk.x;
+          chunk.py = chunk.y;
+          chunk.dx = anchor.dx;
+          chunk.dy = anchor.dy;
+        }
+        chunk.idle = 0;
+        chunk.gain = 0;
+      }
+      this.axis = { ...previous.axis };
+      this.steeringBias = previous.steeringBias;
+      this.accumulator = previous.accumulator;
+      this.breathingScale = previous.breathingScale;
+    }
+
     refreshContacts(throttle) {
       const autoLift = this.model.physics.autoLift;
       for (let index = 0; index < this.chunks.length; index++) {
@@ -195,6 +267,7 @@ const BeefwifeBody = (() => {
       this._applyBend(throttle, this._steer(direction, dt));
       this._updateLinkTargets(throttle);
       for (let pass = 0; pass < RELAX_PASSES; pass++) this._relaxLinks();
+      this._clampLinks();
       this._applyAutoLift(dt, throttle);
     }
 
@@ -414,6 +487,26 @@ const BeefwifeBody = (() => {
       }
     }
 
+    /* Link k joins chunks k and k+1, so a head-to-tail sweep that moves only
+       the trailing chunk settles every link in one pass: the link just fixed
+       cannot be disturbed by the next one. Holding the head still also keeps
+       a clamped chain's reported pose where the host last saw it. */
+    _clampLinks() {
+      for (let index = 0; index < this.model.links.length; index++) {
+        const limit = this.linkTargets[index] * MAX_LINK_STRETCH;
+        const link = this.model.links[index];
+        const before = this.chunks[link.from];
+        const after = this.chunks[link.to];
+        const x = after.x - before.x;
+        const y = after.y - before.y;
+        const distance = magnitude(x, y);
+        if (distance <= limit) continue;
+        const scale = limit / distance;
+        after.x = before.x + x * scale;
+        after.y = before.y + y * scale;
+      }
+    }
+
     _applyAutoLift(dt, throttle) {
       const autoLift = this.model.physics.autoLift;
       if (!autoLift.amount) return;
@@ -465,6 +558,9 @@ const BeefwifeBody = (() => {
   }
 
   Object.defineProperty(BeefwifeBody, "PHYSICS_STEP", { value: PHYSICS_STEP });
+  Object.defineProperty(BeefwifeBody, "MAX_LINK_STRETCH", {
+    value: MAX_LINK_STRETCH,
+  });
   return BeefwifeBody;
 })();
 
@@ -472,5 +568,6 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     BeefwifeBody,
     PHYSICS_STEP: BeefwifeBody.PHYSICS_STEP,
+    MAX_LINK_STRETCH: BeefwifeBody.MAX_LINK_STRETCH,
   };
 }
