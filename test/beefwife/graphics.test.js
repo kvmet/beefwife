@@ -470,39 +470,34 @@ assert.equal(
 checks += 3;
 wideLegs.destroy();
 
-/* A tinted mesh carries no outline, so a limb paint that asks for both draws
-   through Graphics instead, and both passes reach the same closed outline. */
+/* A limb paint that asks for both gets two children over one set of vertices:
+   the mesh tints the triangles, the path traces the outline they came from. */
 const limbCount = bentLeggedSource.legs.pairs * 2;
 const strokedSource = copy(bentLeggedSource);
 strokedSource.definitions.paints.leg.stroke = { colour: "#ffffff", width: 2 };
 const strokedLegs = new Beefwife(strokedSource, { random: () => 0.5 });
-const strokedLimbs = strokedLegs.children[limbCount];
-assert.ok(strokedLimbs instanceof Graphics);
-assert.equal(strokedLimbs.points.length, limbCount * 6);
-assert.deepEqual(strokedLimbs.fills, [
-  strokedSource.definitions.paints.leg.fill,
-]);
-assert.equal(strokedLimbs.strokes.length, 1);
-assert.equal(strokedLimbs.strokes[0].color, "#ffffff");
-assert.equal(strokedLimbs.strokes[0].width, 2);
-const [strokedHipLeft, , , , , strokedHipRight] = strokedLimbs.points;
-assert.ok(
-  near(
-    Math.hypot(
-      strokedHipLeft[0] - strokedHipRight[0],
-      strokedHipLeft[1] - strokedHipRight[1],
-    ),
-    strokedSource.legs.skin.limbWidth,
-  ),
+const strokedFill = strokedLegs.children[limbCount];
+const strokedOutline = strokedLegs.children[limbCount + 1];
+assert.ok(strokedFill instanceof Mesh);
+assert.equal(strokedFill.tint, strokedSource.definitions.paints.leg.fill);
+assert.ok(strokedOutline instanceof Graphics);
+assert.deepEqual(strokedOutline.fills, []);
+assert.equal(strokedOutline.strokes.length, 1);
+assert.equal(strokedOutline.strokes[0].color, "#ffffff");
+assert.equal(strokedOutline.strokes[0].width, 2);
+assert.equal(strokedOutline.points.length, limbCount * 6);
+assert.deepEqual(
+  strokedOutline.points.flat(),
+  Array.from(strokedFill.dynamicPositions),
 );
-checks += 7;
+checks += 8;
 strokedLegs.destroy();
 
 /* No width is no limb, whichever way it draws; the feet stand on their own. */
 const barefootSource = copy(strokedSource);
 barefootSource.legs.skin.limbWidth = 0;
 const barefootLegs = new Beefwife(barefootSource, { random: () => 0.5 });
-assert.deepEqual(barefootLegs.children[limbCount].points, []);
+assert.deepEqual(barefootLegs.children[limbCount + 1].points, []);
 const hiddenSource = copy(bentLeggedSource);
 hiddenSource.legs.skin.limbWidth = 0;
 const hiddenLegs = new Beefwife(hiddenSource, { random: () => 0.5 });
@@ -514,6 +509,43 @@ assert.ok(
 checks += 2;
 barefootLegs.destroy();
 hiddenLegs.destroy();
+
+/* The ribbon splits the same way, and its stroke invents nothing: it walks the
+   mesh's own edge and rim vertices, skipping each cap's hub and the two rim
+   points that are already edge vertices. */
+const CAP_SEGMENTS = 12;
+const CAP_VERTICES = CAP_SEGMENTS + 2;
+const ribbonStrokeSource = copy(bentLeggedSource);
+ribbonStrokeSource.definitions.paints.ribbon.stroke = {
+  colour: "#00ff00",
+  width: 3,
+};
+const ribbonStroked = new Beefwife(ribbonStrokeSource, { random: () => 0.5 });
+const ribbonMeshes = ribbonStroked.children.filter(
+  (child) => child instanceof Mesh,
+);
+const ribbonFill = ribbonMeshes[ribbonMeshes.length - 1];
+const ribbonOutline =
+  ribbonStroked.children[ribbonStroked.children.indexOf(ribbonFill) + 1];
+assert.ok(ribbonOutline instanceof Graphics);
+assert.deepEqual(ribbonOutline.fills, []);
+assert.equal(ribbonOutline.strokes[0].color, "#00ff00");
+const ribbonChunks =
+  (ribbonFill.dynamicPositions.length / 2 - CAP_VERTICES * 2) / 2;
+assert.equal(
+  ribbonOutline.points.length,
+  ribbonChunks * 2 + (CAP_SEGMENTS - 1) * 2,
+);
+const meshVertices = new Set();
+for (let at = 0; at < ribbonFill.dynamicPositions.length; at += 2)
+  meshVertices.add(
+    `${ribbonFill.dynamicPositions[at]},${ribbonFill.dynamicPositions[at + 1]}`,
+  );
+assert.ok(
+  ribbonOutline.points.every(([x, y]) => meshVertices.has(`${x},${y}`)),
+);
+checks += 5;
+ribbonStroked.destroy();
 
 /* Everything under legs.skin is drawn, never simulated, so editing it leaves
    the walked limbs exactly where they were; a leg rebuild would replant them. */
