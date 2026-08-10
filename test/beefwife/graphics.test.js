@@ -216,10 +216,46 @@ assert.ok(drawnScales.some((scale) => Math.abs(scale / 0.002 - 1) < 0.02));
 tiny.destroy();
 checks += 2;
 
+/* A mesh rebuilt for a new vertex count must take its geometry with it: Pixi
+   drops the reference without destroying it, and the renderer holds the
+   buffers until an idle sweep. */
+const regeometried = copy(source);
+regeometried.chain.sections.tail.chunks += 2;
+const oldGeometry = beefwife.children.find((child) => child instanceof Mesh)
+  ? beefwife.children.filter((child) => child instanceof Mesh).at(-1).geometry
+  : null;
+assert.ok(oldGeometry);
+beefwife.setDescriptor(regeometried);
+assert.ok(oldGeometry.destroyed, "a replaced mesh left its geometry behind");
+checks += 2;
+
 const owned = [...beefwife.children];
+const contexts = new Set(owned.map((child) => child.context).filter(Boolean));
 beefwife.destroy();
 assert.equal(beefwife.destroyed, true);
 assert.ok(owned.every((child) => child.destroyed));
-checks += 2;
+/* Pixi's context setter subscribes a Graphics to its context and `destroy`
+   never unsubscribes, so a shared context would hold every child it ever
+   painted alive for as long as the shape and paint live. */
+for (const context of contexts)
+  assert.ok(
+    [...context.listeners].every((child) => !child.destroyed),
+    "a destroyed child is still subscribed to a shared context",
+  );
+checks += 3;
+
+/* A destroyed beefwife has no scene to keep in step with, and setDescriptor
+   would build a second one under the dead container. */
+for (const [act, reason] of [
+  [() => beefwife.step(1 / 60), /destroyed beefwife/],
+  [() => beefwife.setDescriptor(source), /destroyed beefwife/],
+  [() => beefwife.reset(), /destroyed beefwife/],
+  [() => beefwife.translate({ x: 1, y: 0 }), /destroyed beefwife/],
+]) {
+  assert.throws(act, reason);
+  checks++;
+}
+assert.equal(beefwife.children.length, 0);
+checks++;
 
 console.log(`beefwife graphics: ${checks} retained-scene checks passed`);

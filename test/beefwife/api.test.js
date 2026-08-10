@@ -144,6 +144,20 @@ checks += 3;
     /offset\.y must be a finite number/,
   ],
   [() => beefwife.translate(), /offset is required/],
+  /* null is what an emptied number input hands back, and `??` would take it
+     as an omitted field rather than a bad one. */
+  [
+    () => beefwife.step(0.01, { throttle: null }),
+    /controls\.throttle must be a finite number/,
+  ],
+  [
+    () => new Beefwife(example, { phase: null }),
+    /options\.phase must be a finite number/,
+  ],
+  [
+    () => beefwife.reset({ phase: null }),
+    /options\.phase must be a finite number/,
+  ],
 ].forEach(([act, reason]) => {
   assert.throws(act, reason);
   checks++;

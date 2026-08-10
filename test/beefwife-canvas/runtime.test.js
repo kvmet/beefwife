@@ -346,6 +346,7 @@ const pixiStub = (log) => {
     getBuffer() {
       return this.buffer;
     }
+    destroy() {}
   }
   class Mesh extends Container {
     constructor(options) {

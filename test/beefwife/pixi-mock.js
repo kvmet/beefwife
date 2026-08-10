@@ -47,6 +47,21 @@ class Graphics extends Container {
     this.points = [];
     this.fills = [];
     this.strokes = [];
+    this._context = null;
+  }
+
+  /* Pixi subscribes the Graphics to its context here and unsubscribes the one
+     it held before. `destroy` does not unsubscribe, so a context outliving the
+     child keeps it alive; that asymmetry is the whole point of modelling it. */
+  set context(context) {
+    if (context === this._context) return;
+    if (this._context) this._context.listeners.delete(this);
+    this._context = context;
+    context.listeners.add(this);
+  }
+
+  get context() {
+    return this._context;
   }
 
   clear() {
@@ -94,6 +109,7 @@ class GraphicsContext {
   constructor() {
     this.fills = [];
     this.strokes = [];
+    this.listeners = new Set();
   }
   path(value) {
     this.drawnPath = value;
@@ -134,6 +150,10 @@ class MeshGeometry {
     };
   }
 
+  destroy() {
+    this.destroyed = true;
+  }
+
   getBuffer(id) {
     if (!Object.hasOwn(this.buffers, id))
       throw new TypeError(`no buffer named ${id}`);
@@ -149,6 +169,12 @@ class Mesh extends Container {
   constructor(options) {
     super();
     this.geometry = options.geometry;
+  }
+
+  // Pixi drops the reference without destroying the geometry behind it.
+  destroy(options) {
+    super.destroy(options);
+    this.geometry = null;
   }
 }
 

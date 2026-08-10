@@ -129,6 +129,12 @@ finite offset. It preserves velocity, gait phase, steering, and secondary
 motion, making it suitable for world wrapping. It does not change the last
 requested direction.
 
+`destroy()` takes down every display object the instance owns and detaches it
+from its parent. It is required, not optional: a host running many beefwives
+must call it, because the scene is retained and nothing else frees it.
+Afterwards `step`, `setDescriptor`, `reset`, and `translate` throw. The
+descriptor and the last pose remain readable.
+
 `getPose()` returns a stable runtime-owned snapshot in world pixels. The same
 object is refreshed by `step`, `setDescriptor`, `reset`, and `translate`, so a
 host may retain the reference instead of requesting a new object each frame.

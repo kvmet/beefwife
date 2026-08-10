@@ -31,15 +31,26 @@ const BeefwifeGraphics = (() => {
 
   const sharedContexts = new WeakMap();
 
+  /* Pixi leaves something behind whichever kind of child this is. A Graphics
+     is subscribed to its context by the context setter and `destroy` never
+     unsubscribes, so a child holding a cached context stays reachable for as
+     long as that shape and paint live; handing it a private context first
+     detaches it from the shared one. A Mesh drops its reference to its
+     geometry without destroying it, leaving the buffers on the renderer's
+     books until an idle sweep, and every mesh here owns its geometry. */
+  const discard = (parent, child) => {
+    if (child.parent === parent) parent.removeChild(child);
+    const geometry = child.geometry ?? null;
+    if (child.context) child.context = new PIXI.GraphicsContext();
+    child.destroy();
+    if (geometry) geometry.destroy();
+  };
+
   /* Brings a list of interchangeable graphics to a count, keeping every one it
      can. Reports whether the parent's children moved. */
   const resizeGraphics = (parent, list, count) => {
     if (list.length === count) return false;
-    while (list.length > count) {
-      const child = list.pop();
-      if (child.parent === parent) parent.removeChild(child);
-      child.destroy();
-    }
+    while (list.length > count) discard(parent, list.pop());
     while (list.length < count) list.push(new PIXI.Graphics());
     return true;
   };
@@ -214,8 +225,7 @@ const BeefwifeGraphics = (() => {
     }
 
     _drop(child) {
-      if (child.parent === this.parent) this.parent.removeChild(child);
-      child.destroy();
+      discard(this.parent, child);
     }
 
     _syncLimbParts(legCount) {
@@ -565,9 +575,7 @@ const BeefwifeGraphics = (() => {
         ...this.plates,
       ];
       for (const child of children) {
-        if (child === null) continue;
-        if (child.parent === this.parent) this.parent.removeChild(child);
-        child.destroy();
+        if (child !== null) discard(this.parent, child);
       }
     }
   }

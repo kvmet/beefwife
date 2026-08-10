@@ -92,6 +92,11 @@ const Beefwife = (() => {
     return options;
   };
 
+  /* Only an absent field takes the default. `??` would let null through as
+     well, and null is what an emptied number input hands back. */
+  const defaulted = (value, fallback) =>
+    value === undefined ? fallback : value;
+
   const finite = (value, path) => {
     if (typeof value !== "number" || !Number.isFinite(value))
       throw new TypeError(`${path} must be a finite number`);
@@ -226,6 +231,7 @@ const Beefwife = (() => {
     #legs;
     #skin;
     #graphics = null;
+    #gone = false;
     #renderOptions = null;
     #renderState = null;
     #pose = newPose();
@@ -250,7 +256,7 @@ const Beefwife = (() => {
         { x: 1, y: 0 },
         "options.direction",
       );
-      const phase = finite(options.phase ?? 0, "options.phase");
+      const phase = finite(defaulted(options.phase, 0), "options.phase");
       if (options.random !== undefined && typeof options.random !== "function")
         throw new TypeError("options.random must be a function");
       this.#random = options.random ?? Math.random;
@@ -289,10 +295,14 @@ const Beefwife = (() => {
     }
 
     step(rawDt, rawControls) {
+      this.#live("step");
       const dt = finite(rawDt, "dt");
       if (dt < 0) throw new RangeError("dt must be nonnegative");
       const controls = optionsOf(rawControls, CONTROL_KEYS, "controls");
-      const throttle = finite(controls.throttle ?? 1, "controls.throttle");
+      const throttle = finite(
+        defaulted(controls.throttle, 1),
+        "controls.throttle",
+      );
       if (throttle < 0 || throttle > 1)
         throw new RangeError("controls.throttle must be from 0 to 1");
       const wanted = directionInto(
@@ -320,6 +330,7 @@ const Beefwife = (() => {
     }
 
     setDescriptor(descriptor) {
+      this.#live("setDescriptor");
       const nextModel = Model.compile(descriptor);
       Graphics.prepare(nextModel);
       const nextGait = new Gait(nextModel.gait, this.#gait.phase);
@@ -366,6 +377,7 @@ const Beefwife = (() => {
     }
 
     reset(rawOptions) {
+      this.#live("reset");
       const options = optionsOf(rawOptions, RESET_KEYS, "options");
       const pose = this.#body.getPose(this.#pose);
       const position = worldPoint(
@@ -378,7 +390,10 @@ const Beefwife = (() => {
         pose.direction,
         "options.direction",
       );
-      const phase = finite(options.phase ?? this.#gait.phase, "options.phase");
+      const phase = finite(
+        defaulted(options.phase, this.#gait.phase),
+        "options.phase",
+      );
       const gait = new Gait(this.#model.gait, phase);
       const breathingPhase = this.#model.breathing.strain
         ? TAU * this.#sampleRandom()
@@ -405,6 +420,7 @@ const Beefwife = (() => {
     }
 
     translate(rawOffset) {
+      this.#live("translate");
       const offset = worldPoint(rawOffset, null, "offset");
       if (!this.#body.fitsTranslation(offset, MAX_WORLD_COORDINATE))
         throw new RangeError("offset places the body outside the world");
@@ -424,7 +440,16 @@ const Beefwife = (() => {
         this.#graphics.destroy();
         this.#graphics = null;
       }
+      this.#gone = true;
       super.destroy(options);
+    }
+
+    /* A destroyed instance has no scene left to keep in step with, and
+       `setDescriptor` would build a second one under the dead container that
+       nothing would ever free. Refuse rather than leak. */
+    #live(method) {
+      if (this.#gone)
+        throw new Error(`${method} was called on a destroyed beefwife`);
     }
 
     #sampleRandom() {
