@@ -120,7 +120,7 @@ source.name = "caller mutation";
 source.chain.sections.head.spacing = 99;
 source.definitions.shapes.eye.path = "M 0 0";
 source.chain.skin.ornaments[0].id = "changed";
-assert.equal(model.descriptor.name, "undulating");
+assert.equal(model.descriptor.name, "beefwife");
 assert.equal(model.sections.head.spacing, 12);
 assert.notEqual(model.skin.ornaments[0].id, "changed");
 assert.notEqual(model.skin.ornaments[0].shape.path, "M 0 0");

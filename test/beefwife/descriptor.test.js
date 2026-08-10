@@ -415,8 +415,20 @@ oneExtraOrnament.chain.skin.ornaments.push(extraOrnament);
 rejected("one excessive ornament", oneExtraOrnament, /at most 512/);
 
 const excessiveScale = copy(source);
-excessiveScale.chain.skin.plates[0].scale = 101;
+excessiveScale.chain.skin.plates[0].scale = 1001;
 rejected("excessive drawable scale", excessiveScale, /between/);
+
+/* Lag is radians per pixel, so tight spacing needs a large one: this is the
+   example's own 0.47 radians per chunk at a hundredth of its spacing. */
+const tightSpacing = copy(source);
+for (const name of ["head", "trunk", "tail"])
+  tightSpacing.chain.sections[name].spacing = 0.12;
+tightSpacing.gait.phaseLagRadiansPerPixel = 3.9166666667;
+assert.equal(
+  BeefwifeDescriptor.read(tightSpacing).gait.phaseLagRadiansPerPixel,
+  3.9166666667,
+);
+checks++;
 
 const disconnectedMaterial = copy(source);
 disconnectedMaterial.definitions.materials.body.linkCorrection = 0;
@@ -431,7 +443,7 @@ blankPaint.definitions.paints.eye.fill = " ";
 rejected("blank paint", blankPaint, /must not be blank/);
 
 const paddedName = copy(source);
-paddedName.name = " undulating ";
+paddedName.name = " beefwife ";
 rejected("padded name", paddedName, /allowed/);
 
 const accessor = copy(source);
@@ -542,8 +554,83 @@ for (const factor of [0, -1, NaN, Infinity, "2"])
     /scale factor/,
   );
 assert.throws(() => BeefwifeDescriptor.scale(source, 100), /between/);
-assert.throws(() => BeefwifeDescriptor.scale(source, 0.001), /between/);
+assert.throws(() => BeefwifeDescriptor.scale(source, 0.0001), /between/);
 checks += 24;
+
+assert.deepEqual(BeefwifeDescriptor.bounds("legs.pairs"), {
+  kind: "number",
+  min: 0,
+  max: 128,
+  integer: true,
+  nullable: false,
+});
+assert.deepEqual(BeefwifeDescriptor.bounds("chain.skin.ornaments[].side"), {
+  kind: "choice",
+  values: ["left", "right", "both"],
+  nullable: false,
+});
+assert.equal(
+  BeefwifeDescriptor.bounds("chain.skin.plates[].repeat.count").nullable,
+  true,
+);
+assert.equal(
+  BeefwifeDescriptor.bounds("chain.skin.plates[].at.section").kind,
+  "choice",
+);
+// Descends through a nullable container to reach the field inside it.
+assert.equal(
+  BeefwifeDescriptor.bounds("definitions.paints.*.stroke.width").max,
+  1000,
+);
+assert.equal(BeefwifeDescriptor.bounds("definitions.shapes").minEntries, 1);
+assert.equal(BeefwifeDescriptor.bounds("chain.skin.plates").maxLength, 512);
+assert.ok(Object.isFrozen(BeefwifeDescriptor.bounds("legs.pairs")));
+for (const path of ["legs.nope", "chain.skin.plates.side", "legs..pairs"])
+  assert.throws(() => BeefwifeDescriptor.bounds(path), /not a field/);
+assert.throws(() => BeefwifeDescriptor.bounds(""), /non-empty string/);
+assert.throws(() => BeefwifeDescriptor.bounds(null), /non-empty string/);
+checks += 11;
+
+/* A reported bound is only useful if it is the one `read` enforces, so every
+   edge is applied to a real descriptor and the value past it is rejected. */
+const setAt = (target, segments, value) => {
+  if (target === null || target === undefined) return;
+  const [head, ...rest] = segments;
+  if (head === "[]")
+    return target.forEach((item) => setAt(item, rest, value));
+  if (head === "*")
+    return Object.values(target).forEach((item) => setAt(item, rest, value));
+  if (!rest.length) target[head] = value;
+  else setAt(target[head], rest, value);
+};
+
+for (const path of [
+  "legs.pairs",
+  "gait.bend.harmonic",
+  "chain.skin.loadScale",
+  "chain.skin.ornaments[].scale",
+  "chain.skin.plates[].scale",
+  "definitions.materials.*.grip.forward",
+  "chain.sections.trunk.spacing",
+  "definitions.paints.*.stroke.width",
+  "chain.skin.ornaments[].react",
+]) {
+  const limit = BeefwifeDescriptor.bounds(path);
+  const segments = path.replace(/\[\]/g, ".[]").split(".");
+  const step = limit.integer ? 1 : 1e-6;
+  for (const [edge, outside] of [
+    [limit.min, limit.min - step],
+    [limit.max, limit.max + step],
+  ]) {
+    const inside = copy(source);
+    setAt(inside, segments, edge);
+    BeefwifeDescriptor.read(inside);
+    const beyond = copy(source);
+    setAt(beyond, segments, outside);
+    rejected(`${path} past ${outside}`, beyond, /between/);
+  }
+  checks += 2;
+}
 
 if (uncanonical.length)
   throw new Error(

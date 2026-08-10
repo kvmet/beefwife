@@ -53,7 +53,7 @@ const BeefwifeDescriptor = (() => {
   /* Placement scales carry the px dimension: shape paths are local units,
      drawn px = path units x scale. plantedScale is a ratio on top of
      foot.scale and stays invariant. */
-  const pxScale = px(0.001, 100);
+  const pxScale = px(0.001, 1000);
   const ratioScale = number(0.001, 100);
   const distance = px(1e-6, 10000);
   const offset = px(-10000, 10000);
@@ -147,7 +147,9 @@ const BeefwifeDescriptor = (() => {
     }),
     gait: object({
       cyclesPerSecond: number(0, 100),
-      phaseLagRadiansPerPixel: perPx(-Math.PI, Math.PI),
+      /* Aliasing depends on lag x spacing x harmonic, so no per-pixel bound
+         can express it; this one only keeps the value sane and scalable. */
+      phaseLagRadiansPerPixel: perPx(-1000, 1000),
       bend: object({
         amplitude: number(0, 10),
         harmonic: number(1, 8, true),
@@ -495,6 +497,64 @@ const BeefwifeDescriptor = (() => {
 
   const read = (value) => validate(readNode(schema, value, "$", new WeakSet()));
 
+  /* Field constraints for editors, so a caller reads one field's range from
+     the schema that enforces it rather than keeping a second copy. Paths name
+     fields with dots, an array item with [], and a record entry with *. */
+  const resolve = (segments) => {
+    let node = schema;
+    for (const segment of segments) {
+      while (node.kind === "nullable") node = node.item;
+      if (node.kind === "object" && Object.hasOwn(node.fields, segment))
+        node = node.fields[segment];
+      else if (node.kind === "record" && segment === "*") node = node.item;
+      else if (node.kind === "array" && segment === "[]") node = node.item;
+      else return null;
+    }
+    const nullable = node.kind === "nullable";
+    return { node: nullable ? node.item : node, nullable };
+  };
+
+  const shapeOf = (node) => {
+    if (node.kind === "number")
+      return {
+        kind: "number",
+        min: node.min,
+        max: node.max,
+        integer: node.integer,
+      };
+    if (node.kind === "string")
+      return {
+        kind: "string",
+        minLength: node.minLength,
+        maxLength: node.maxLength,
+        pattern: node.pattern,
+      };
+    if (node.kind === "choice")
+      return { kind: "choice", values: Object.freeze([...node.values]) };
+    if (node.kind === "literal") return { kind: "literal", value: node.value };
+    if (node.kind === "object")
+      return {
+        kind: "object",
+        fields: Object.freeze(Object.keys(node.fields)),
+      };
+    if (node.kind === "record")
+      return {
+        kind: "record",
+        minEntries: node.minLength,
+        maxEntries: node.maxLength,
+        keyPattern: ID_PATTERN,
+      };
+    return { kind: "array", maxLength: node.maxLength };
+  };
+
+  const bounds = (path) => {
+    if (typeof path !== "string" || !path)
+      fail("$", "bounds path must be a non-empty string");
+    const found = resolve(path.replace(/\[\]/g, ".[]").split("."));
+    if (!found) fail(`$.${path}`, "is not a field in this schema");
+    return Object.freeze({ ...shapeOf(found.node), nullable: found.nullable });
+  };
+
   const scaleNode = (node, value, factor) => {
     if (node.kind === "nullable")
       return value === null ? null : scaleNode(node.item, value, factor);
@@ -544,7 +604,15 @@ const BeefwifeDescriptor = (() => {
     return JSON.stringify(read(value), null, space);
   };
 
-  return Object.freeze({ VERSION, LIMITS, read, parse, stringify, scale });
+  return Object.freeze({
+    VERSION,
+    LIMITS,
+    read,
+    parse,
+    stringify,
+    scale,
+    bounds,
+  });
 })();
 
 if (typeof module !== "undefined" && module.exports) {

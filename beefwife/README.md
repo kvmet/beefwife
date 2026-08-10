@@ -159,6 +159,27 @@ the pose trace scales by the factor with timing and feel unchanged. Paint
 stroke widths are exempt by rule. A product outside its field's bounds is an
 error, not a clamp.
 
+`bounds(path)` reports what the schema enforces for one field, so an editor can
+read a range from the schema that checks it instead of keeping a second copy.
+Paths name fields with dots, an array item with `[]`, and a record entry with
+`*`:
+
+```js
+BeefwifeDescriptor.bounds("legs.pairs");
+// { kind: "number", min: 0, max: 128, integer: true, nullable: false }
+BeefwifeDescriptor.bounds("chain.skin.ornaments[].side");
+// { kind: "choice", values: ["left", "right", "both"], nullable: false }
+BeefwifeDescriptor.bounds("definitions.paints.*.stroke.width");
+// { kind: "number", min: 0, max: 1000, integer: false, nullable: false }
+```
+
+Every kind reports `nullable`. Numbers add `min`, `max`, and `integer`; strings
+add `minLength`, `maxLength`, and `pattern`; choices add `values`; objects add
+`fields`; records add `minEntries`, `maxEntries`, and `keyPattern`; arrays add
+`maxLength`. A path the schema does not define is an error. A consumer may
+narrow a range to suit its own users, but a value outside the reported bound is
+one `read` rejects.
+
 See [beefwife.example.json](beefwife.example.json) for the complete shape.
 
 ## Definitions and links
@@ -214,6 +235,23 @@ target length by at most 10%. Its independent cycle continues at zero throttle;
 trunks with more chunks breathe more slowly. Head, tail, and section-boundary
 links retain their ordinary target lengths.
 
+## Chain physics
+
+`chain.physics` holds the two responses that are not gait channels.
+
+`autoLift` is adaptive ground lift. Each substep it ranks chunks by how far
+their grip pushed the creature along its travel axis, picks up the `share`
+fraction that pushed the least, and eases every chunk toward its lifted or
+planted target at `rate` per second. `amount` is the contact a fully lifted
+chunk loses: `0` disables the mechanism outright and `1` frees the chunk. Lift
+multiplies the contact rhythm rather than replacing it.
+
+`steering` turns the head toward the requested direction. The angle between
+them times `gain` is the wanted bend bias in radians, clamped to `limit`; the
+applied bias eases toward that at `rate` per second. The bias adds to the bend
+channel along the whole chain, so a turning beefwife curves through its body
+instead of pivoting at the neck. Throttle scales it.
+
 ## Gait
 
 All channels read one phase clock and one spatial lag:
@@ -264,8 +302,14 @@ Offsets are zero-based from the named end. Repetition walks away from that end:
 
 Placements that leave their scope are invalid; they are never clamped.
 
-Only one plate may resolve onto a chunk. Ornaments accumulate, may use the same
-anchor, and retain descriptor order. Drawing order is:
+Only one plate may resolve onto a chunk. `chain.skin.loadScale` then grows
+plates with grip: a plate's drawn scale is multiplied by
+`1 + loadScale * contact`, so a chunk under full contact draws `1 + loadScale`
+times its resting size and a negative value shrinks it instead. `-1` is the
+floor because below it a fully gripped plate would draw mirrored.
+
+Ornaments accumulate, may use the same anchor, and retain descriptor order.
+Drawing order is:
 
 1. `under` ornaments in descriptor order;
 2. ribbon and plates;
@@ -309,6 +353,10 @@ timing from the instance's injected random function. A jitter of zero makes each
 pair exactly mirrored and consumes randomness without changing its geometry.
 All positional jitter scales with the larger of `reach` and the resolved
 spread; it never introduces a fixed world-pixel displacement.
+
+`legs.skin.foot.scale` is the drawn foot size in px. `plantedScale` multiplies
+it while the foot is on the ground, so feet may swell as they take weight and
+shrink through the swing. It is a ratio, so a resized creature keeps it.
 
 A limb is one closed outline, not a stroked line: hip, knee, foot down one side
 and back up the other, with both sides sharing each knee vertex so a bend leaves
