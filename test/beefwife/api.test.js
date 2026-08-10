@@ -43,60 +43,109 @@ input.definitions.shapes.eye.path = "M 0 0";
 assert.equal(beefwife.descriptor.name, "beefwife");
 assert.notEqual(beefwife.descriptor.definitions.shapes.eye.path, "M 0 0");
 assert.ok(Object.isFrozen(beefwife.descriptor));
-checks += 5;
+// Freezing only the root would leave every nested object writable.
+assert.ok(Object.isFrozen(beefwife.descriptor.chain.sections.head));
+assert.ok(Object.isFrozen(beefwife.descriptor.chain.skin.plates[0].at));
+checks += 7;
 
 const borrowedPose = beefwife.getPose();
 assert.equal(beefwife.getPose(), borrowedPose);
-assert.equal(beefwife.getPose.length, 0);
 borrowedPose.head.x = -100;
 assert.equal(beefwife.getPose().head.x, -100);
 beefwife.translate({ x: 0, y: 0 });
 assert.equal(beefwife.getPose(), borrowedPose);
 assert.equal(borrowedPose.head.x, 20);
-checks += 5;
+checks += 4;
 
 assert.equal(beefwife.draw, undefined);
 assert.equal(beefwife.getRenderState, undefined);
 assert.equal(beefwife.sync, undefined);
 checks += 3;
 
+/* Each case names the reason it must be rejected: a bare `assert.throws` here
+   passes for a method that throws on everything. */
 [
-  () => new Beefwife(example, { unknown: true }),
-  () => new Beefwife(example, { position: { x: 0, y: 0, z: 0 } }),
-  () => new Beefwife(example, { direction: { x: 0, y: 0 } }),
-  () => new Beefwife(example, { position: { x: Number.MAX_VALUE, y: 0 } }),
-  () => new Beefwife(example, { phase: Infinity }),
-  () => new Beefwife(example, { random: 1 }),
-  () => new Beefwife(example, { render: { unknown: true } }),
-  () => new Beefwife(example, { render: { roundVertices: 1 } }),
-  () => new Beefwife(example, { render: { pixelResolution: 0 } }),
-  () => new Beefwife(example, { render: { pixelResolution: Infinity } }),
-  () =>
-    new Beefwife(example, {
-      render: {
-        kneeProjection: { centerX: 0, centerY: 0, perspective: -1 },
-      },
-    }),
-  () =>
-    new Beefwife(example, {
-      render: {
-        kneeProjection: {
-          centerX: 0,
-          centerY: 0,
-          perspective: 1,
-          extra: true,
+  [
+    () => new Beefwife(example, { unknown: true }),
+    /options\.unknown is unknown/,
+  ],
+  [
+    () => new Beefwife(example, { position: { x: 0, y: 0, z: 0 } }),
+    /options\.position\.z is unknown/,
+  ],
+  [
+    () => new Beefwife(example, { direction: { x: 0, y: 0 } }),
+    /options\.direction must be nonzero/,
+  ],
+  [
+    () => new Beefwife(example, { position: { x: Number.MAX_VALUE, y: 0 } }),
+    /options\.position coordinates must be from/,
+  ],
+  [
+    () => new Beefwife(example, { phase: Infinity }),
+    /options\.phase must be a finite number/,
+  ],
+  [
+    () => new Beefwife(example, { random: 1 }),
+    /options\.random must be a function/,
+  ],
+  [
+    () => new Beefwife(example, { render: { unknown: true } }),
+    /options\.render\.unknown is unknown/,
+  ],
+  [
+    () => new Beefwife(example, { render: { roundVertices: 1 } }),
+    /options\.render\.roundVertices must be a boolean/,
+  ],
+  [
+    () => new Beefwife(example, { render: { pixelResolution: 0 } }),
+    /options\.render\.pixelResolution must be positive/,
+  ],
+  [
+    () => new Beefwife(example, { render: { pixelResolution: Infinity } }),
+    /options\.render\.pixelResolution must be a finite number/,
+  ],
+  [
+    () =>
+      new Beefwife(example, {
+        render: {
+          kneeProjection: { centerX: 0, centerY: 0, perspective: -1 },
         },
-      },
-    }),
-  () => beefwife.step(-1),
-  () => beefwife.step(NaN),
-  () => beefwife.step(0.01, { throttle: 1.1 }),
-  () => beefwife.step(0.01, { direction: { x: 0, y: 0 } }),
-  () => beefwife.step(0.01, { extra: true }),
-  () => beefwife.translate({ x: 1, y: Infinity }),
-  () => beefwife.translate(),
-].forEach((act) => {
-  assert.throws(act);
+      }),
+    /options\.render\.kneeProjection\.perspective must be nonnegative/,
+  ],
+  [
+    () =>
+      new Beefwife(example, {
+        render: {
+          kneeProjection: {
+            centerX: 0,
+            centerY: 0,
+            perspective: 1,
+            extra: true,
+          },
+        },
+      }),
+    /options\.render\.kneeProjection\.extra is unknown/,
+  ],
+  [() => beefwife.step(-1), /dt must be nonnegative/],
+  [() => beefwife.step(NaN), /dt must be a finite number/],
+  [
+    () => beefwife.step(0.01, { throttle: 1.1 }),
+    /controls\.throttle must be from 0 to 1/,
+  ],
+  [
+    () => beefwife.step(0.01, { direction: { x: 0, y: 0 } }),
+    /controls\.direction must be nonzero/,
+  ],
+  [() => beefwife.step(0.01, { extra: true }), /controls\.extra is unknown/],
+  [
+    () => beefwife.translate({ x: 1, y: Infinity }),
+    /offset\.y must be a finite number/,
+  ],
+  [() => beefwife.translate(), /offset is required/],
+].forEach(([act, reason]) => {
+  assert.throws(act, reason);
   checks++;
 });
 
@@ -217,12 +266,25 @@ assert.ok(!samePose(breathAtZero.getPose(), breathAtQuarter.getPose()));
 assert.ok(samePose(breathAtQuarter.getPose(), matchingBreath.getPose()));
 checks += 2;
 
-assert.equal("_body" in beefwife, false);
-assert.equal("_model" in beefwife, false);
-assert.equal("_gait" in beefwife, false);
-assert.equal("_legs" in beefwife, false);
-assert.equal("_skin" in beefwife, false);
-checks += 5;
+/* `#private` fields are invisible to `in` whatever the implementation, so
+   naming ones this code never had proves nothing. Enumerate what is actually
+   reachable instead: two Pixi properties and the documented methods. */
+assert.deepEqual(Object.keys(beefwife), ["label", "onRender"]);
+assert.deepEqual(
+  Object.getOwnPropertyNames(Object.getPrototypeOf(beefwife)).sort(),
+  [
+    "constructor",
+    "descriptor",
+    "destroy",
+    "getPose",
+    "reset",
+    "restLength",
+    "setDescriptor",
+    "step",
+    "translate",
+  ],
+);
+checks += 2;
 
 const sixty = new Beefwife(example);
 const oneTwenty = new Beefwife(example);
