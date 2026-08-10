@@ -161,7 +161,7 @@
         <div class="slim-heading">
           <label class="advanced-mode">
             <Tooltip
-              label="Shows harmonics, phases, steering, and the per-section channel scales."
+              label="Adds the detail controls to every tab, from ornament Layer to gait phases. Hidden fields keep their current values."
               ><span>Advanced mode</span></Tooltip
             >
             <div class="switch">
