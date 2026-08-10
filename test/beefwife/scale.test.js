@@ -9,12 +9,12 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const BeefwifeDescriptor = require("../../beefwife/beefwife-descriptor.js");
-const BeefwifeModel = require("../../beefwife/beefwife-model.js");
-const { BeefwifeGait } = require("../../beefwife/beefwife-drive.js");
-const { BeefwifeBody } = require("../../beefwife/beefwife-body.js");
-const { BeefwifeLegs } = require("../../beefwife/beefwife-legs.js");
-const { BeefwifeSkin } = require("../../beefwife/beefwife-skin.js");
+const BeefwifeDescriptor = require("../../beefwife/src/descriptor.mjs");
+const BeefwifeModel = require("../../beefwife/src/model.mjs");
+const { Gait: BeefwifeGait } = require("../../beefwife/src/drive.mjs");
+const { Body: BeefwifeBody } = require("../../beefwife/src/body.mjs");
+const { Legs: BeefwifeLegs } = require("../../beefwife/src/legs.mjs");
+const { Skin: BeefwifeSkin } = require("../../beefwife/src/skin.mjs");
 
 const source = JSON.parse(
   fs.readFileSync(

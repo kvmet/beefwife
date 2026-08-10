@@ -9,10 +9,13 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const Beefwife = require("../../beefwife/beefwife.js");
-const BeefwifeModel = require("../../beefwife/beefwife-model.js");
-const { BeefwifeGait } = require("../../beefwife/beefwife-drive.js");
-const { BeefwifeBody } = require("../../beefwife/beefwife-body.js");
+const { Beefwife } = require("../../beefwife/src/beefwife.mjs");
+const BeefwifeModel = require("../../beefwife/src/model.mjs");
+const { Gait: BeefwifeGait } = require("../../beefwife/src/drive.mjs");
+const {
+  Body: BeefwifeBody,
+  MAX_LINK_STRETCH,
+} = require("../../beefwife/src/body.mjs");
 
 const source = JSON.parse(
   fs.readFileSync(
@@ -242,7 +245,7 @@ for (const linkCorrection of [0.001, 0.05, 0.2, 0.5, 1])
       assert.ok(Number.isFinite(span), `${label} reached a non-finite pose`);
       const stretch = span / loose.linkTargets[index];
       if (stretch > worstStretch) worstStretch = stretch;
-      if (stretch > BeefwifeBody.MAX_LINK_STRETCH * 0.999) ceilingReached++;
+      if (stretch > MAX_LINK_STRETCH * 0.999) ceilingReached++;
       arc += span;
       rest += loose.linkTargets[index];
     }
@@ -255,7 +258,7 @@ for (const linkCorrection of [0.001, 0.05, 0.2, 0.5, 1])
 /* No link may pass the ceiling, and the softest materials must reach it, or
    the clamp is dead code and this whole sweep proves nothing. */
 assert.ok(
-  worstStretch <= BeefwifeBody.MAX_LINK_STRETCH * (1 + 1e-9),
+  worstStretch <= MAX_LINK_STRETCH * (1 + 1e-9),
   `a link stretched to ${worstStretch}`,
 );
 assert.ok(ceilingReached > 0, "no link ever reached the ceiling");

@@ -1,0 +1,62 @@
+{
+  "name": "@kvmet/beefwife",
+  "version": "0.1.0",
+  "description": "Procedurally animated chain-body creatures for the web.",
+  "license": "MPL-2.0",
+  "author": "Kristen Metcalfe",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvmet/beefwife.git",
+    "directory": "beefwife"
+  },
+  "homepage": "https://github.com/kvmet/beefwife/tree/main/beefwife#readme",
+  "bugs": "https://github.com/kvmet/beefwife/issues",
+  "keywords": [
+    "animation",
+    "browser",
+    "creature",
+    "physics",
+    "pixi",
+    "procedural",
+    "verlet"
+  ],
+  "main": "./beefwife.js",
+  "module": "./src/beefwife.mjs",
+  "browser": "./beefwife.js",
+  "unpkg": "./beefwife.min.js",
+  "jsdelivr": "./beefwife.min.js",
+  "exports": {
+    ".": {
+      "import": "./src/beefwife.mjs",
+      "require": "./beefwife.js",
+      "default": "./beefwife.js"
+    },
+    "./beefwife.js": "./beefwife.js",
+    "./beefwife.min.js": "./beefwife.min.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "LICENSE",
+    "README.md",
+    "beefwife.example.json",
+    "beefwife.js",
+    "beefwife.min.js",
+    "src"
+  ],
+  "sideEffects": false,
+  "peerDependencies": {
+    "pixi.js": "^8.19.0"
+  },
+  "scripts": {
+    "build": "rolldown -c rolldown.config.mjs",
+    "prepack": "npm run build && npm test",
+    "test": "node ../test/beefwife/run.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "pixi.js": "^8.19.0",
+    "rolldown": "1.2.2"
+  }
+}

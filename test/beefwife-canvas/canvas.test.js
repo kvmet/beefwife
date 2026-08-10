@@ -116,11 +116,13 @@ const context = {
       this.detail = options.detail;
     }
   },
-  BeefwifeDescriptor: {
-    read(value) {
-      if (!value || typeof value.name !== "string")
-        throw new TypeError("descriptor needs a name");
-      return JSON.parse(JSON.stringify(value));
+  Beefwife: {
+    descriptor: {
+      read(value) {
+        if (!value || typeof value.name !== "string")
+          throw new TypeError("descriptor needs a name");
+        return JSON.parse(JSON.stringify(value));
+      },
     },
   },
   BeefwifeCanvasRuntime: { create: async (options) => newHost(options) },

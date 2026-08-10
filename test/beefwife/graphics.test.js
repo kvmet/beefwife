@@ -10,8 +10,17 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const { Container, Mesh } = require("./pixi-mock.js");
-const Beefwife = require("../../beefwife/beefwife.js");
+const {
+  PIXI,
+  fillsOf,
+  pointsOf,
+  colourNumber,
+  colourText,
+  drawnWidthOf,
+  pathWidthOf,
+} = require("./pixi.js");
+const { Container, Mesh } = PIXI;
+const { Beefwife } = require("../../beefwife/src/beefwife.mjs");
 const source = JSON.parse(
   fs.readFileSync(
     path.join(__dirname, "..", "..", "beefwife", "beefwife.example.json"),
@@ -39,16 +48,22 @@ assert.ok(meshIndexes[1] > meshIndexes[0]);
 checks += 3;
 
 const meshes = partsOf(beefwife).filter((child) => child instanceof Mesh);
-const buffers = meshes.map((mesh) => mesh.geometry.buffer);
+const buffers = meshes.map((mesh) => mesh.positionBuffer);
+/* Pixi counts buffer uploads in `_updateID`. Exactly one per render pass says
+   the vertices reach the GPU once, neither skipped nor written twice. */
+const uploads = buffers.map((buffer) => buffer._updateID);
 const children = [...partsOf(beefwife)];
 beefwife.step(1 / 60);
 beefwife.onRender();
 assert.deepEqual(partsOf(beefwife), children);
-assert.ok(buffers.every((buffer) => buffer.updates >= 2));
+assert.deepEqual(
+  buffers.map((buffer) => buffer._updateID),
+  uploads.map((id) => id + 1),
+);
 checks += 2;
 
 const invalidPaint = copy(source);
-invalidPaint.definitions.paints.shell.fill = "BAD";
+invalidPaint.definitions.paints.shell.fill = "notacolor";
 assert.throws(() => beefwife.setDescriptor(invalidPaint), /shell\.fill/);
 assert.equal(
   beefwife.descriptor.definitions.paints.shell.fill,
@@ -67,8 +82,8 @@ assert.ok(partsOf(beefwife).every((child, index) => child === children[index]));
 assert.ok(
   partsOf(beefwife)
     .filter((child) => child.context)
-    .flatMap((child) => child.context.fills)
-    .includes("#123456"),
+    .flatMap((child) => fillsOf(child.context))
+    .includes(colourNumber("#123456")),
 );
 checks += 4;
 
@@ -136,9 +151,9 @@ stack.onRender();
 const kindOf = (child) =>
   child instanceof Mesh
     ? "mesh"
-    : child.points.length
+    : pointsOf(child).length
       ? "path"
-      : (child.context?.fills ?? []).join();
+      : fillsOf(child.context).map(colourText).join();
 assert.deepEqual(partsOf(stack).map(kindOf), [
   foot,
   foot,
@@ -225,9 +240,13 @@ tinyPlate.chain.skin.plates = [tinyPlate.chain.skin.plates[0]];
 tinyPlate.chain.skin.plates[0].scale = 0.002;
 tinyPlate.chain.sections.head.profile.plateScale = { start: 1, end: 1 };
 const tiny = new Beefwife(tinyPlate, { random: () => 0.5 });
+/* Pixi bakes the draw scale into the path rather than keeping it on the child,
+   so the width it drew is the only place the scale is observable. */
+const plateShape =
+  tinyPlate.definitions.shapes[tinyPlate.chain.skin.plates[0].shape];
 const drawnScales = partsOf(tiny)
-  .filter((child) => child.context?.drawnPath)
-  .map((child) => child.context.drawnPath.matrix.a);
+  .filter((child) => child.context)
+  .map((child) => drawnWidthOf(child.context) / pathWidthOf(plateShape.path));
 assert.ok(drawnScales.every((scale) => scale > 0));
 assert.ok(drawnScales.some((scale) => Math.abs(scale / 0.002 - 1) < 0.02));
 tiny.destroy();
@@ -245,20 +264,36 @@ const oldGeometry = partsOf(beefwife).find((child) => child instanceof Mesh)
   : null;
 assert.ok(oldGeometry);
 beefwife.setDescriptor(regeometried);
-assert.ok(oldGeometry.destroyed, "a replaced mesh left its geometry behind");
+// Geometry carries no destroyed flag; a destroyed one has dropped its buffers.
+assert.equal(
+  oldGeometry.buffers,
+  null,
+  "a replaced mesh left its geometry behind",
+);
 checks += 2;
 
 const owned = [...partsOf(beefwife)];
-const contexts = new Set(owned.map((child) => child.context).filter(Boolean));
+const painted = new Map();
+for (const child of owned)
+  if (child.context)
+    painted.set(child.context, (painted.get(child.context) ?? 0) + 1);
+const subscribed = new Map(
+  [...painted.keys()].map((context) => [
+    context,
+    context.listenerCount("update"),
+  ]),
+);
 beefwife.destroy();
 assert.equal(beefwife.destroyed, true);
 assert.ok(owned.every((child) => child.destroyed));
 /* Pixi's context setter subscribes a Graphics to its context and `destroy`
    never unsubscribes, so a shared context would hold every child it ever
-   painted alive for as long as the shape and paint live. */
-for (const context of contexts)
-  assert.ok(
-    [...context.listeners].every((child) => !child.destroyed),
+   painted alive for as long as the shape and paint live. Each context has to
+   shed exactly the children that just died. */
+for (const [context, children] of painted)
+  assert.equal(
+    context.listenerCount("update"),
+    subscribed.get(context) - children,
     "a destroyed child is still subscribed to a shared context",
   );
 checks += 3;

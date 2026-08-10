@@ -8,8 +8,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const vm = require("node:vm");
-const BeefwifeModel = require("../../beefwife/beefwife-model.js");
+const BeefwifeModel = require("../../beefwife/src/model.mjs");
 
 const source = JSON.parse(
   fs.readFileSync(
@@ -319,25 +318,5 @@ fs.readdirSync(castDir)
     );
     checks++;
   });
-
-const browser = vm.createContext({ console });
-["beefwife-schema.js", "beefwife-descriptor.js", "beefwife-model.js"].forEach(
-  (name) =>
-    vm.runInContext(
-      fs.readFileSync(
-        path.join(__dirname, "..", "..", "beefwife", name),
-        "utf8",
-      ),
-      browser,
-    ),
-);
-assert.equal(
-  vm.runInContext(
-    `BeefwifeModel.compile(${JSON.stringify(model.descriptor)}).chunks.length`,
-    browser,
-  ),
-  27,
-);
-checks++;
 
 console.log(`beefwife model: ${checks} contract checks passed`);

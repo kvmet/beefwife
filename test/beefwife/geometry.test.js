@@ -12,10 +12,17 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const { Graphics, Mesh } = require("./pixi-mock.js");
-const Beefwife = require("../../beefwife/beefwife.js");
-const { limbLength } = require("../../beefwife/beefwife-legs.js");
-const Geometry = require("../../beefwife/beefwife-geometry.js");
+const {
+  PIXI,
+  fillsOf,
+  pointsOf,
+  strokesOf,
+  colourNumber,
+} = require("./pixi.js");
+const { Graphics, Mesh } = PIXI;
+const { Beefwife } = require("../../beefwife/src/beefwife.mjs");
+const { limbLength } = require("../../beefwife/src/legs.mjs");
+const Geometry = require("../../beefwife/src/geometry.mjs");
 const copy = (value) => JSON.parse(JSON.stringify(value));
 // The creature's own parts, which are one container down from the Beefwife.
 const partsOf = (beefwife) => beefwife.children[0].children;
@@ -307,7 +314,7 @@ assert.ok(
 );
 assert.equal(
   partsOf(baselineLegs).find((child) => child instanceof Mesh).tint,
-  bentLeggedSource.definitions.paints.leg.fill,
+  colourNumber(bentLeggedSource.definitions.paints.leg.fill),
 );
 checks += 3;
 wideLegs.destroy();
@@ -321,15 +328,18 @@ const strokedLegs = new Beefwife(strokedSource, { random: () => 0.5 });
 const strokedFill = partsOf(strokedLegs)[limbCount];
 const strokedOutline = partsOf(strokedLegs)[limbCount + 1];
 assert.ok(strokedFill instanceof Mesh);
-assert.equal(strokedFill.tint, strokedSource.definitions.paints.leg.fill);
+assert.equal(
+  strokedFill.tint,
+  colourNumber(strokedSource.definitions.paints.leg.fill),
+);
 assert.ok(strokedOutline instanceof Graphics);
-assert.deepEqual(strokedOutline.fills, []);
-assert.equal(strokedOutline.strokes.length, 1);
-assert.equal(strokedOutline.strokes[0].color, "#ffffff");
-assert.equal(strokedOutline.strokes[0].width, 2);
-assert.equal(strokedOutline.points.length, limbCount * 6);
+assert.deepEqual(fillsOf(strokedOutline.context), []);
+assert.equal(strokesOf(strokedOutline.context).length, 1);
+assert.equal(strokesOf(strokedOutline.context)[0].color, colourNumber("#ffffff"));
+assert.equal(strokesOf(strokedOutline.context)[0].width, 2);
+assert.equal(pointsOf(strokedOutline).length, limbCount * 6);
 assert.deepEqual(
-  strokedOutline.points.flat(),
+  pointsOf(strokedOutline).flat(),
   Array.from(strokedFill.dynamicPositions),
 );
 checks += 8;
@@ -339,7 +349,7 @@ strokedLegs.destroy();
 const barefootSource = copy(strokedSource);
 barefootSource.legs.skin.limbWidth = 0;
 const barefootLegs = new Beefwife(barefootSource, { random: () => 0.5 });
-assert.deepEqual(partsOf(barefootLegs)[limbCount + 1].points, []);
+assert.deepEqual(pointsOf(partsOf(barefootLegs)[limbCount + 1]), []);
 const hiddenSource = copy(bentLeggedSource);
 hiddenSource.legs.skin.limbWidth = 0;
 const hiddenLegs = new Beefwife(hiddenSource, { random: () => 0.5 });
@@ -404,12 +414,15 @@ const ribbonFill = ribbonMeshes[ribbonMeshes.length - 1];
 const ribbonOutline =
   partsOf(ribbonStroked)[partsOf(ribbonStroked).indexOf(ribbonFill) + 1];
 assert.ok(ribbonOutline instanceof Graphics);
-assert.deepEqual(ribbonOutline.fills, []);
-assert.equal(ribbonOutline.strokes[0].color, "#00ff00");
+assert.deepEqual(fillsOf(ribbonOutline.context), []);
+assert.equal(
+  strokesOf(ribbonOutline.context)[0].color,
+  colourNumber("#00ff00"),
+);
 const ribbonChunks =
   (ribbonFill.dynamicPositions.length / 2 - CAP_VERTICES * 2) / 2;
 assert.equal(
-  ribbonOutline.points.length,
+  pointsOf(ribbonOutline).length,
   ribbonChunks * 2 + (CAP_SEGMENTS - 1) * 2,
 );
 const meshVertices = new Set();
@@ -418,7 +431,7 @@ for (let at = 0; at < ribbonFill.dynamicPositions.length; at += 2)
     `${ribbonFill.dynamicPositions[at]},${ribbonFill.dynamicPositions[at + 1]}`,
   );
 assert.ok(
-  ribbonOutline.points.every(([x, y]) => meshVertices.has(`${x},${y}`)),
+  pointsOf(ribbonOutline).every(([x, y]) => meshVertices.has(`${x},${y}`)),
 );
 /* Walking the same vertices is not the same as covering the same area: the
    triangle list must enclose exactly what the outline encloses, and wind one
@@ -428,8 +441,8 @@ const ribbonFilled = unsignedArea(ribbonFill.dynamicPositions, ribbonTriangles);
 /* The outline walks the mesh's own vertices, so this is exact bar float
    error; a loose tolerance here hides a dropped quad at the tapered tail. */
 assert.ok(
-  Math.abs(ribbonFilled / shoelace(ribbonOutline.points) - 1) < 1e-9,
-  `fill covers ${ribbonFilled}, stroke encloses ${shoelace(ribbonOutline.points)}`,
+  Math.abs(ribbonFilled / shoelace(pointsOf(ribbonOutline)) - 1) < 1e-9,
+  `fill covers ${ribbonFilled}, stroke encloses ${shoelace(pointsOf(ribbonOutline))}`,
 );
 checks += 6;
 ribbonStroked.destroy();

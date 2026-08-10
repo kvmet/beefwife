@@ -446,7 +446,7 @@ const BeefwifeCanvas = (() => {
   return {
     /* The bundle is one closure, so a page that wants to read, check, or write
        a document has no other way to reach the schema. */
-    descriptor: BeefwifeDescriptor,
+    descriptor: Beefwife.descriptor,
     get: (canvas) => controllers.get(canvas)?.facade || null,
     mount,
     scan: autoMount,

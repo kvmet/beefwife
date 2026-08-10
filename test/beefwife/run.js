@@ -1,7 +1,7 @@
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 
-const root = path.resolve(__dirname, "..");
+const root = path.resolve(__dirname, "..", "..");
 const files = [
   "test/beefwife/descriptor.test.js",
   "test/beefwife/schema.test.js",
@@ -14,13 +14,6 @@ const files = [
   "test/beefwife/graphics.test.js",
   "test/beefwife/geometry.test.js",
   "test/beefwife/api.test.js",
-  "test/beefwife/package.test.mjs",
-  "test/terrain/demo.test.mjs",
-  "test/terrain/module.test.mjs",
-  "test/terrain/terrain.test.js",
-  "test/beefwife-canvas/runtime.test.js",
-  "test/beefwife-canvas/render.test.js",
-  "test/beefwife-canvas/canvas.test.js",
 ];
 
 for (const file of files) {

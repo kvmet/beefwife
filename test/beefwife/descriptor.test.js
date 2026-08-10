@@ -9,7 +9,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const BeefwifeDescriptor = require("../../beefwife/beefwife-descriptor.js");
+const BeefwifeDescriptor = require("../../beefwife/src/descriptor.mjs");
 
 const examplePath = path.join(
   __dirname,

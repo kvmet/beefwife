@@ -1,10 +1,10 @@
 # Beefwife
 
-`beefwife-schema.js` holds the schema-v1 tree, the authority on a beefwife's
-portable JSON contract, and `beefwife-descriptor.js` reads, resizes, and
-reports bounds against it. Version 1 deliberately accepts no older descriptor
-shapes or field aliases. The other modules build, step, and render beefwives;
-Beefwife Lab is a consumer of this directory.
+`src/schema.mjs` holds the schema-v1 tree, the authority on a beefwife's
+portable JSON contract, and `src/descriptor.mjs` reads, resizes, and reports
+bounds against it. Version 1 deliberately accepts no older descriptor shapes or
+field aliases. The other modules build, step, and render beefwives; Beefwife Lab
+is a consumer of this directory.
 
 `name` is the portable identity and JSON filename stem: a lowercase slug of up
 to 64 letters, digits, and hyphens. Schema v1 does not mix display copy into the
@@ -13,15 +13,39 @@ runtime descriptor.
 The runtime modules consume only schema v1. Callers use `Beefwife`; the model,
 gait, body, legs, and skin modules are implementation boundaries.
 
-## Public runtime contract
+`beefwife.js` and `beefwife.min.js` are generated from `src` by `bb
+beefwife-build`; edit the sources, never the artifacts.
 
-The library exposes two stable globals: `BeefwifeDescriptor` for plain JSON and
-`Beefwife` for one live Pixi display object. Physics, gait, legs, skin, render
-snapshots, caches, and fixed-step state remain private.
+## Installing
+
+```sh
+npm install @kvmet/beefwife pixi.js
+```
+
+Pixi is a peer dependency. The module entry imports it, so a bundler resolves
+one copy for the page and the library shares it:
 
 ```js
-const descriptor = BeefwifeDescriptor.parse(text);
-const beefwife = new Beefwife(descriptor, {
+import { Beefwife, descriptor } from "@kvmet/beefwife";
+```
+
+The classic-script build reads `window.PIXI` instead and adds one global,
+`Beefwife`, with the JSON half hanging off it as `Beefwife.descriptor`. Where
+that global is missing a beefwife still simulates: it builds no display children
+and leaves `onRender` null, so a headless page or a server gets the pose without
+a renderer.
+
+## Public runtime contract
+
+The library exposes `Beefwife` for one live Pixi display object and `descriptor`
+for plain JSON. Physics, gait, legs, skin, render snapshots, caches, and
+fixed-step state remain private.
+
+```js
+import { Beefwife, descriptor } from "@kvmet/beefwife";
+
+const chevronGuy = descriptor.parse(text);
+const beefwife = new Beefwife(chevronGuy, {
   position: { x: 200, y: 150 }, // world px at the head
   direction: { x: 1, y: 0 },
   phase: 0, // gait phase in radians
@@ -164,22 +188,12 @@ long creature as gone while it is still on screen.
 
 ```html
 <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.19.0/dist/pixi.min.js"></script>
-<script src="beefwife-schema.js"></script>
-<script src="beefwife-descriptor.js"></script>
-<script src="beefwife-model.js"></script>
-<script src="beefwife-drive.js"></script>
-<script src="beefwife-body.js"></script>
-<script src="beefwife-legs.js"></script>
-<script src="beefwife-skin.js"></script>
-<script src="beefwife-geometry.js"></script>
-<script src="beefwife-display.js"></script>
-<script src="beefwife-graphics.js"></script>
 <script src="beefwife.js"></script>
 ```
 
 ```js
-const descriptor = BeefwifeDescriptor.parse(text);
-const textAgain = BeefwifeDescriptor.stringify(descriptor);
+const chevronGuy = descriptor.parse(text);
+const textAgain = descriptor.stringify(chevronGuy);
 ```
 
 `read(value)` validates an already parsed value. It returns a deep-owned plain
@@ -199,11 +213,11 @@ Paths name fields with dots, an array item with `[]`, and a record entry with
 `*`:
 
 ```js
-BeefwifeDescriptor.bounds("legs.pairs");
+descriptor.bounds("legs.pairs");
 // { kind: "number", min: 0, max: 128, integer: true, nullable: false }
-BeefwifeDescriptor.bounds("chain.skin.ornaments[].side");
+descriptor.bounds("chain.skin.ornaments[].side");
 // { kind: "choice", values: ["left", "right", "both"], nullable: false }
-BeefwifeDescriptor.bounds("definitions.paints.*.stroke.width");
+descriptor.bounds("definitions.paints.*.stroke.width");
 // { kind: "number", min: 0, max: 1000, integer: false, nullable: false }
 ```
 

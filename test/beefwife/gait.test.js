@@ -4,7 +4,7 @@
  */
 
 const assert = require("node:assert/strict");
-const { BeefwifeGait } = require("../../beefwife/beefwife-drive.js");
+const { Gait: BeefwifeGait } = require("../../beefwife/src/drive.mjs");
 
 const TAU = Math.PI * 2;
 const gaitSpec = {

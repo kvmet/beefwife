@@ -7,11 +7,11 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const Beefwife = require("../../beefwife/beefwife.js");
-const BeefwifeModel = require("../../beefwife/beefwife-model.js");
-const { BeefwifeGait } = require("../../beefwife/beefwife-drive.js");
-const { BeefwifeBody } = require("../../beefwife/beefwife-body.js");
-const { BeefwifeLegs } = require("../../beefwife/beefwife-legs.js");
+const { Beefwife } = require("../../beefwife/src/beefwife.mjs");
+const BeefwifeModel = require("../../beefwife/src/model.mjs");
+const { Gait: BeefwifeGait } = require("../../beefwife/src/drive.mjs");
+const { Body: BeefwifeBody } = require("../../beefwife/src/body.mjs");
+const { Legs: BeefwifeLegs } = require("../../beefwife/src/legs.mjs");
 
 const source = JSON.parse(
   fs.readFileSync(

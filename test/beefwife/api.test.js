@@ -9,7 +9,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
-const Beefwife = require("../../beefwife/beefwife.js");
+const { PIXI } = require("./pixi.js");
+const { Beefwife } = require("../../beefwife/src/beefwife.mjs");
 
 const example = JSON.parse(
   fs.readFileSync(
@@ -327,8 +328,14 @@ checks += 2;
 
 /* `#private` fields are invisible to `in` whatever the implementation, so
    naming ones this code never had proves nothing. Enumerate what is actually
-   reachable instead: two Pixi properties and the documented methods. */
-assert.deepEqual(Object.keys(beefwife), ["label", "onRender"]);
+   reachable instead: what a beefwife adds over a bare container, and the
+   documented methods. */
+const containerKeys = new Set(Object.keys(new PIXI.Container()));
+// `onRender` is an accessor on Container, so assigning it lands in `_onRender`.
+assert.deepEqual(
+  Object.keys(beefwife).filter((key) => !containerKeys.has(key)),
+  ["label", "_onRender"],
+);
 assert.deepEqual(
   Object.getOwnPropertyNames(Object.getPrototypeOf(beefwife)).sort(),
   [
@@ -475,31 +482,43 @@ vm.runInContext(
    const limbLength = "host";`,
   browser,
 );
-[
-  "beefwife-schema.js",
-  "beefwife-descriptor.js",
-  "beefwife-model.js",
-  "beefwife-drive.js",
-  "beefwife-body.js",
-  "beefwife-legs.js",
-  "beefwife-skin.js",
-  "beefwife-geometry.js",
-  "beefwife-display.js",
-  "beefwife-graphics.js",
-  "beefwife.js",
-].forEach((name) =>
-  vm.runInContext(
-    fs.readFileSync(path.join(__dirname, "..", "..", "beefwife", name), "utf8"),
-    browser,
+const seeded = new Set(Reflect.ownKeys(browser));
+vm.runInContext(
+  fs.readFileSync(
+    path.join(__dirname, "..", "..", "beefwife", "beefwife.js"),
+    "utf8",
   ),
+  browser,
 );
-assert.equal(
-  vm.runInContext(
-    `new Beefwife(${JSON.stringify(example)}).descriptor.name`,
-    browser,
-  ),
-  "beefwife",
+assert.deepEqual(
+  Reflect.ownKeys(browser).filter((key) => !seeded.has(key)),
+  ["Beefwife"],
 );
-checks++;
+/* No renderer is on this page, which is the only path where a beefwife
+   simulates without building a scene to draw it with. */
+const headless = vm.runInContext(
+  `const creature = new Beefwife(${JSON.stringify(example)});
+   creature.step(1 / 60);
+   ({
+     name: creature.descriptor.name,
+     parse: typeof Beefwife.descriptor.parse,
+     onRender: creature.onRender,
+     children: creature.children,
+     moved: creature.getPose().head.x !== 0,
+   })`,
+  browser,
+);
+// Spread to compare by value: the object comes back from another realm.
+assert.deepEqual(
+  { ...headless },
+  {
+    name: "beefwife",
+    parse: "function",
+    onRender: null,
+    children: undefined,
+    moved: true,
+  },
+);
+checks += 2;
 
 console.log(`beefwife API: ${checks} lifecycle checks passed`);

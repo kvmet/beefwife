@@ -7,16 +7,6 @@
 
 (def files
   ["terrain/terrain.js"
-   "beefwife/beefwife-schema.js"
-   "beefwife/beefwife-descriptor.js"
-   "beefwife/beefwife-model.js"
-   "beefwife/beefwife-drive.js"
-   "beefwife/beefwife-body.js"
-   "beefwife/beefwife-legs.js"
-   "beefwife/beefwife-skin.js"
-   "beefwife/beefwife-geometry.js"
-   "beefwife/beefwife-display.js"
-   "beefwife/beefwife-graphics.js"
    "beefwife/beefwife.js"
    "beefwife-canvas/beefwife-canvas-path.js"
    "beefwife-canvas/beefwife-canvas-steering.js"

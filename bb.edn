@@ -18,6 +18,15 @@
   {:doc "Check BeefwifeCanvas runtime integration."
    :task (shell "node" "test/beefwife-canvas/runtime.test.js")}
 
+  beefwife-build
+  {:doc "Build standalone Beefwife browser artifacts."
+   :task (shell "npm" "--prefix" "beefwife" "run" "build")}
+
+  beefwife-package
+  {:doc "Build and check the published Beefwife package."
+   :depends [beefwife-build]
+   :task (shell "node" "test/beefwife/package.test.mjs")}
+
   terrain-build
   {:doc "Build standalone Terrain browser artifacts."
    :task (shell "npm" "--prefix" "terrain" "run" "build")}
@@ -40,7 +49,7 @@
 
   bundle
   {:doc "Build dist/beefwife-canvas.js."
-   :depends [terrain-build]
+   :depends [beefwife-build terrain-build]
    :task (load-file "bb/bundle.clj")}
 
   bundle-test
