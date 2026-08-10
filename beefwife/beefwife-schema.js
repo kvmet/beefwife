@@ -57,7 +57,11 @@ const BeefwifeSchema = (() => {
   const ratioScale = number(0.001, 100);
   const distance = px(1e-6, 10000);
   const offset = px(-10000, 10000);
-  const colour = nullable(string(1, 256));
+  /* Whitespace is length without content, and a paint or path made of it
+     draws nothing while passing every length check. `validate` rejects it; the
+     tag is what lets `bounds` say so. */
+  const nonBlank = (node) => ({ ...node, blank: false });
+  const colour = nullable(nonBlank(string(1, 256)));
 
   const material = object({
     velocityRetention: ratio,
@@ -70,7 +74,7 @@ const BeefwifeSchema = (() => {
     }),
   });
 
-  const shape = object({ path: string(1, LIMITS.path) });
+  const shape = object({ path: nonBlank(string(1, LIMITS.path)) });
   const paint = object({
     fill: colour,
     stroke: nullable(
@@ -84,24 +88,29 @@ const BeefwifeSchema = (() => {
     start: px(0, 1000),
     end: px(0, 1000),
   });
-  const section = object({
-    chunks: number(0, LIMITS.chunks, true),
-    spacing: px(1e-6, 1000),
-    material: id,
-    motionScale: object({
-      bend: number(0, 4),
-      thrust: number(0, 4),
-      gather: number(0, 4),
-      contact: number(0, 4),
-    }),
-    profile: object({
-      ribbonWidth: span,
-      plateScale: object({
-        start: number(0, 100),
-        end: number(0, 100),
+  /* Head and trunk must exist for the chain to have a direction and a middle;
+     the tail may be empty. The node carries the floor so `bounds` reports the
+     range a caller can actually use. Their total is capped as well, which no
+     per-field bound can express. */
+  const sectionOf = (minChunks) =>
+    object({
+      chunks: number(minChunks, LIMITS.chunks, true),
+      spacing: px(1e-6, 1000),
+      material: id,
+      motionScale: object({
+        bend: number(0, 4),
+        thrust: number(0, 4),
+        gather: number(0, 4),
+        contact: number(0, 4),
       }),
-    }),
-  });
+      profile: object({
+        ribbonWidth: span,
+        plateScale: object({
+          start: number(0, 100),
+          end: number(0, 100),
+        }),
+      }),
+    });
 
   const anchor = object({
     section: nullable(choice(...SECTIONS)),
@@ -186,13 +195,19 @@ const BeefwifeSchema = (() => {
         }),
       }),
       breathing: ratio,
-      sections: object({ head: section, trunk: section, tail: section }),
+      sections: object({
+        head: sectionOf(1),
+        trunk: sectionOf(1),
+        tail: sectionOf(0),
+      }),
       skin: object({
         /* -1 shrinks plates to nothing at full grip; below it they would
            draw mirrored, so the bound is the last meaningful value. */
         loadScale: number(-1, 10),
         ribbon: object({ paint: id }),
-        plates: array(plate, LIMITS.placements),
+        /* One plate per chunk at most, so the chain length is the real
+           ceiling; `placements` would report one `read` never accepts. */
+        plates: array(plate, LIMITS.chunks),
         ornaments: array(ornament, LIMITS.placements),
       }),
     }),

@@ -186,10 +186,6 @@ const BeefwifeDescriptor = (() => {
       (sum, name) => sum + sections[name].chunks,
       0,
     );
-    if (sections.head.chunks < 1)
-      fail("$.chain.sections.head.chunks", "must be at least 1");
-    if (sections.trunk.chunks < 1)
-      fail("$.chain.sections.trunk.chunks", "must be at least 1");
     if (total < 2 || total > LIMITS.chunks)
       fail("$.chain.sections", `must contain 2 to ${LIMITS.chunks} chunks`);
     SECTIONS.forEach((name) =>
@@ -319,7 +315,12 @@ const BeefwifeDescriptor = (() => {
         kind: "string",
         minLength: node.minLength,
         maxLength: node.maxLength,
-        pattern: node.pattern,
+        /* A copy: the schema's own RegExp is what `read` tests against, and a
+           caller that reassigned its `test` would switch validation off for
+           every descriptor in the process. */
+        pattern:
+          node.pattern && new RegExp(node.pattern.source, node.pattern.flags),
+        blankAllowed: node.blank !== false,
       };
     if (node.kind === "choice")
       return { kind: "choice", values: Object.freeze([...node.values]) };
@@ -334,7 +335,7 @@ const BeefwifeDescriptor = (() => {
         kind: "record",
         minEntries: node.minLength,
         maxEntries: node.maxLength,
-        keyPattern: ID_PATTERN,
+        keyPattern: new RegExp(ID_PATTERN.source, ID_PATTERN.flags),
       };
     return { kind: "array", maxLength: node.maxLength };
   };

@@ -281,11 +281,11 @@ rejected("negative contact", negativeContact, /contact negative/);
 
 const emptyHead = copy(source);
 emptyHead.chain.sections.head.chunks = 0;
-rejected("empty head", emptyHead, /at least 1/);
+rejected("empty head", emptyHead, /must be between 1 and 256/);
 
 const emptyTrunk = copy(source);
 emptyTrunk.chain.sections.trunk.chunks = 0;
-rejected("empty trunk", emptyTrunk, /at least 1/);
+rejected("empty trunk", emptyTrunk, /must be between 1 and 256/);
 
 const tooManyChunks = copy(source);
 tooManyChunks.chain.sections.trunk.chunks = BeefwifeDescriptor.LIMITS.chunks;

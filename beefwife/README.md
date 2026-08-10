@@ -198,9 +198,16 @@ BeefwifeDescriptor.bounds("definitions.paints.*.stroke.width");
 ```
 
 Every kind reports `nullable`. Numbers add `min`, `max`, and `integer`; strings
-add `minLength`, `maxLength`, and `pattern`; choices add `values`; objects add
-`fields`; records add `minEntries`, `maxEntries`, and `keyPattern`; arrays add
-`maxLength`. A path the schema does not define is an error. A consumer may
+add `minLength`, `maxLength`, `pattern`, and `blankAllowed`; choices add
+`values`; objects add `fields`; records add `minEntries`, `maxEntries`, and
+`keyPattern`; arrays add `maxLength`. Each call returns fresh `pattern` and
+`keyPattern` objects, so editing one cannot change what `read` enforces.
+
+A few fields answer to more than themselves, and no per-field bound can say so:
+the three section chunk counts must total from 2 to 256, a placement's anchor
+must land on a chunk in scope that no other plate claims, and the contact and
+gather amplitudes are rejected where their section scale and the gait channel
+together would drive a link or a footfall negative. A path the schema does not define is an error. A consumer may
 narrow a range to suit its own users, but a value outside the reported bound is
 one `read` rejects.
 
