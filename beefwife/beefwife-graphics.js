@@ -468,8 +468,8 @@ const BeefwifeGraphics = (() => {
         coordinate(chunks[0]),
         coordinate(chunks[1]),
         this.model.chunks[0].ribbonWidth,
+        headAngle,
         headAngle + Math.PI,
-        headAngle + Math.PI * 2,
       );
       this.ribbon.closePath();
       const paint = this.model.skin.ribbonPaint;
