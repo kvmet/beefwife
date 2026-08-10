@@ -8,7 +8,8 @@ const BeefwifeSkin = (() => {
     plateStride: 5,
   });
   /* Turn rate that deflects a react-1 ornament by one radian; the lateral
-     counterpart is body-relative and comes from model.skin.lateralRate. */
+     counterpart scales with segment size and comes from
+     model.skin.lateralRate. */
   const RADIAN_TURN_RATE = 13;
   const MIN_DAMPING_RATIO = 0.02;
   const MAX_DEFLECTION = Math.PI / 2;

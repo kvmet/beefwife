@@ -16,9 +16,11 @@ const BeefwifeModel = (() => {
   const SECTION_NAMES = ["head", "trunk", "tail"];
   const MAX_BREATHING_STRAIN = 0.1;
   const BREATHING_RATE_AT_16_CHUNKS = 0.15;
-  /* Full ornament deflection at 1.2 body lengths per second of lateral root
-     speed; body-relative so a resized creature keeps the same feel. */
-  const LATERAL_LENGTHS_PER_SECOND = 1.2;
+  /* Full ornament deflection at 14 trunk spacings per second of lateral root
+     speed. Per-segment, not whole-body: a root's lateral speed tracks segment
+     size, so measuring against total length would quiet every ornament on the
+     creature whenever chunks are added anywhere along the chain. */
+  const LATERAL_SPACINGS_PER_SECOND = 14;
   /* Floor for resolving swingCycles when the gait clock is stopped;
      cyclesPerSecond 0 gives feet a 100 s cycle instead of dividing by 0. */
   const MIN_SWING_RATE = 0.01;
@@ -232,7 +234,7 @@ const BeefwifeModel = (() => {
       physics: descriptor.chain.physics,
       breathing,
       skin: {
-        lateralRate: LATERAL_LENGTHS_PER_SECOND * restDistance,
+        lateralRate: LATERAL_SPACINGS_PER_SECOND * sections.trunk.spacing,
         loadScale: descriptor.chain.skin.loadScale,
         hasRibbon: chunks.some((chunk) => chunk.ribbonWidth > 0),
         ribbonPaintId: descriptor.chain.skin.ribbon.paint,

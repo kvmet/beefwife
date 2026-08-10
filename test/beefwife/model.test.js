@@ -94,7 +94,7 @@ assert.equal(
 assert.equal(model.breathing.strain, 0);
 assert.ok(model.breathing.cyclesPerSecond >= 0.1);
 assert.ok(model.breathing.cyclesPerSecond <= 0.4);
-assert.equal(model.skin.lateralRate, 1.2 * model.restLength);
+assert.equal(model.skin.lateralRate, 14 * model.sections.trunk.spacing);
 const bendChannel = model.gait.bend;
 assert.equal(bendChannel.phaseOffset, 0);
 const bendChunk = model.chunks[10];
