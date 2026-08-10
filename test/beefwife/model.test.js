@@ -88,8 +88,7 @@ assert.equal(
 );
 assert.equal(
   model.legs.swingSeconds,
-  model.descriptor.legs.swingCycles /
-    model.descriptor.gait.cyclesPerSecond,
+  model.descriptor.legs.swingCycles / model.descriptor.gait.cyclesPerSecond,
 );
 assert.equal(model.breathing.strain, 0);
 assert.ok(model.breathing.cyclesPerSecond >= 0.1);
@@ -263,19 +262,15 @@ fs.readdirSync(castDir)
   });
 
 const browser = vm.createContext({ console });
-vm.runInContext(
-  fs.readFileSync(
-    path.join(__dirname, "..", "..", "beefwife", "beefwife-descriptor.js"),
-    "utf8",
-  ),
-  browser,
-);
-vm.runInContext(
-  fs.readFileSync(
-    path.join(__dirname, "..", "..", "beefwife", "beefwife-model.js"),
-    "utf8",
-  ),
-  browser,
+["beefwife-schema.js", "beefwife-descriptor.js", "beefwife-model.js"].forEach(
+  (name) =>
+    vm.runInContext(
+      fs.readFileSync(
+        path.join(__dirname, "..", "..", "beefwife", name),
+        "utf8",
+      ),
+      browser,
+    ),
 );
 assert.equal(
   vm.runInContext(

@@ -355,6 +355,7 @@ vm.runInContext(
   browser,
 );
 [
+  "beefwife-schema.js",
   "beefwife-descriptor.js",
   "beefwife-model.js",
   "beefwife-drive.js",

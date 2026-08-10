@@ -7,6 +7,7 @@
 
 (def files
   ["terrain/terrain.js"
+   "beefwife/beefwife-schema.js"
    "beefwife/beefwife-descriptor.js"
    "beefwife/beefwife-model.js"
    "beefwife/beefwife-drive.js"

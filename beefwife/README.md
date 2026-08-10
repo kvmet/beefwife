@@ -1,9 +1,10 @@
 # Beefwife
 
-`beefwife-descriptor.js` is the schema-v1 authority for a beefwife's portable JSON
-contract. Version 1 deliberately accepts no older descriptor shapes or field
-aliases. The other modules build, step, and render beefwives; Beefwife Lab is a
-consumer of this directory.
+`beefwife-schema.js` holds the schema-v1 tree, the authority on a beefwife's
+portable JSON contract, and `beefwife-descriptor.js` reads, resizes, and
+reports bounds against it. Version 1 deliberately accepts no older descriptor
+shapes or field aliases. The other modules build, step, and render beefwives;
+Beefwife Lab is a consumer of this directory.
 
 `name` is the portable identity and JSON filename stem: a lowercase slug of up
 to 64 letters, digits, and hyphens. Schema v1 does not mix display copy into the
@@ -147,6 +148,7 @@ long creature as gone while it is still on screen.
 
 ```html
 <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.19.0/dist/pixi.min.js"></script>
+<script src="beefwife-schema.js"></script>
 <script src="beefwife-descriptor.js"></script>
 <script src="beefwife-model.js"></script>
 <script src="beefwife-drive.js"></script>

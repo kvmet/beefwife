@@ -2,7 +2,9 @@
  :tasks
  {descriptor
   {:doc "Check the Beefwife descriptor schema."
-   :task (shell "node" "test/beefwife/descriptor.test.js")}
+   :task (do
+           (shell "node" "test/beefwife/descriptor.test.js")
+           (shell "node" "test/beefwife/schema.test.js"))}
 
   beefwife-model
   {:doc "Check descriptor compilation and model contracts."
