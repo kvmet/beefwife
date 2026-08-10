@@ -9,8 +9,8 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const BeefwifeDescriptor = require("../../beefwife/src/descriptor.mjs");
-const BeefwifeSchema = require("../../beefwife/src/schema.mjs");
+const Descriptor = require("../../beefwife/src/descriptor.mjs");
+const Schema = require("../../beefwife/src/schema.mjs");
 
 const source = JSON.parse(
   fs.readFileSync(
@@ -24,7 +24,7 @@ let checks = 0;
 const accepted = (label, value) => {
   checks++;
   try {
-    return BeefwifeDescriptor.read(value);
+    return Descriptor.read(value);
   } catch (error) {
     throw new Error(`${label} was rejected: ${error.message}`);
   }
@@ -34,7 +34,7 @@ const rejected = (label, value, pattern) => {
   checks++;
   let error = null;
   try {
-    BeefwifeDescriptor.read(value);
+    Descriptor.read(value);
   } catch (caught) {
     error = caught;
   }
@@ -48,7 +48,7 @@ const canonical = accepted("canonical example", source);
 /* scale() transforms every length-dimensioned field by k ** length and
    leaves everything else untouched. */
 const k = 2.5;
-const scaled = BeefwifeDescriptor.scale(source, k);
+const scaled = Descriptor.scale(source, k);
 assert.equal(
   scaled.chain.sections.trunk.spacing,
   canonical.chain.sections.trunk.spacing * k,
@@ -94,46 +94,42 @@ strokedPaint.definitions.paints.ribbon.stroke = {
   width: 3,
 };
 assert.equal(
-  BeefwifeDescriptor.scale(strokedPaint, k).definitions.paints.ribbon.stroke
-    .width,
+  Descriptor.scale(strokedPaint, k).definitions.paints.ribbon.stroke.width,
   3 * k,
 );
-assert.deepEqual(BeefwifeDescriptor.scale(source, 1), canonical);
+assert.deepEqual(Descriptor.scale(source, 1), canonical);
 for (const factor of [0, -1, NaN, Infinity, "2"])
-  assert.throws(() => BeefwifeDescriptor.scale(source, factor), /scale factor/);
-assert.throws(() => BeefwifeDescriptor.scale(source, 100), /between/);
-assert.throws(() => BeefwifeDescriptor.scale(source, 0.0001), /between/);
+  assert.throws(() => Descriptor.scale(source, factor), /scale factor/);
+assert.throws(() => Descriptor.scale(source, 100), /between/);
+assert.throws(() => Descriptor.scale(source, 0.0001), /between/);
 checks += 24;
 
-assert.deepEqual(BeefwifeDescriptor.bounds("legs.pairs"), {
+assert.deepEqual(Descriptor.bounds("legs.pairs"), {
   kind: "number",
   min: 0,
   max: 128,
   integer: true,
   nullable: false,
 });
-assert.deepEqual(BeefwifeDescriptor.bounds("chain.skin.ornaments[].side"), {
+assert.deepEqual(Descriptor.bounds("chain.skin.ornaments[].side"), {
   kind: "choice",
   values: ["left", "right", "both"],
   nullable: false,
 });
 assert.equal(
-  BeefwifeDescriptor.bounds("chain.skin.plates[].repeat.count").nullable,
+  Descriptor.bounds("chain.skin.plates[].repeat.count").nullable,
   true,
 );
 assert.equal(
-  BeefwifeDescriptor.bounds("chain.skin.plates[].at.section").kind,
+  Descriptor.bounds("chain.skin.plates[].at.section").kind,
   "choice",
 );
 // Descends through a nullable container to reach the field inside it.
-assert.equal(
-  BeefwifeDescriptor.bounds("definitions.paints.*.stroke.width").max,
-  1000,
-);
-assert.equal(BeefwifeDescriptor.bounds("definitions.shapes").minEntries, 1);
-assert.equal(BeefwifeDescriptor.bounds("chain.skin.plates").maxLength, 256);
-assert.equal(BeefwifeDescriptor.bounds("chain.skin.ornaments").maxLength, 512);
-assert.ok(Object.isFrozen(BeefwifeDescriptor.bounds("legs.pairs")));
+assert.equal(Descriptor.bounds("definitions.paints.*.stroke.width").max, 1000);
+assert.equal(Descriptor.bounds("definitions.shapes").minEntries, 1);
+assert.equal(Descriptor.bounds("chain.skin.plates").maxLength, 256);
+assert.equal(Descriptor.bounds("chain.skin.ornaments").maxLength, 512);
+assert.ok(Object.isFrozen(Descriptor.bounds("legs.pairs")));
 
 /* The reported pattern must be a copy. Freezing the wrapper does not reach
    into a RegExp, so handing back the schema's own would let a caller reassign
@@ -142,8 +138,8 @@ for (const [path, key] of [
   ["name", "pattern"],
   ["definitions.shapes", "keyPattern"],
 ]) {
-  const first = BeefwifeDescriptor.bounds(path)[key];
-  const second = BeefwifeDescriptor.bounds(path)[key];
+  const first = Descriptor.bounds(path)[key];
+  const second = Descriptor.bounds(path)[key];
   assert.notEqual(first, second);
   assert.equal(first.source, second.source);
   first.test = () => true;
@@ -156,9 +152,9 @@ rejected("neutered key pattern", badKey, /invalid id/);
 
 /* Head and trunk have to exist, and a caller driving a slider from `bounds`
    must be told so rather than finding out from `read`. */
-assert.equal(BeefwifeDescriptor.bounds("chain.sections.head.chunks").min, 1);
-assert.equal(BeefwifeDescriptor.bounds("chain.sections.trunk.chunks").min, 1);
-assert.equal(BeefwifeDescriptor.bounds("chain.sections.tail.chunks").min, 0);
+assert.equal(Descriptor.bounds("chain.sections.head.chunks").min, 1);
+assert.equal(Descriptor.bounds("chain.sections.trunk.chunks").min, 1);
+assert.equal(Descriptor.bounds("chain.sections.tail.chunks").min, 0);
 for (const section of ["head", "trunk"]) {
   const empty = copy(source);
   empty.chain.sections[section].chunks = 0;
@@ -171,18 +167,18 @@ checks += 4;
 
 // Blank is length without content, so the reported minimum alone would lie.
 assert.equal(
-  BeefwifeDescriptor.bounds("definitions.paints.*.fill").blankAllowed,
+  Descriptor.bounds("definitions.paints.*.fill").blankAllowed,
   false,
 );
-assert.equal(BeefwifeDescriptor.bounds("name").blankAllowed, true);
+assert.equal(Descriptor.bounds("name").blankAllowed, true);
 const blankFill = copy(source);
 blankFill.definitions.paints.shell.fill = " ";
 rejected("blank fill", blankFill, /must not be blank/);
 checks += 3;
 for (const path of ["legs.nope", "chain.skin.plates.side", "legs..pairs"])
-  assert.throws(() => BeefwifeDescriptor.bounds(path), /not a field/);
-assert.throws(() => BeefwifeDescriptor.bounds(""), /non-empty string/);
-assert.throws(() => BeefwifeDescriptor.bounds(null), /non-empty string/);
+  assert.throws(() => Descriptor.bounds(path), /not a field/);
+assert.throws(() => Descriptor.bounds(""), /non-empty string/);
+assert.throws(() => Descriptor.bounds(null), /non-empty string/);
 checks += 11;
 
 /* A reported bound is only useful if it is the one `read` enforces, so every
@@ -214,7 +210,7 @@ const numericPaths = (node, trail = [], out = []) => {
     numericPaths(node.item, [...trail.slice(0, -1), `${trail.at(-1)}[]`], out);
   return out;
 };
-const everyNumber = numericPaths(BeefwifeSchema.schema);
+const everyNumber = numericPaths(Schema.schema);
 assert.ok(everyNumber.length > 80, `only ${everyNumber.length} numeric fields`);
 
 /* Some fields answer to more than themselves: section counts are capped as a
@@ -247,7 +243,7 @@ checks += 1;
 let swept = 0;
 for (const path of everyNumber) {
   if (crossChecked(path)) continue;
-  const limit = BeefwifeDescriptor.bounds(path);
+  const limit = Descriptor.bounds(path);
   const segments = path.replace(/\[\]/g, ".[]").split(".");
   const step = limit.integer ? 1 : 1e-6;
   for (const [edge, outside] of [
@@ -257,7 +253,7 @@ for (const path of everyNumber) {
     const inside = copy(source);
     setAt(inside, segments, edge);
     try {
-      BeefwifeDescriptor.read(inside);
+      Descriptor.read(inside);
     } catch (error) {
       throw new Error(
         `${path} rejects its own bound ${edge}: ${error.message}`,

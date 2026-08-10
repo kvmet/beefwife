@@ -40,7 +40,7 @@ const selectLowest = (order, chunks, count) => {
   }
 };
 
-class BeefwifeBody {
+class Body {
   constructor(model, gait, breathingPhase = gait.phase) {
     this.model = model;
     this.gait = gait;
@@ -81,12 +81,7 @@ class BeefwifeBody {
       );
   }
 
-  reconfigure(
-    model,
-    gait,
-    throttle = 1,
-    breathingPhase = this.breathingPhase,
-  ) {
+  reconfigure(model, gait, throttle = 1, breathingPhase = this.breathingPhase) {
     if (model.chunks.length !== this.chunks.length)
       throw new Error("cannot reconfigure a different chunk count");
     this.model = model;
@@ -257,8 +252,7 @@ class BeefwifeBody {
   _substep(dt, throttle, direction) {
     this.gait.advance(dt, throttle);
     this.breathingPhase =
-      (this.breathingPhase +
-        TAU * this.model.breathing.cyclesPerSecond * dt) %
+      (this.breathingPhase + TAU * this.model.breathing.cyclesPerSecond * dt) %
       TAU;
     this._updateTangentsAndAxis(dt);
     this._applyBreathing();
@@ -431,8 +425,7 @@ class BeefwifeBody {
         throttle *
         (phaseSine * spec.bendPhaseCosine + phaseCosine * spec.bendPhaseSine);
       const target = (bend + bias * throttle) * spec.bendScale;
-      const correction =
-        (target - turn) * spec.material.jointCorrection * 0.5;
+      const correction = (target - turn) * spec.material.jointCorrection * 0.5;
       const cosine = Math.cos(correction);
       const sine = Math.sin(correction);
       const nextBeforeX = chunk.x - (ax * cosine + ay * sine);
@@ -458,10 +451,8 @@ class BeefwifeBody {
     for (let index = 0; index < this.model.links.length; index++) {
       const link = this.model.links[index];
       const wave =
-        phaseCosine * link.gatherPhaseCosine -
-        phaseSine * link.gatherPhaseSine;
-      const gather =
-        1 + channel.amplitude * link.gatherScale * throttle * wave;
+        phaseCosine * link.gatherPhaseCosine - phaseSine * link.gatherPhaseSine;
+      const gather = 1 + channel.amplitude * link.gatherScale * throttle * wave;
       const breathing = 1 + (link.breathingScale ? this.breathingScale : 0);
       this.linkTargets[index] = link.restLength * gather * breathing;
     }
@@ -556,4 +547,4 @@ class BeefwifeBody {
   }
 }
 
-export { BeefwifeBody as Body, PHYSICS_STEP, MAX_LINK_STRETCH };
+export { Body, PHYSICS_STEP, MAX_LINK_STRETCH };

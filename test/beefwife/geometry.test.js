@@ -335,7 +335,10 @@ assert.equal(
 assert.ok(strokedOutline instanceof Graphics);
 assert.deepEqual(fillsOf(strokedOutline.context), []);
 assert.equal(strokesOf(strokedOutline.context).length, 1);
-assert.equal(strokesOf(strokedOutline.context)[0].color, colourNumber("#ffffff"));
+assert.equal(
+  strokesOf(strokedOutline.context)[0].color,
+  colourNumber("#ffffff"),
+);
 assert.equal(strokesOf(strokedOutline.context)[0].width, 2);
 assert.equal(pointsOf(strokedOutline).length, limbCount * 6);
 assert.deepEqual(

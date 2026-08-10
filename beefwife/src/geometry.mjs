@@ -88,8 +88,7 @@ const snapPositions = (
   else if (pixelResolution > 0)
     for (let index = start; index < end; index++)
       positions[index] =
-        Math.round(positions[index] * pixelResolution) *
-        inversePixelResolution;
+        Math.round(positions[index] * pixelResolution) * inversePixelResolution;
 };
 
 /* Sweeps the rim a half turn from `fromX,fromY` through `overX,overY` to the

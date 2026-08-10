@@ -9,7 +9,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const BeefwifeDescriptor = require("../../beefwife/src/descriptor.mjs");
+const Descriptor = require("../../beefwife/src/descriptor.mjs");
 
 const examplePath = path.join(
   __dirname,
@@ -26,7 +26,7 @@ let checks = 0;
 const accepted = (label, value) => {
   checks++;
   try {
-    return BeefwifeDescriptor.read(value);
+    return Descriptor.read(value);
   } catch (error) {
     throw new Error(`${label} was rejected: ${error.message}`);
   }
@@ -36,7 +36,7 @@ const rejected = (label, value, pattern) => {
   checks++;
   let error = null;
   try {
-    BeefwifeDescriptor.read(value);
+    Descriptor.read(value);
   } catch (caught) {
     error = caught;
   }
@@ -111,10 +111,10 @@ const labelFor = (tokens) =>
   );
 
 const canonical = accepted("canonical example", source);
-assert.equal(exampleText, `${BeefwifeDescriptor.stringify(canonical)}\n`);
+assert.equal(exampleText, `${Descriptor.stringify(canonical)}\n`);
 assert.equal(
-  BeefwifeDescriptor.stringify(BeefwifeDescriptor.parse(exampleText)),
-  BeefwifeDescriptor.stringify(canonical),
+  Descriptor.stringify(Descriptor.parse(exampleText)),
+  Descriptor.stringify(canonical),
 );
 checks += 2;
 
@@ -132,16 +132,16 @@ fs.readdirSync(castDir)
     const descriptor = accepted(`cast/${file}`, JSON.parse(text));
     assert.equal(descriptor.name, path.basename(file, ".json"));
     assert.equal(
-      BeefwifeDescriptor.stringify(BeefwifeDescriptor.parse(text)),
-      BeefwifeDescriptor.stringify(descriptor),
+      Descriptor.stringify(Descriptor.parse(text)),
+      Descriptor.stringify(descriptor),
     );
-    if (text !== `${BeefwifeDescriptor.stringify(descriptor)}\n`)
+    if (text !== `${Descriptor.stringify(descriptor)}\n`)
       uncanonical.push(file);
     checks += 2;
   });
 
 const callerOwned = copy(source);
-const owned = BeefwifeDescriptor.read(callerOwned);
+const owned = Descriptor.read(callerOwned);
 callerOwned.chain.sections.head.chunks = 99;
 assert.equal(owned.chain.sections.head.chunks, 2);
 checks++;
@@ -288,7 +288,7 @@ emptyTrunk.chain.sections.trunk.chunks = 0;
 rejected("empty trunk", emptyTrunk, /must be between 1 and 256/);
 
 const tooManyChunks = copy(source);
-tooManyChunks.chain.sections.trunk.chunks = BeefwifeDescriptor.LIMITS.chunks;
+tooManyChunks.chain.sections.trunk.chunks = Descriptor.LIMITS.chunks;
 rejected("too many total chunks", tooManyChunks, /2 to 256/);
 
 const fractionalPairs = copy(source);
@@ -375,15 +375,13 @@ Object.defineProperty(hostileKey.chain, "__proto__", {
 rejected("prototype-named key", hostileKey, /is unknown/);
 
 const longPath = copy(source);
-longPath.definitions.shapes.eye.path = "M".repeat(
-  BeefwifeDescriptor.LIMITS.path + 1,
-);
+longPath.definitions.shapes.eye.path = "M".repeat(Descriptor.LIMITS.path + 1);
 rejected("oversized SVG path", longPath, /characters/);
 
 const tooManyPathCharacters = copy(source);
 for (let i = 0; i < 17; i++)
   tooManyPathCharacters.definitions.shapes[`bulk-${i}`] = {
-    path: "M".repeat(BeefwifeDescriptor.LIMITS.path),
+    path: "M".repeat(Descriptor.LIMITS.path),
   };
 rejected("oversized combined paths", tooManyPathCharacters, /paths must total/);
 
@@ -425,7 +423,7 @@ for (const name of ["head", "trunk", "tail"])
   tightSpacing.chain.sections[name].spacing = 0.12;
 tightSpacing.gait.phaseLagRadiansPerPixel = 3.9166666667;
 assert.equal(
-  BeefwifeDescriptor.read(tightSpacing).gait.phaseLagRadiansPerPixel,
+  Descriptor.read(tightSpacing).gait.phaseLagRadiansPerPixel,
   3.9166666667,
 );
 checks++;
@@ -468,7 +466,7 @@ const negativeZero = copy(source);
 negativeZero.chain.skin.ornaments[0].angleDegrees = -0;
 assert.equal(
   Object.is(
-    BeefwifeDescriptor.read(negativeZero).chain.skin.ornaments[0].angleDegrees,
+    Descriptor.read(negativeZero).chain.skin.ornaments[0].angleDegrees,
     -0,
   ),
   false,
@@ -479,15 +477,12 @@ const reordered = copy(source);
 reordered.definitions.shapes = Object.fromEntries(
   Object.entries(reordered.definitions.shapes).reverse(),
 );
-assert.equal(
-  BeefwifeDescriptor.stringify(reordered),
-  BeefwifeDescriptor.stringify(source),
-);
+assert.equal(Descriptor.stringify(reordered), Descriptor.stringify(source));
 checks++;
 
-assert.throws(() => BeefwifeDescriptor.parse("{"), /invalid JSON/);
-assert.throws(() => BeefwifeDescriptor.parse({}), /must be a string/);
-assert.throws(() => BeefwifeDescriptor.stringify(source, 11), /indentation/);
+assert.throws(() => Descriptor.parse("{"), /invalid JSON/);
+assert.throws(() => Descriptor.parse({}), /must be a string/);
+assert.throws(() => Descriptor.stringify(source, 11), /indentation/);
 checks += 3;
 
 const withAppearance = copy(source);

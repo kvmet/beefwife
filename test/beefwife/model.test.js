@@ -8,7 +8,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const BeefwifeModel = require("../../beefwife/src/model.mjs");
+const Model = require("../../beefwife/src/model.mjs");
 
 const source = JSON.parse(
   fs.readFileSync(
@@ -19,7 +19,7 @@ const source = JSON.parse(
 const copy = (value) => JSON.parse(JSON.stringify(value));
 let checks = 0;
 
-const model = BeefwifeModel.compile(source);
+const model = Model.compile(source);
 assert.equal(model.chunks.length, 27);
 assert.deepEqual(
   Object.fromEntries(
@@ -61,7 +61,7 @@ strokedSource.definitions.paints.ribbon.stroke = {
   colour: "#0a0b0c",
   width: 7,
 };
-const strokedModel = BeefwifeModel.compile(strokedSource);
+const strokedModel = Model.compile(strokedSource);
 assert.deepEqual(strokedModel.paints.ribbon, {
   fill: "#7a1414",
   stroke: "#0a0b0c",
@@ -79,7 +79,7 @@ assert.equal(model.chunks[middle].bendScale, 1);
 const spread = copy(source);
 spread.chain.sections.head.spacing = 24;
 spread.chain.sections.head.chunks = 4;
-const spreadModel = BeefwifeModel.compile(spread);
+const spreadModel = Model.compile(spread);
 // Chunk 2 has a head link on both sides; chunk 3 straddles the seam.
 assert.equal(spreadModel.chunks[2].bendScale, 2);
 assert.ok(spreadModel.chunks[3].bendScale < 2);
@@ -88,7 +88,7 @@ assert.equal(spreadModel.chunks.at(-3).bendScale, 1);
 const uneven = copy(source);
 uneven.chain.sections.head.motionScale.gather = 0;
 uneven.chain.sections.trunk.motionScale.gather = 1;
-const unevenModel = BeefwifeModel.compile(uneven);
+const unevenModel = Model.compile(uneven);
 const seam = unevenModel.links.find(
   (link) =>
     unevenModel.chunks[link.from].section !==
@@ -110,7 +110,7 @@ assert.equal(model.skin.hasRibbon, true);
 const bald = copy(source);
 for (const section of Object.values(bald.chain.sections))
   section.profile.ribbonWidth = { start: 0, end: 0 };
-assert.equal(BeefwifeModel.compile(bald).skin.hasRibbon, false);
+assert.equal(Model.compile(bald).skin.hasRibbon, false);
 checks += 10;
 assert.equal(
   model.skin.plates[0].shape,
@@ -201,7 +201,7 @@ boundaries.definitions.materials.tail = {
   linkCorrection: 0.2,
 };
 boundaries.chain.sections.tail.material = "tail";
-const boundaryModel = BeefwifeModel.compile(boundaries);
+const boundaryModel = Model.compile(boundaries);
 assert.equal(boundaryModel.links[1].restLength, 15);
 assert.equal(boundaryModel.links[17].restLength, 25);
 assert.equal(boundaryModel.links[17].linkCorrection, 0.4);
@@ -209,7 +209,7 @@ checks += 3;
 
 const breathing = copy(model.descriptor);
 breathing.chain.breathing = 1;
-const breathingModel = BeefwifeModel.compile(breathing);
+const breathingModel = Model.compile(breathing);
 const breathingLinks = breathingModel.links.filter(
   (link) => link.breathingScale > 0,
 );
@@ -227,13 +227,13 @@ assert.ok(
 const largerBreather = copy(breathing);
 largerBreather.chain.sections.trunk.chunks *= 4;
 assert.ok(
-  BeefwifeModel.compile(largerBreather).breathing.cyclesPerSecond <
+  Model.compile(largerBreather).breathing.cyclesPerSecond <
     breathingModel.breathing.cyclesPerSecond,
 );
 const widerBreather = copy(breathing);
 widerBreather.chain.sections.trunk.spacing *= 4;
 assert.equal(
-  BeefwifeModel.compile(widerBreather).breathing.cyclesPerSecond,
+  Model.compile(widerBreather).breathing.cyclesPerSecond,
   breathingModel.breathing.cyclesPerSecond,
 );
 checks += 5;
@@ -245,7 +245,7 @@ singleton.chain.sections.head.profile.plateScale = { start: 1, end: 3 };
 singleton.chain.skin.plates[0].repeat.count = null;
 singleton.chain.skin.plates[1].at.offset = 1;
 singleton.chain.skin.ornaments[0].at.offset = 0;
-const singletonModel = BeefwifeModel.compile(singleton);
+const singletonModel = Model.compile(singleton);
 assert.equal(singletonModel.chunks[0].ribbonWidth, 4);
 assert.equal(singletonModel.chunks[0].plateScale, 2);
 checks += 2;
@@ -259,7 +259,7 @@ tailward.chain.skin.ornaments[0].at = {
 tailward.chain.skin.ornaments[0].repeat = { count: 3, step: 2 };
 tailward.chain.skin.ornaments[0].side = "right";
 assert.deepEqual(
-  BeefwifeModel.compile(tailward).skin.ornaments.map(({ chunk }) => chunk),
+  Model.compile(tailward).skin.ornaments.map(({ chunk }) => chunk),
   [26, 24, 22],
 );
 checks++;
@@ -273,7 +273,7 @@ chainTailward.chain.skin.ornaments[0].at = {
 chainTailward.chain.skin.ornaments[0].repeat = { count: null, step: 5 };
 chainTailward.chain.skin.ornaments[0].side = "left";
 assert.deepEqual(
-  BeefwifeModel.compile(chainTailward).skin.ornaments.map(({ chunk }) => chunk),
+  Model.compile(chainTailward).skin.ornaments.map(({ chunk }) => chunk),
   [25, 20, 15, 10, 5, 0],
 );
 checks++;
@@ -285,9 +285,11 @@ under.layer = "under";
 under.side = "left";
 overlapOrder.chain.skin.ornaments.push(under);
 assert.deepEqual(
-  BeefwifeModel.compile(overlapOrder).skin.ornaments.map(
-    ({ id, side, layer }) => [id, side, layer],
-  ),
+  Model.compile(overlapOrder).skin.ornaments.map(({ id, side, layer }) => [
+    id,
+    side,
+    layer,
+  ]),
   [
     ["eyes", "left", "over"],
     ["eyes", "right", "over"],
@@ -298,7 +300,7 @@ checks++;
 
 const emptyTail = copy(model.descriptor);
 emptyTail.chain.sections.tail.chunks = 0;
-const emptyTailModel = BeefwifeModel.compile(emptyTail);
+const emptyTailModel = Model.compile(emptyTail);
 assert.equal(emptyTailModel.sections.tail.start, 18);
 assert.equal(emptyTailModel.sections.tail.end, 18);
 assert.equal(emptyTailModel.chunks.length, 18);
@@ -306,14 +308,14 @@ checks += 3;
 
 const invalid = copy(model.descriptor);
 invalid.chain.sections.trunk.material = "missing";
-assert.throws(() => BeefwifeModel.compile(invalid), /references missing/);
+assert.throws(() => Model.compile(invalid), /references missing/);
 checks++;
 
 const castDir = path.join(__dirname, "..", "fixtures", "beefwives");
 fs.readdirSync(castDir)
   .filter((name) => name.endsWith(".json") && name !== "index.json")
   .forEach((name) => {
-    BeefwifeModel.compile(
+    Model.compile(
       JSON.parse(fs.readFileSync(path.join(castDir, name), "utf8")),
     );
     checks++;

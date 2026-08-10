@@ -5,7 +5,7 @@ const TAU = Math.PI * 2;
 const positiveModulo = (value, divisor) =>
   ((value % divisor) + divisor) % divisor;
 
-class BeefwifeGait {
+class Gait {
   constructor(gait, phase = 0) {
     this.gait = gait;
     this.phase = positiveModulo(phase, TAU);
@@ -29,8 +29,7 @@ class BeefwifeGait {
 
   _pulseAt(distance, channel, phaseOffset = 0) {
     const cycle =
-      positiveModulo(this._phaseAt(distance, channel, phaseOffset), TAU) /
-      TAU;
+      positiveModulo(this._phaseAt(distance, channel, phaseOffset), TAU) / TAU;
     if (cycle >= channel.dutyCycle) return 0;
     return Math.sin((Math.PI * cycle) / channel.dutyCycle);
   }
@@ -48,10 +47,7 @@ class BeefwifeGait {
   thrustAt(distance, throttle, scale) {
     const channel = this.gait.thrust;
     return (
-      channel.acceleration *
-      scale *
-      throttle *
-      this._pulseAt(distance, channel)
+      channel.acceleration * scale * throttle * this._pulseAt(distance, channel)
     );
   }
 
@@ -78,4 +74,4 @@ class BeefwifeGait {
   }
 }
 
-export { BeefwifeGait as Gait };
+export { Gait };

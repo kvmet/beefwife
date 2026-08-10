@@ -12,7 +12,7 @@ const limbLength = (reach, scale, fold) => {
   return reach * scale * amount;
 };
 
-class BeefwifeLegs {
+class Legs {
   constructor(model, body, gait, random) {
     this.model = model;
     this.body = body;
@@ -215,4 +215,4 @@ class BeefwifeLegs {
   }
 }
 
-export { BeefwifeLegs as Legs, limbLength };
+export { Legs, limbLength };

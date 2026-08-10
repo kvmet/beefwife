@@ -802,7 +802,7 @@ pixi_js = __toESM(pixi_js, 1);
 /** Schema-v1 gait clock and spatial channels. Private to the Beefwife runtime. */
 	var TAU$2 = Math.PI * 2;
 	var positiveModulo = (value, divisor) => (value % divisor + divisor) % divisor;
-	var BeefwifeGait = class {
+	var Gait = class {
 		constructor(gait, phase = 0) {
 			this.gait = gait;
 			this.phase = positiveModulo(phase, TAU$2);
@@ -869,7 +869,7 @@ pixi_js = __toESM(pixi_js, 1);
 			else return;
 		}
 	};
-	var BeefwifeBody = class {
+	var Body = class {
 		constructor(model, gait, breathingPhase = gait.phase) {
 			this.model = model;
 			this.gait = gait;
@@ -1287,7 +1287,7 @@ pixi_js = __toESM(pixi_js, 1);
 		const amount = fold <= .5 ? lerp(.9, 1.35, fold * 2) : lerp(1.35, 1.72, (fold - .5) * 2);
 		return reach * scale * amount;
 	};
-	var BeefwifeLegs = class {
+	var Legs = class {
 		constructor(model, body, gait, random) {
 			this.model = model;
 			this.body = body;
@@ -2299,12 +2299,12 @@ pixi_js = __toESM(pixi_js, 1);
 			this.#requestedDirection = { ...facing };
 			this.#model = compile(descriptor);
 			graphics_default.prepare(this.#model);
-			this.#gait = new BeefwifeGait(this.#model.gait, phase);
+			this.#gait = new Gait(this.#model.gait, phase);
 			const breathingPhase = this.#model.breathing.strain ? TAU * this.#sampleRandom() : this.#gait.phase;
-			this.#body = new BeefwifeBody(this.#model, this.#gait, breathingPhase);
+			this.#body = new Body(this.#model, this.#gait, breathingPhase);
 			this.#body.place(position, facing);
 			if (!bodyFitsWorld(this.#body)) throw new RangeError("options.position places the body outside the world");
-			this.#legs = new BeefwifeLegs(this.#model, this.#body, this.#gait, () => this.#sampleRandom());
+			this.#legs = new Legs(this.#model, this.#body, this.#gait, () => this.#sampleRandom());
 			this.#throttle = 1;
 			this.#stepThrottle = 1;
 			this.#skin = new Skin(this.#model, this.#body, this.#legs);
@@ -2342,17 +2342,17 @@ pixi_js = __toESM(pixi_js, 1);
 			this.#live("setDescriptor");
 			const nextModel = compile(descriptor);
 			graphics_default.prepare(nextModel);
-			const nextGait = new BeefwifeGait(nextModel.gait, this.#gait.phase);
+			const nextGait = new Gait(nextModel.gait, this.#gait.phase);
 			const breathingPhase = !this.#model.breathing.strain && nextModel.breathing.strain ? TAU * this.#sampleRandom() : this.#body.breathingPhase;
 			const compatible = sameTopology(this.#model, nextModel);
 			let body = this.#body;
 			if (!compatible) {
-				body = new BeefwifeBody(nextModel, nextGait, breathingPhase);
+				body = new Body(nextModel, nextGait, breathingPhase);
 				body.adopt(this.#body);
 				body.refreshContacts(this.#throttle);
 				if (!bodyFitsWorld(body)) throw new RangeError("descriptor places the body outside the world");
 			}
-			const nextLegs = legCountKey(this.#model) === legCountKey(nextModel) ? null : new BeefwifeLegs(nextModel, body, nextGait, () => this.#sampleRandom());
+			const nextLegs = legCountKey(this.#model) === legCountKey(nextModel) ? null : new Legs(nextModel, body, nextGait, () => this.#sampleRandom());
 			const nextSkin = ornamentKey(this.#model) === ornamentKey(nextModel) ? null : new Skin(nextModel, body, nextLegs || this.#legs);
 			if (compatible) this.#body.reconfigure(nextModel, nextGait, this.#throttle, breathingPhase);
 			else this.#body = body;
@@ -2373,12 +2373,12 @@ pixi_js = __toESM(pixi_js, 1);
 			const position = worldPoint(options.position, pose.head, "options.position");
 			const facing = direction(options.direction, pose.direction, "options.direction");
 			const phase = finite(defaulted(options.phase, this.#gait.phase), "options.phase");
-			const gait = new BeefwifeGait(this.#model.gait, phase);
+			const gait = new Gait(this.#model.gait, phase);
 			const breathingPhase = this.#model.breathing.strain ? TAU * this.#sampleRandom() : gait.phase;
-			const body = new BeefwifeBody(this.#model, gait, breathingPhase);
+			const body = new Body(this.#model, gait, breathingPhase);
 			body.place(position, facing);
 			if (!bodyFitsWorld(body)) throw new RangeError("options.position places the body outside the world");
-			const legs = new BeefwifeLegs(this.#model, body, gait, () => this.#sampleRandom());
+			const legs = new Legs(this.#model, body, gait, () => this.#sampleRandom());
 			const skin = new Skin(this.#model, body, legs);
 			if (options.direction !== void 0) this.#requestedDirection = { ...facing };
 			this.#gait = gait;

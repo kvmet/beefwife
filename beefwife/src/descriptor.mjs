@@ -6,13 +6,7 @@
  * `bounds` reports what the schema enforces for one field.
  */
 
-import {
-  VERSION,
-  LIMITS,
-  SECTIONS,
-  ID_PATTERN,
-  schema,
-} from "./schema.mjs";
+import { VERSION, LIMITS, SECTIONS, ID_PATTERN, schema } from "./schema.mjs";
 
 const fail = (path, message) => {
   throw new Error(`${path}: ${message}`);
@@ -40,9 +34,7 @@ const ownKeys = (value, path) => {
 
 const readNode = (node, value, path, ancestors) => {
   if (node.kind === "nullable")
-    return value === null
-      ? null
-      : readNode(node.item, value, path, ancestors);
+    return value === null ? null : readNode(node.item, value, path, ancestors);
   if (node.kind === "literal") {
     if (value !== node.value) fail(path, `must equal ${node.value}`);
     return value;
@@ -90,10 +82,7 @@ const readNode = (node, value, path, ancestors) => {
       keys.forEach((key) => {
         const descriptor = Object.getOwnPropertyDescriptor(value, key);
         if (!descriptor.enumerable || !("value" in descriptor))
-          fail(
-            `${path}.${String(key)}`,
-            "must be an enumerable data property",
-          );
+          fail(`${path}.${String(key)}`, "must be an enumerable data property");
       });
       for (let i = 0; i < value.length; i++)
         if (!Object.hasOwn(value, i)) fail(`${path}[${i}]`, "is missing");
@@ -112,14 +101,8 @@ const readNode = (node, value, path, ancestors) => {
         );
       const out = {};
       keys.sort().forEach((key) => {
-        if (!ID_PATTERN.test(key))
-          fail(`${path}.${key}`, "has an invalid id");
-        out[key] = readNode(
-          node.item,
-          value[key],
-          `${path}.${key}`,
-          ancestors,
-        );
+        if (!ID_PATTERN.test(key)) fail(`${path}.${key}`, "has an invalid id");
+        out[key] = readNode(node.item, value[key], `${path}.${key}`, ancestors);
       });
       return out;
     }
@@ -168,8 +151,7 @@ const resolvedChunks = (descriptor, placement, path) => {
   const available =
     Math.floor((length - 1 - offset) / placement.repeat.step) + 1;
   const count = placement.repeat.count ?? available;
-  if (count > available)
-    fail(`${path}.repeat.count`, "runs outside its scope");
+  if (count > available) fail(`${path}.repeat.count`, "runs outside its scope");
   const base = section ? offsets[section] : 0;
   return Array.from(
     { length: count },
@@ -180,10 +162,7 @@ const resolvedChunks = (descriptor, placement, path) => {
 const validate = (descriptor) => {
   const { definitions, chain, legs } = descriptor;
   const sections = chain.sections;
-  const total = SECTIONS.reduce(
-    (sum, name) => sum + sections[name].chunks,
-    0,
-  );
+  const total = SECTIONS.reduce((sum, name) => sum + sections[name].chunks, 0);
   if (total < 2 || total > LIMITS.chunks)
     fail("$.chain.sections", `must contain 2 to ${LIMITS.chunks} chunks`);
   SECTIONS.forEach((name) =>
@@ -207,11 +186,7 @@ const validate = (descriptor) => {
       );
   });
   const references = [
-    [
-      definitions.paints,
-      chain.skin.ribbon.paint,
-      "$.chain.skin.ribbon.paint",
-    ],
+    [definitions.paints, chain.skin.ribbon.paint, "$.chain.skin.ribbon.paint"],
     [definitions.paints, legs.skin.limbPaint, "$.legs.skin.limbPaint"],
     [definitions.shapes, legs.skin.foot.shape, "$.legs.skin.foot.shape"],
     [definitions.paints, legs.skin.foot.paint, "$.legs.skin.foot.paint"],

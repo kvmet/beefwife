@@ -4,7 +4,7 @@
  */
 
 const assert = require("node:assert/strict");
-const { Gait: BeefwifeGait } = require("../../beefwife/src/drive.mjs");
+const { Gait } = require("../../beefwife/src/drive.mjs");
 
 const TAU = Math.PI * 2;
 const gaitSpec = {
@@ -27,7 +27,7 @@ const gaitSpec = {
 };
 let checks = 0;
 
-const gait = new BeefwifeGait(gaitSpec, Math.PI / 2);
+const gait = new Gait(gaitSpec, Math.PI / 2);
 assert.ok(Math.abs(gait.bendAt(0, 0.5, 0.25) - 0.25) < 1e-12);
 assert.ok(Math.abs(gait.restAt(0, 1, 0.5) - 1.1) < 1e-12);
 assert.ok(Math.abs(gait.contactAt(0, 1, 1) - 0.2) < 1e-12);
@@ -56,7 +56,7 @@ checks++;
    alone cannot see which way the wave travels. A positive lag must put the
    distant chunk behind the head: the value there is the one the head held
    earlier, so the wave runs head to tail and the creature swims forwards. */
-const lagged = new BeefwifeGait(gaitSpec, 0);
+const lagged = new Gait(gaitSpec, 0);
 const quarterWave = TAU / 4 / gaitSpec.phaseLagRadiansPerPixel;
 lagged.phase = 0;
 const headNow = lagged.bendAt(0, 1, 1);

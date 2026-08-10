@@ -370,10 +370,7 @@ class Graphics {
     const headRim = count * 4 + CAP_VERTICES * 2 + 2;
     this.ribbonStroke.moveTo(positions[0], positions[1]);
     for (let index = 1; index < count; index++)
-      this.ribbonStroke.lineTo(
-        positions[index * 4],
-        positions[index * 4 + 1],
-      );
+      this.ribbonStroke.lineTo(positions[index * 4], positions[index * 4 + 1]);
     // The rim's first and last points are the edge vertices already drawn.
     for (let step = 1; step < CAP_SEGMENTS; step++)
       this.ribbonStroke.lineTo(

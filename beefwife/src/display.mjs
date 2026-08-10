@@ -115,10 +115,4 @@ const setShapeTransform = (
   graphics.scale.set(1, mirror);
 };
 
-export {
-  discard,
-  resizeGraphics,
-  contextFor,
-  meshFor,
-  setShapeTransform,
-};
+export { discard, resizeGraphics, contextFor, meshFor, setShapeTransform };

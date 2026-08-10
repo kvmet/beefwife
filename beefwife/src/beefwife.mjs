@@ -64,8 +64,7 @@ const optionsOf = (value, allowed, path) => {
 
 /* Only an absent field takes the default. `??` would let null through as
    well, and null is what an emptied number input hands back. */
-const defaulted = (value, fallback) =>
-  value === undefined ? fallback : value;
+const defaulted = (value, fallback) => (value === undefined ? fallback : value);
 
 const finite = (value, path) => {
   if (typeof value !== "number" || !Number.isFinite(value))
@@ -398,9 +397,7 @@ class Beefwife extends Container {
       throw new RangeError(
         "options.position places the body outside the world",
       );
-    const legs = new Legs(this.#model, body, gait, () =>
-      this.#sampleRandom(),
-    );
+    const legs = new Legs(this.#model, body, gait, () => this.#sampleRandom());
     const skin = new Skin(this.#model, body, legs);
     if (options.direction !== undefined)
       this.#requestedDirection = { ...facing };

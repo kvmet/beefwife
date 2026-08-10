@@ -218,8 +218,7 @@ class Skin {
       state.plates[offset + 4] =
         plate.scale *
         this.model.chunks[plate.chunk].plateScale *
-        (1 +
-          this.model.skin.loadScale * this.body.chunks[plate.chunk].contact);
+        (1 + this.model.skin.loadScale * this.body.chunks[plate.chunk].contact);
     }
     return state;
   }

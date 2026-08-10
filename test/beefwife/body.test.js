@@ -10,12 +10,9 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { Beefwife } = require("../../beefwife/src/beefwife.mjs");
-const BeefwifeModel = require("../../beefwife/src/model.mjs");
-const { Gait: BeefwifeGait } = require("../../beefwife/src/drive.mjs");
-const {
-  Body: BeefwifeBody,
-  MAX_LINK_STRETCH,
-} = require("../../beefwife/src/body.mjs");
+const Model = require("../../beefwife/src/model.mjs");
+const { Gait } = require("../../beefwife/src/drive.mjs");
+const { Body, MAX_LINK_STRETCH } = require("../../beefwife/src/body.mjs");
 
 const source = JSON.parse(
   fs.readFileSync(
@@ -34,9 +31,9 @@ const distance = (before, after) =>
   Math.hypot(after.x - before.x, after.y - before.y);
 let checks = 0;
 
-const model = BeefwifeModel.compile(source);
-const gait = new BeefwifeGait(model.gait);
-const body = new BeefwifeBody(model, gait);
+const model = Model.compile(source);
+const gait = new Gait(model.gait);
+const body = new Body(model, gait);
 body.place({ x: 0, y: 0 }, { x: 1, y: 0 });
 const start = poseOf(body);
 let maximumLinkError = 0;
@@ -77,8 +74,8 @@ runBody(600, { x: 0, y: 1 }, 0);
 assert.ok(Math.max(...body.chunks.map((chunk) => chunk.idle)) < 1e-6);
 checks++;
 
-const selectionGait = new BeefwifeGait(model.gait);
-const selectionBody = new BeefwifeBody(model, selectionGait);
+const selectionGait = new Gait(model.gait);
+const selectionBody = new Body(model, selectionGait);
 selectionBody.place({ x: 0, y: 0 }, { x: 1, y: 0 });
 selectionBody.refreshContacts(0.75);
 selectionBody.chunks.forEach((chunk, index) => {
@@ -126,22 +123,16 @@ const withoutMotion = copy(source);
 
 const breathingSource = copy(withoutMotion);
 breathingSource.chain.breathing = 1;
-const breathingModel = BeefwifeModel.compile(breathingSource);
-const offsetBreath = new BeefwifeBody(
+const breathingModel = Model.compile(breathingSource);
+const offsetBreath = new Body(
   breathingModel,
-  new BeefwifeGait(breathingModel.gait),
+  new Gait(breathingModel.gait),
   Math.PI / 2,
 );
 offsetBreath.place({ x: 0, y: 0 }, { x: 1, y: 0 });
 assert.equal(offsetBreath.breathingPhase, Math.PI / 2);
-const restingBreath = new BeefwifeBody(
-  breathingModel,
-  new BeefwifeGait(breathingModel.gait),
-);
-const movingBreath = new BeefwifeBody(
-  breathingModel,
-  new BeefwifeGait(breathingModel.gait),
-);
+const restingBreath = new Body(breathingModel, new Gait(breathingModel.gait));
+const movingBreath = new Body(breathingModel, new Gait(breathingModel.gait));
 for (const breathingBody of [restingBreath, movingBreath])
   breathingBody.place({ x: 0, y: 0 }, { x: 1, y: 0 });
 const breathingStart = poseOf(restingBreath);
@@ -180,10 +171,10 @@ assert.ok(breathingDrift < 0.1, `breathing drifted ${breathingDrift}px`);
 const breathingPhase = restingBreath.breathingPhase;
 const quieterBreathing = copy(breathingSource);
 quieterBreathing.chain.breathing = 0.5;
-const quieterModel = BeefwifeModel.compile(quieterBreathing);
+const quieterModel = Model.compile(quieterBreathing);
 restingBreath.reconfigure(
   quieterModel,
-  new BeefwifeGait(quieterModel.gait, restingBreath.gait.phase),
+  new Gait(quieterModel.gait, restingBreath.gait.phase),
   0,
 );
 assert.equal(restingBreath.breathingPhase, breathingPhase);
@@ -223,9 +214,9 @@ for (const linkCorrection of [0.001, 0.05, 0.2, 0.5, 1])
     const material = copy(source);
     material.definitions.materials.body.linkCorrection = linkCorrection;
     material.definitions.materials.body.jointCorrection = jointCorrection;
-    const model = BeefwifeModel.compile(material);
-    const gait = new BeefwifeGait(model.gait, 0);
-    const loose = new BeefwifeBody(model, gait);
+    const model = Model.compile(material);
+    const gait = new Gait(model.gait, 0);
+    const loose = new Body(model, gait);
     loose.place({ x: 0, y: 0 }, { x: 1, y: 0 });
     for (let frame = 0; frame < 20 * 60; frame++)
       loose.step(
@@ -274,16 +265,16 @@ const grown = (edit) => {
   before.chain.sections.head.chunks = 2;
   before.chain.sections.trunk.chunks = 6;
   before.chain.sections.tail.chunks = 3;
-  const model = BeefwifeModel.compile(before);
-  const gait = new BeefwifeGait(model.gait, 0);
-  const settled = new BeefwifeBody(model, gait);
+  const model = Model.compile(before);
+  const gait = new Gait(model.gait, 0);
+  const settled = new Body(model, gait);
   settled.place({ x: 0, y: 0 }, { x: 1, y: 0 });
   for (let frame = 0; frame < 120; frame++)
     settled.step(1 / 60, 1, { x: 1, y: 0 }, () => {});
   const after = copy(before);
   edit(after);
-  const nextModel = BeefwifeModel.compile(after);
-  const next = new BeefwifeBody(nextModel, new BeefwifeGait(nextModel.gait, 0));
+  const nextModel = Model.compile(after);
+  const next = new Body(nextModel, new Gait(nextModel.gait, 0));
   next.adopt(settled);
   return { settled, next, model, nextModel };
 };
@@ -350,11 +341,8 @@ const nextSample = () => {
 for (const share of [0, 0.1, 0.33, 0.5, 0.9, 1]) {
   const shared = copy(source);
   shared.chain.physics.autoLift.share = share;
-  const shareModel = BeefwifeModel.compile(shared);
-  const selection = new BeefwifeBody(
-    shareModel,
-    new BeefwifeGait(shareModel.gait),
-  );
+  const shareModel = Model.compile(shared);
+  const selection = new Body(shareModel, new Gait(shareModel.gait));
   selection.place({ x: 0, y: 0 }, { x: 1, y: 0 });
   selection.refreshContacts(0.75);
   const lifted = Math.round(share * selection.chunks.length);

@@ -1,5 +1,5 @@
 /**
- * Does BeefwifeDescriptor.scale resize the pose trace and nothing else?
+ * Does Descriptor.scale resize the pose trace and nothing else?
  * chevron-guy at 1x is the control: it drives thrust, legs, ornaments, and
  * plates at once. Fails if any chunk of the 2.5x body leaves 2.5x the
  * control's trace, if timing (gait phase, breathing rate) shifts with size,
@@ -9,12 +9,12 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const BeefwifeDescriptor = require("../../beefwife/src/descriptor.mjs");
-const BeefwifeModel = require("../../beefwife/src/model.mjs");
-const { Gait: BeefwifeGait } = require("../../beefwife/src/drive.mjs");
-const { Body: BeefwifeBody } = require("../../beefwife/src/body.mjs");
-const { Legs: BeefwifeLegs } = require("../../beefwife/src/legs.mjs");
-const { Skin: BeefwifeSkin } = require("../../beefwife/src/skin.mjs");
+const Descriptor = require("../../beefwife/src/descriptor.mjs");
+const Model = require("../../beefwife/src/model.mjs");
+const { Gait } = require("../../beefwife/src/drive.mjs");
+const { Body } = require("../../beefwife/src/body.mjs");
+const { Legs } = require("../../beefwife/src/legs.mjs");
+const { Skin } = require("../../beefwife/src/skin.mjs");
 
 const source = JSON.parse(
   fs.readFileSync(
@@ -26,27 +26,24 @@ const K = 2.5;
 let checks = 0;
 
 const runtimeFor = (descriptor) => {
-  const model = BeefwifeModel.compile(descriptor);
-  const gait = new BeefwifeGait(model.gait, 0);
-  const body = new BeefwifeBody(model, gait);
+  const model = Model.compile(descriptor);
+  const gait = new Gait(model.gait, 0);
+  const body = new Body(model, gait);
   body.place({ x: 0, y: 0 }, { x: 1, y: 0 });
-  const legs = new BeefwifeLegs(model, body, gait, () => 0.5);
-  const skin = new BeefwifeSkin(model, body, legs);
+  const legs = new Legs(model, body, gait, () => 0.5);
+  const skin = new Skin(model, body, legs);
   return { model, gait, body, legs, skin };
 };
 
 const base = runtimeFor(source);
-const scaled = runtimeFor(BeefwifeDescriptor.scale(source, K));
+const scaled = runtimeFor(Descriptor.scale(source, K));
 
 assert.equal(scaled.model.restLength, base.model.restLength * K);
 assert.equal(
   scaled.model.breathing.cyclesPerSecond,
   base.model.breathing.cyclesPerSecond,
 );
-assert.equal(
-  scaled.model.skin.lateralRate,
-  base.model.skin.lateralRate * K,
-);
+assert.equal(scaled.model.skin.lateralRate, base.model.skin.lateralRate * K);
 checks += 3;
 
 /* Identical steering and throttle sequences; a turn and a throttle drop keep

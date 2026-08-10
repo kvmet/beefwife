@@ -45,9 +45,7 @@ const placementChunks = (placement, sections, chunkCount) => {
   const scope = section ? sections[section] : { start: 0, count: chunkCount };
   const direction = placement.at.from === "head" ? 1 : -1;
   const localStart =
-    direction > 0
-      ? placement.at.offset
-      : scope.count - 1 - placement.at.offset;
+    direction > 0 ? placement.at.offset : scope.count - 1 - placement.at.offset;
   const available =
     Math.floor(
       (scope.count - 1 - placement.at.offset) / placement.repeat.step,
@@ -105,11 +103,7 @@ const compile = (value) => {
           localIndex,
           spec.chunks,
         ),
-        plateScale: profileAt(
-          spec.profile.plateScale,
-          localIndex,
-          spec.chunks,
-        ),
+        plateScale: profileAt(spec.profile.plateScale, localIndex, spec.chunks),
       });
     }
     sections[name] = {

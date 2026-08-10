@@ -8,11 +8,11 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const BeefwifeModel = require("../../beefwife/src/model.mjs");
-const { Gait: BeefwifeGait } = require("../../beefwife/src/drive.mjs");
-const { Body: BeefwifeBody } = require("../../beefwife/src/body.mjs");
-const { Legs: BeefwifeLegs } = require("../../beefwife/src/legs.mjs");
-const { Skin: BeefwifeSkin } = require("../../beefwife/src/skin.mjs");
+const Model = require("../../beefwife/src/model.mjs");
+const { Gait } = require("../../beefwife/src/drive.mjs");
+const { Body } = require("../../beefwife/src/body.mjs");
+const { Legs } = require("../../beefwife/src/legs.mjs");
+const { Skin } = require("../../beefwife/src/skin.mjs");
 
 const descriptor = JSON.parse(
   fs.readFileSync(
@@ -25,12 +25,12 @@ const near = (before, after, tolerance = 1e-6) =>
   Math.abs(before - after) <= tolerance;
 
 const runtimeFor = (source) => {
-  const model = BeefwifeModel.compile(source);
-  const gait = new BeefwifeGait(model.gait, 0);
-  const body = new BeefwifeBody(model, gait);
+  const model = Model.compile(source);
+  const gait = new Gait(model.gait, 0);
+  const body = new Body(model, gait);
   body.place({ x: 20, y: 30 }, { x: 1, y: 0 });
-  const legs = new BeefwifeLegs(model, body, gait, () => 0.5);
-  const skin = new BeefwifeSkin(model, body, legs);
+  const legs = new Legs(model, body, gait, () => 0.5);
+  const skin = new Skin(model, body, legs);
   return { model, gait, body, legs, skin };
 };
 
@@ -175,11 +175,11 @@ const probeSkin = (fields) => {
       ...fields,
     },
   ];
-  const model = BeefwifeModel.compile(source);
+  const model = Model.compile(source);
   const chunk = { x: 0, y: 0, dx: 1, dy: 0 };
   return {
     chunk,
-    skin: new BeefwifeSkin(model, { chunks: [chunk] }, { legs: [] }),
+    skin: new Skin(model, { chunks: [chunk] }, { legs: [] }),
   };
 };
 const turnTrace = (fields, rate, driveSteps, settleSteps, dt) => {

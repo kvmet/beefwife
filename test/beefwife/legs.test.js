@@ -8,10 +8,10 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { Beefwife } = require("../../beefwife/src/beefwife.mjs");
-const BeefwifeModel = require("../../beefwife/src/model.mjs");
-const { Gait: BeefwifeGait } = require("../../beefwife/src/drive.mjs");
-const { Body: BeefwifeBody } = require("../../beefwife/src/body.mjs");
-const { Legs: BeefwifeLegs } = require("../../beefwife/src/legs.mjs");
+const Model = require("../../beefwife/src/model.mjs");
+const { Gait } = require("../../beefwife/src/drive.mjs");
+const { Body } = require("../../beefwife/src/body.mjs");
+const { Legs } = require("../../beefwife/src/legs.mjs");
 
 const source = JSON.parse(
   fs.readFileSync(
@@ -25,11 +25,11 @@ const seeded = (seed) => () => {
   return seed / 2 ** 32;
 };
 const build = (descriptor, random = seeded(1)) => {
-  const model = BeefwifeModel.compile(descriptor);
-  const gait = new BeefwifeGait(model.gait);
-  const body = new BeefwifeBody(model, gait);
+  const model = Model.compile(descriptor);
+  const gait = new Gait(model.gait);
+  const body = new Body(model, gait);
   body.place({ x: 0, y: 0 }, { x: 1, y: 0 });
-  const legs = new BeefwifeLegs(model, body, gait, random);
+  const legs = new Legs(model, body, gait, random);
   return { model, gait, body, legs };
 };
 let checks = 0;
@@ -229,7 +229,7 @@ const anchored = build(source, seeded(3));
 const trunkAnchors = anchored.legs.legs.map((leg) => leg.anchor);
 const toTail = copy(source);
 toTail.legs.section = "tail";
-const tailModel = BeefwifeModel.compile(toTail);
+const tailModel = Model.compile(toTail);
 anchored.legs.reconfigure(tailModel, anchored.body, anchored.gait);
 const tailAnchors = anchored.legs.legs.map((leg) => leg.anchor);
 assert.notDeepEqual(tailAnchors, trunkAnchors);
