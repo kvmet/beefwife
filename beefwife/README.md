@@ -90,14 +90,30 @@ construction and descriptor replacement reject SVG paths and colors that Pixi
 cannot parse.
 
 `setDescriptor` validates replacement resources before changing the instance.
-Invalid input changes nothing. Topology is compatible only when the
-head, trunk, and tail chunk counts are unchanged. Compatible changes preserve
-chunk positions, previous positions, steering state, fixed-step remainder, and
-gait and breathing phases. Enabling breathing samples its starting phase.
-Changed leg data rebuilds foot state; changed skin or visual
-definitions rebuild ornament state. Incompatible topology rebuilds all physical
-and secondary state at the current head position and head direction while
-preserving gait phase and the last requested direction.
+Invalid input changes nothing about the object definition; a rejected call may
+still have drawn from `random`, which seeds state rather than definition.
+Replacement keeps as much of the live creature as the new descriptor allows.
+Chunk positions, previous positions, steering state, fixed-step remainder, and
+gait and breathing phases survive every edit. Changing a section's chunk count
+carries the chain rather than re-placing it: a chunk the descriptor still names
+keeps its exact position and velocity, and an added one is seeded between its
+neighbours, so the creature settles from where it stood. The head tangent then
+follows whichever chunk sits behind the head, which is a real turn when the
+chunk that defined it was removed.
+
+Only the number of leg pairs rebuilds foot state, and only a change to the
+expanded ornament list rebuilds ornament swing. Everything else those parts
+read comes from the model each step, so a foot stays planted and a swing stays
+mid-flight while its stance, anchor, colour, or spring settings change under
+it. Enabling breathing samples a starting phase.
+
+Display objects are retained on the same terms, one at a time rather than all
+together. A replacement repaints the children it can and changes only what the
+new descriptor disagrees with: feet, plates, and ornaments are added or dropped
+by count, and a limb or ribbon mesh is rebuilt only when its vertex count moves
+or its paint gains or loses a fill or a visible stroke. Adding a leg pair
+rebuilds the limb mesh; adding a chunk rebuilds the ribbon mesh. Nothing else
+in the scene is discarded, so no edit restarts the creature.
 
 `reset(options)` deliberately clears physical and secondary state and samples a
 new breathing phase when breathing is enabled. Its optional position defaults

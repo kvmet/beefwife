@@ -40,7 +40,7 @@ assert.deepEqual(beefwife.getPose().head, { x: 20, y: 30 });
 assert.deepEqual(beefwife.getPose().direction, { x: 1, y: 0 });
 input.name = "mutated";
 input.definitions.shapes.eye.path = "M 0 0";
-assert.equal(beefwife.descriptor.name, "undulating");
+assert.equal(beefwife.descriptor.name, "beefwife");
 assert.notEqual(beefwife.descriptor.definitions.shapes.eye.path, "M 0 0");
 assert.ok(Object.isFrozen(beefwife.descriptor));
 checks += 5;
@@ -278,14 +278,25 @@ changedTopology.chain.skin.ornaments[0].at.offset = 0;
 const beforeTopology = copy(edited.getPose());
 edited.setDescriptor(changedTopology);
 const afterTopology = edited.getPose();
+/* Changed section counts carry the chain rather than re-place it: a chunk the
+   descriptor still names keeps its exact position, so the body settles from
+   where it stood. The head tangent follows whichever chunk now sits behind the
+   head, which is a real turn when the chunk that defined it was removed. */
 assert.equal(afterTopology, retainedEditedPose);
-assert.ok(near(afterTopology.head.x, beforeTopology.head.x));
-assert.ok(near(afterTopology.head.y, beforeTopology.head.y));
+assert.equal(afterTopology.head.x, beforeTopology.head.x);
+assert.equal(afterTopology.head.y, beforeTopology.head.y);
 assert.ok(
-  near(afterTopology.direction.x, beforeTopology.direction.x) &&
-    near(afterTopology.direction.y, beforeTopology.direction.y),
+  Math.hypot(
+    afterTopology.center.x - beforeTopology.center.x,
+    afterTopology.center.y - beforeTopology.center.y,
+  ) < 10,
 );
-checks += 4;
+assert.ok(
+  afterTopology.direction.x * beforeTopology.direction.x +
+    afterTopology.direction.y * beforeTopology.direction.y >
+    Math.cos(Math.PI / 9),
+);
+checks += 5;
 
 /* Hosts size their own bounds from the chain, so the resting arc length is
    public and tracks the live topology. */
@@ -364,7 +375,7 @@ assert.equal(
     `new Beefwife(${JSON.stringify(example)}).descriptor.name`,
     browser,
   ),
-  "undulating",
+  "beefwife",
 );
 checks++;
 

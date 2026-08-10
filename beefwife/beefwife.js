@@ -204,22 +204,18 @@ const Beefwife = (() => {
     ["head", "trunk", "tail"].every(
       (name) => before.sections[name].count === after.sections[name].count,
     );
-  const legStateKey = (model) => {
-    /* Joint placement and everything under skin are drawn, never simulated,
-       so editing them keeps the feet planted. */
-    const { jointBend, jointLean, jointLeanCenter, skin, ...legs } =
-      model.descriptor.legs;
-    return JSON.stringify(legs);
-  };
-  const sameLegs = (before, after) =>
-    legStateKey(before) === legStateKey(after);
-  const skinKey = (model) =>
-    JSON.stringify([
-      model.descriptor.definitions.shapes,
-      model.descriptor.definitions.paints,
-      model.descriptor.chain.skin,
-      model.descriptor.legs.skin,
-    ]);
+  /* Only the number of legs forces new foot state. A leg reads its stance from
+     the model every step and reconfigure moves its anchor, so changing reach,
+     spread, or even the leg section leaves planted feet where they stand and
+     lets them walk to the new stance. */
+  const legCountKey = (model) => model.descriptor.legs.pairs;
+  /* Only the expanded ornament list forces new swing state. An ornament that
+     moves to another chunk keeps its deflection and settles from wherever the
+     new root leaves it. */
+  const ornamentKey = (model) =>
+    model.skin.ornaments
+      .map((ornament) => `${ornament.id}:${ornament.side}`)
+      .join("|");
 
   class Beefwife extends Container {
     #random;
@@ -331,43 +327,37 @@ const Beefwife = (() => {
         !this.#model.breathing.strain && nextModel.breathing.strain
           ? TAU * this.#sampleRandom()
           : this.#body.breathingPhase;
+      /* Every construction happens before the first assignment, so a rejected
+         replacement leaves the instance untouched. */
       const compatible = sameTopology(this.#model, nextModel);
-      const rebuildSkin =
-        !compatible || skinKey(this.#model) !== skinKey(nextModel);
-      if (compatible) {
-        const nextLegs = sameLegs(this.#model, nextModel)
+      let body = this.#body;
+      if (!compatible) {
+        body = new Body(nextModel, nextGait, breathingPhase);
+        body.adopt(this.#body);
+        body.refreshContacts(this.#throttle);
+        if (!bodyFitsWorld(body))
+          throw new RangeError("descriptor places the body outside the world");
+      }
+      const nextLegs =
+        legCountKey(this.#model) === legCountKey(nextModel)
           ? null
-          : new Legs(nextModel, this.#body, nextGait, () =>
-              this.#sampleRandom(),
-            );
-        const nextSkin = rebuildSkin
-          ? new Skin(nextModel, this.#body, nextLegs || this.#legs)
-          : null;
+          : new Legs(nextModel, body, nextGait, () => this.#sampleRandom());
+      const nextSkin =
+        ornamentKey(this.#model) === ornamentKey(nextModel)
+          ? null
+          : new Skin(nextModel, body, nextLegs || this.#legs);
+      if (compatible)
         this.#body.reconfigure(
           nextModel,
           nextGait,
           this.#throttle,
           breathingPhase,
         );
-        if (nextLegs) this.#legs = nextLegs;
-        else this.#legs.reconfigure(nextModel, this.#body, nextGait);
-        if (nextSkin) this.#skin = nextSkin;
-        else this.#skin.reconfigure(nextModel, this.#body, this.#legs);
-      } else {
-        const pose = this.#body.getPose(this.#pose);
-        const body = new Body(nextModel, nextGait, breathingPhase);
-        body.place(pose.head, pose.direction);
-        body.refreshContacts(this.#throttle);
-        if (!bodyFitsWorld(body))
-          throw new RangeError("descriptor places the body outside the world");
-        const legs = new Legs(nextModel, body, nextGait, () =>
-          this.#sampleRandom(),
-        );
-        const skin = new Skin(nextModel, body, legs);
-        this.#body = body;
-        this.#legs = legs;
-        this.#skin = skin;
-      }
+      else this.#body = body;
+      if (nextLegs) this.#legs = nextLegs;
+      else this.#legs.reconfigure(nextModel, this.#body, nextGait);
+      if (nextSkin) this.#skin = nextSkin;
+      else this.#skin.reconfigure(nextModel, this.#body, this.#legs);
       this.#model = nextModel;
       this.#gait = nextGait;
       this.#refreshPose();
@@ -451,11 +441,14 @@ const Beefwife = (() => {
     }
 
     #replaceGraphics() {
-      if (this.#graphics) this.#graphics.destroy();
-      this.#renderState = this.#skin.writeRenderState();
-      this.#graphics = Graphics.available
-        ? new Graphics(this, this.#renderState, this.#renderOptions)
-        : null;
+      this.#renderState = this.#skin.writeRenderState(this.#renderState);
+      if (this.#graphics) this.#graphics.adopt(this.#renderState);
+      else if (Graphics.available)
+        this.#graphics = new Graphics(
+          this,
+          this.#renderState,
+          this.#renderOptions,
+        );
     }
 
     #syncGraphics() {

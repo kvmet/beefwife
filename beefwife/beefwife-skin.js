@@ -86,10 +86,17 @@ const BeefwifeSkin = (() => {
       this._buildOrnaments();
     }
 
+    /* Ornament specs are rebuilt on every compile, so each swing re-points at
+       its counterpart and drops its cached spring coefficients; recover and
+       wobble may have moved. The caller's key guarantees the lists line up. */
     reconfigure(model, body, legs) {
       this.model = model;
       this.body = body;
       this.legs = legs;
+      this.ornaments.forEach((ornament, index) => {
+        ornament.spec = model.skin.ornaments[index];
+        ornament.coefficientDt = null;
+      });
     }
 
     _buildOrnaments() {
@@ -112,26 +119,28 @@ const BeefwifeSkin = (() => {
       });
     }
 
-    _createRenderState() {
-      return {
-        layout: RENDER_LAYOUT,
-        model: this.model,
-        chunks: new Float64Array(
-          this.body.chunks.length * RENDER_LAYOUT.chunkStride,
-        ),
-        legs: new Float64Array(this.legs.legs.length * RENDER_LAYOUT.legStride),
-        ornaments: new Float64Array(
-          this.ornaments.length * RENDER_LAYOUT.ornamentStride,
-        ),
-        plates: new Float64Array(
+    /* Every field is overwritten below, so a band only needs a new array when
+       its length moved. The model is carried so the graphics can tell which
+       one these numbers describe. */
+    _fitRenderState(state) {
+      if (!state) state = { layout: RENDER_LAYOUT };
+      state.model = this.model;
+      const lengths = {
+        chunks: this.body.chunks.length * RENDER_LAYOUT.chunkStride,
+        legs: this.legs.legs.length * RENDER_LAYOUT.legStride,
+        ornaments: this.ornaments.length * RENDER_LAYOUT.ornamentStride,
+        plates:
           this.model.skin.platesTailFirst.length * RENDER_LAYOUT.plateStride,
-        ),
       };
+      for (const [band, length] of Object.entries(lengths)) {
+        if (!state[band] || state[band].length !== length)
+          state[band] = new Float64Array(length);
+      }
+      return state;
     }
 
     writeRenderState(state) {
-      if (!state || state.model !== this.model)
-        state = this._createRenderState();
+      state = this._fitRenderState(state);
       const chunkStride = RENDER_LAYOUT.chunkStride;
       for (let index = 0; index < this.body.chunks.length; index++) {
         const chunk = this.body.chunks[index];

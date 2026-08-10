@@ -23,10 +23,15 @@ const BeefwifeLegs = (() => {
       this._build();
     }
 
+    /* Re-anchors the existing pairs on the new chain. Feet keep their world
+       positions and their sampled proportions, so a pair whose anchor moved
+       walks to its new stance instead of being replanted under it. */
     reconfigure(model, body, gait) {
       this.model = model;
       this.body = body;
       this.gait = gait;
+      const anchors = this._anchors();
+      this.legs.forEach((leg) => (leg.anchor = anchors[leg.pair]));
     }
 
     _signedRandom() {

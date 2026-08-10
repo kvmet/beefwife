@@ -79,19 +79,27 @@ class GraphicsPath {
     if (value === "BAD") throw new Error("bad SVG path");
   }
 
-  transform() {
+  transform(matrix) {
+    this.matrix = matrix;
     return this;
   }
 }
 
 class GraphicsContext {
-  path() {
+  constructor() {
+    this.fills = [];
+    this.strokes = [];
+  }
+  path(value) {
+    this.drawnPath = value;
     return this;
   }
-  fill() {
+  fill(value) {
+    this.fills.push(value);
     return this;
   }
-  stroke() {
+  stroke(value) {
+    this.strokes.push(value);
     return this;
   }
 }
@@ -126,7 +134,11 @@ global.PIXI = {
   Graphics,
   GraphicsContext,
   GraphicsPath,
-  Matrix: class Matrix {},
+  Matrix: class Matrix {
+    constructor(a, b, c, d, tx, ty) {
+      Object.assign(this, { a, b, c, d, tx, ty });
+    }
+  },
   Mesh,
   MeshGeometry,
   Texture: { WHITE: {} },

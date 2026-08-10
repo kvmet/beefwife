@@ -31,6 +31,27 @@ const BeefwifeGraphics = (() => {
 
   const sharedContexts = new WeakMap();
 
+  /* Brings a list of interchangeable graphics to a count, keeping every one it
+     can. Reports whether the parent's children moved. */
+  const resizeGraphics = (parent, list, count) => {
+    if (list.length === count) return false;
+    while (list.length > count) {
+      const child = list.pop();
+      if (child.parent === parent) parent.removeChild(child);
+      child.destroy();
+    }
+    while (list.length < count) list.push(new PIXI.Graphics());
+    return true;
+  };
+
+  /* Draw scales are cached per quantized step, so a plate riding on contact
+     reuses contexts instead of minting one a frame. The step is relative:
+     1.6% of the scale, so the schema's 0.001 floor draws as accurately as its
+     1000 ceiling and the whole range spans under 900 buckets. */
+  const SCALE_STEPS_PER_E = 63;
+  const scaleBucketFor = (scale) =>
+    Math.round(Math.log(scale) * SCALE_STEPS_PER_E);
+
   const contextFor = (shape, paint, scaleBucket) => {
     let paintContexts = sharedContexts.get(shape);
     if (!paintContexts) {
@@ -44,7 +65,7 @@ const BeefwifeGraphics = (() => {
     }
     let context = scaleContexts.get(scaleBucket);
     if (context) return context;
-    const scale = scaleBucket / 64;
+    const scale = Math.exp(scaleBucket / SCALE_STEPS_PER_E);
     const path = new PIXI.GraphicsPath(shape.path).transform(
       new PIXI.Matrix(scale, 0, 0, scale, 0, 0),
     );
@@ -96,7 +117,7 @@ const BeefwifeGraphics = (() => {
     pixelResolution = 0,
     inversePixelResolution = 0,
   ) => {
-    const scaleBucket = Math.round(scale * 64);
+    const scaleBucket = scaleBucketFor(scale);
     if (graphics.scaleBucket !== scaleBucket) {
       graphics.context = contextFor(spec.shape, spec.paint, scaleBucket);
       graphics.scaleBucket = scaleBucket;
@@ -140,78 +161,152 @@ const BeefwifeGraphics = (() => {
       this.parent = parent;
       this.model = state.model;
       this.options = options || {};
-      /* One set of vertices per shape, written once a frame; the mesh reads it
-         for the fill and the path traces it for the stroke. */
-      const legPaint = this.model.legs.skin.limbPaint;
-      const legCount = state.legs.length / state.layout.legStride;
-      this.limbPositions = new Float32Array(legCount * LIMB_FLOATS);
-      this.limbFill =
-        legPaint.fill === null
-          ? null
-          : meshFor(
-              this.limbPositions,
-              limbIndicesFor(legCount),
-              legPaint.fill,
-            );
-      this.limbStroke =
-        legPaint.stroke !== null && legPaint.strokeWidth > 0
-          ? new PIXI.Graphics()
-          : null;
-      const ribbonPaint = this.model.skin.ribbonPaint;
-      const chunkCount = this.model.chunks.length;
-      this.ribbonPositions = ribbonPositionsFor(chunkCount);
-      this.ribbonFill =
-        ribbonPaint.fill === null
-          ? null
-          : meshFor(
-              this.ribbonPositions,
-              ribbonIndicesFor(chunkCount),
-              ribbonPaint.fill,
-            );
-      this.ribbonStroke =
-        ribbonPaint.stroke !== null && ribbonPaint.strokeWidth > 0
-          ? new PIXI.Graphics()
-          : null;
       this.feet = [];
       this.ornaments = [];
       this.plates = [];
-      this._build(state);
+      /* One set of vertices per shape, written once a frame; the mesh reads it
+         for the fill and the path traces it for the stroke. */
+      this.limbPositions = null;
+      this.limbFill = null;
+      this.limbStroke = null;
+      this.limbCount = -1;
+      this.ribbonPositions = null;
+      this.ribbonFill = null;
+      this.ribbonStroke = null;
+      this.ribbonCount = -1;
+      this.layers = null;
+      this.adopt(state);
+    }
+
+    /* Takes on a model by changing only what it disagrees with: children come
+       and go by count, a mesh is rebuilt only when its vertex count moves or
+       its paint gains or loses a pass, and the order is settled only when the
+       cast changed. Shapes and paints are new objects on every compile, so
+       cached contexts always go. */
+    adopt(state) {
+      this.model = state.model;
+      const legCount = state.legs.length / state.layout.legStride;
+      const layers = this.model.skin.ornaments
+        .map((ornament) => ornament.layer)
+        .join("");
+      let changed = resizeGraphics(this.parent, this.feet, legCount);
+      changed =
+        resizeGraphics(
+          this.parent,
+          this.plates,
+          this.model.skin.platesTailFirst.length,
+        ) || changed;
+      changed =
+        resizeGraphics(
+          this.parent,
+          this.ornaments,
+          this.model.skin.ornaments.length,
+        ) || changed;
+      changed = this._syncLimbParts(legCount) || changed;
+      changed = this._syncRibbonParts() || changed;
+      if (changed || layers !== this.layers) {
+        this.layers = layers;
+        this._arrange();
+      }
+      for (const child of [...this.feet, ...this.ornaments, ...this.plates])
+        child.scaleBucket = null;
       this.sync(state);
     }
 
-    _build(state) {
-      for (
-        let offset = 0;
-        offset < state.legs.length;
-        offset += state.layout.legStride
-      ) {
-        const foot = new PIXI.Graphics();
-        this.feet.push(foot);
-        this.parent.addChild(foot);
+    _drop(child) {
+      if (child.parent === this.parent) this.parent.removeChild(child);
+      child.destroy();
+    }
+
+    _syncLimbParts(legCount) {
+      const paint = this.model.legs.skin.limbPaint;
+      const wantFill = paint.fill !== null;
+      const wantStroke = paint.stroke !== null && paint.strokeWidth > 0;
+      const resized = legCount !== this.limbCount;
+      let changed = false;
+      if (resized) {
+        this.limbCount = legCount;
+        this.limbPositions = new Float32Array(legCount * LIMB_FLOATS);
       }
-      if (this.limbFill) this.parent.addChild(this.limbFill);
-      if (this.limbStroke) this.parent.addChild(this.limbStroke);
-      for (let index = 0; index < this.model.skin.ornaments.length; index++) {
-        const spec = this.model.skin.ornaments[index];
-        const ornament = new PIXI.Graphics();
-        this.ornaments[index] = ornament;
-        if (spec.layer === "under") this.parent.addChild(ornament);
+      if (this.limbFill && (resized || !wantFill)) {
+        this._drop(this.limbFill);
+        this.limbFill = null;
+        changed = true;
       }
-      if (this.ribbonFill) this.parent.addChild(this.ribbonFill);
-      if (this.ribbonStroke) this.parent.addChild(this.ribbonStroke);
-      for (
-        let index = 0;
-        index < this.model.skin.platesTailFirst.length;
-        index++
-      ) {
-        const plate = new PIXI.Graphics();
-        this.plates.push(plate);
-        this.parent.addChild(plate);
+      if (wantFill && !this.limbFill) {
+        this.limbFill = meshFor(
+          this.limbPositions,
+          limbIndicesFor(legCount),
+          paint.fill,
+        );
+        changed = true;
+      } else if (this.limbFill) this.limbFill.tint = paint.fill;
+      if (this.limbStroke && !wantStroke) {
+        this._drop(this.limbStroke);
+        this.limbStroke = null;
+        changed = true;
+      } else if (wantStroke && !this.limbStroke) {
+        this.limbStroke = new PIXI.Graphics();
+        changed = true;
       }
-      for (let index = 0; index < this.model.skin.ornaments.length; index++) {
-        if (this.model.skin.ornaments[index].layer === "over")
-          this.parent.addChild(this.ornaments[index]);
+      return changed;
+    }
+
+    _syncRibbonParts() {
+      const paint = this.model.skin.ribbonPaint;
+      const chunkCount = this.model.chunks.length;
+      const wantFill = paint.fill !== null;
+      const wantStroke = paint.stroke !== null && paint.strokeWidth > 0;
+      const resized = chunkCount !== this.ribbonCount;
+      let changed = false;
+      if (resized) {
+        this.ribbonCount = chunkCount;
+        this.ribbonPositions = ribbonPositionsFor(chunkCount);
       }
+      if (this.ribbonFill && (resized || !wantFill)) {
+        this._drop(this.ribbonFill);
+        this.ribbonFill = null;
+        changed = true;
+      }
+      if (wantFill && !this.ribbonFill) {
+        this.ribbonFill = meshFor(
+          this.ribbonPositions,
+          ribbonIndicesFor(chunkCount),
+          paint.fill,
+        );
+        changed = true;
+      } else if (this.ribbonFill) this.ribbonFill.tint = paint.fill;
+      if (this.ribbonStroke && !wantStroke) {
+        this._drop(this.ribbonStroke);
+        this.ribbonStroke = null;
+        changed = true;
+      } else if (wantStroke && !this.ribbonStroke) {
+        this.ribbonStroke = new PIXI.Graphics();
+        changed = true;
+      }
+      return changed;
+    }
+
+    /* Feet sit under the limbs, then the under ornaments, the ribbon, the
+       plates tail to head, and the over ornaments. Re-adding a child the
+       parent already holds moves it to the end, so this one pass settles the
+       whole order however the cast changed. */
+    _arrange() {
+      const onLayer = (layer) =>
+        this.ornaments.filter(
+          (_, index) => this.model.skin.ornaments[index].layer === layer,
+        );
+      for (const child of [
+        ...this.feet,
+        this.limbFill,
+        this.limbStroke,
+        ...onLayer("under"),
+        this.ribbonFill,
+        this.ribbonStroke,
+        ...this.plates,
+        ...onLayer("over"),
+      ])
+        if (child) this.parent.addChild(child);
     }
 
     _syncLimbs(state, pixelResolution, inversePixelResolution) {

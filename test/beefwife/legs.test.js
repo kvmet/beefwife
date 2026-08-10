@@ -193,9 +193,17 @@ const leaning = copy(recolored);
 leaning.legs.jointLean = 0.25;
 live.setDescriptor(leaning);
 assert.equal(randomCalls, afterBuild);
-const changedLegs = copy(leaning);
-changedLegs.legs.lead += 0.01;
-live.setDescriptor(changedLegs);
+/* Stance is read from the model every step, so editing it re-anchors the
+   existing pairs rather than sampling a new set of proportions. */
+const changedStance = copy(leaning);
+changedStance.legs.lead += 0.01;
+changedStance.legs.reach += 3;
+changedStance.legs.section = "tail";
+live.setDescriptor(changedStance);
+assert.equal(randomCalls, afterBuild);
+const changedCount = copy(changedStance);
+changedCount.legs.pairs += 1;
+live.setDescriptor(changedCount);
 assert.ok(randomCalls > afterBuild);
 const afterLegEdit = randomCalls;
 live.reset();

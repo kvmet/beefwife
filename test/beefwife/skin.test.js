@@ -76,12 +76,29 @@ assert.equal(state.legs, legStorage);
 assert.ok(finite(state.chunks) && finite(state.legs));
 checks += 4;
 
+/* A replacement descriptor writes into the storage it still fits, so only the
+   band whose length moved costs an allocation. */
+const restyled = JSON.parse(JSON.stringify(descriptor));
+restyled.definitions.paints.shell.fill = "#123456";
+const restyledRuntime = runtimeFor(restyled);
+assert.equal(restyledRuntime.skin.writeRenderState(state), state);
+assert.equal(state.model, restyledRuntime.model);
+assert.equal(state.chunks, chunkStorage);
+assert.equal(state.legs, legStorage);
+const longer = JSON.parse(JSON.stringify(descriptor));
+longer.chain.sections.tail.chunks += 1;
+runtimeFor(longer).skin.writeRenderState(state);
+assert.notEqual(state.chunks, chunkStorage);
+assert.equal(state.legs, legStorage);
+assert.ok(finite(state.chunks) && finite(state.legs));
+checks += 7;
+
 const beforeTranslation = runtime.skin.writeRenderState();
 runtime.body.translate({ x: 7, y: -11 });
 runtime.legs.translate({ x: 7, y: -11 });
 runtime.skin.translate({ x: 7, y: -11 });
 const afterTranslation = runtime.skin.writeRenderState();
-for (let offset = 0; offset < state.chunks.length; offset += 4) {
+for (let offset = 0; offset < beforeTranslation.chunks.length; offset += 4) {
   assert.ok(
     near(afterTranslation.chunks[offset], beforeTranslation.chunks[offset] + 7),
   );
@@ -93,7 +110,7 @@ for (let offset = 0; offset < state.chunks.length; offset += 4) {
   );
   checks += 2;
 }
-for (let offset = 0; offset < state.ornaments.length; offset += 6) {
+for (let offset = 0; offset < beforeTranslation.ornaments.length; offset += 6) {
   assert.ok(
     near(
       afterTranslation.ornaments[offset],
