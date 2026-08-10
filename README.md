@@ -15,6 +15,13 @@ Instructions coming soon(TM)!
 
 Because I already owned the domain name and decided to use it for this project.
 
+## What license is this under?
+
+Mozilla Public License 2.0, except `terrain/`, which is MIT. MPL is file-level
+copyleft: put beefwives on any page you like, commercial or not, and bundle them
+with whatever else you please. If you change the library's own files, publish
+those changes.
+
 ## Were LLMs or other generative tools used in this project?
 
 Yes, LLMs were used to assist with programming as well as code reviews and refactors. 
