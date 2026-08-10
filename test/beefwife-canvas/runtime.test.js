@@ -451,6 +451,7 @@ const classicBoundary = async () => {
     "../../beefwife/beefwife-body.js",
     "../../beefwife/beefwife-legs.js",
     "../../beefwife/beefwife-skin.js",
+    "../../beefwife/beefwife-geometry.js",
     "../../beefwife/beefwife-graphics.js",
     "../../beefwife/beefwife.js",
     "../../beefwife-canvas/beefwife-canvas-path.js",

@@ -137,6 +137,7 @@ long creature as gone while it is still on screen.
 <script src="beefwife-body.js"></script>
 <script src="beefwife-legs.js"></script>
 <script src="beefwife-skin.js"></script>
+<script src="beefwife-geometry.js"></script>
 <script src="beefwife-graphics.js"></script>
 <script src="beefwife.js"></script>
 ```

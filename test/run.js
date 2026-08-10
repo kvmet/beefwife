@@ -11,6 +11,7 @@ const files = [
   "test/beefwife/legs.test.js",
   "test/beefwife/skin.test.js",
   "test/beefwife/graphics.test.js",
+  "test/beefwife/geometry.test.js",
   "test/beefwife/api.test.js",
   "test/terrain/demo.test.mjs",
   "test/terrain/module.test.mjs",

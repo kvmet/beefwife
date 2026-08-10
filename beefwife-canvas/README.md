@@ -61,6 +61,7 @@ Already mounted canvases are left alone.
 <script src="beefwife/beefwife-body.js"></script>
 <script src="beefwife/beefwife-legs.js"></script>
 <script src="beefwife/beefwife-skin.js"></script>
+<script src="beefwife/beefwife-geometry.js"></script>
 <script src="beefwife/beefwife-graphics.js"></script>
 <script src="beefwife/beefwife.js"></script>
 <script src="beefwife-canvas/beefwife-canvas-path.js"></script>
