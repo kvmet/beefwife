@@ -173,6 +173,35 @@ const runFrames = (frameSeconds, frames) => {
 assert.deepEqual(runFrames(1 / 60, 60), runFrames(1 / 120, 120));
 checks++;
 
+/* The body hands legs a fixed substep, so equal frame counts above prove only
+   that the body divides time. Drive `update` directly to see whether a swing
+   advances on the seconds it is given or on the number of calls. */
+const walked = () => {
+  const runtime = build(source, seeded(7));
+  for (let frame = 0; frame < 90; frame++)
+    runtime.body.step(1 / 60, 1, { x: 1, y: 0 }, (seconds) =>
+      runtime.legs.update(seconds, 1),
+    );
+  return runtime;
+};
+const swungWhole = walked();
+const swungHalves = walked();
+swungWhole.legs.update(1 / 60, 1);
+swungHalves.legs.update(1 / 120, 1);
+swungHalves.legs.update(1 / 120, 1);
+const midSwing = swungWhole.legs.legs.filter(
+  (leg, index) => leg.progress < 1 && swungHalves.legs.legs[index].progress < 1,
+);
+assert.ok(midSwing.length > 0, "no leg was mid-swing, so nothing advanced");
+swungWhole.legs.legs.forEach((leg, index) => {
+  // Two halves accumulate one rounding step more than one whole.
+  assert.ok(
+    Math.abs(leg.progress - swungHalves.legs.legs[index].progress) < 1e-12,
+    `leg ${index} advanced on calls, not seconds`,
+  );
+});
+checks += 2;
+
 assert.throws(() => new Beefwife(source, { random: () => 1 }), /from 0 to 1/);
 assert.throws(() => new Beefwife(source, { random: () => NaN }), /finite/);
 checks += 2;
@@ -193,6 +222,23 @@ const leaning = copy(recolored);
 leaning.legs.jointLean = 0.25;
 live.setDescriptor(leaning);
 assert.equal(randomCalls, afterBuild);
+/* Moving the leg section has to move the hips onto it. Counting random draws
+   proves only that no pair was rebuilt, not that the survivors were re-aimed,
+   so check where the anchors actually point. */
+const anchored = build(source, seeded(3));
+const trunkAnchors = anchored.legs.legs.map((leg) => leg.anchor);
+const toTail = copy(source);
+toTail.legs.section = "tail";
+const tailModel = BeefwifeModel.compile(toTail);
+anchored.legs.reconfigure(tailModel, anchored.body, anchored.gait);
+const tailAnchors = anchored.legs.legs.map((leg) => leg.anchor);
+assert.notDeepEqual(tailAnchors, trunkAnchors);
+assert.ok(
+  tailAnchors.every((anchor) => tailModel.chunks[anchor].section === "tail"),
+  "a leg still hangs off the old section",
+);
+checks += 2;
+
 /* Stance is read from the model every step, so editing it re-anchors the
    existing pairs rather than sampling a new set of proportions. */
 const changedStance = copy(leaning);

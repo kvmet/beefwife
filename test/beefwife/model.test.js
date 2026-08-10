@@ -54,6 +54,65 @@ assert.deepEqual(model.paints.ribbon, {
   stroke: null,
   strokeWidth: 0,
 });
+/* Every stroked paint in the example has a null stroke, so a width carried
+   from the descriptor and a hard-coded zero are indistinguishable without
+   one that is actually drawn. */
+const strokedSource = copy(source);
+strokedSource.definitions.paints.ribbon.stroke = {
+  colour: "#0a0b0c",
+  width: 7,
+};
+const strokedModel = BeefwifeModel.compile(strokedSource);
+assert.deepEqual(strokedModel.paints.ribbon, {
+  fill: "#7a1414",
+  stroke: "#0a0b0c",
+  strokeWidth: 7,
+});
+checks += 1;
+
+/* Compiled per-chunk and per-link scales, and the three skin values the
+   renderer reads. Each of these was replaceable by a constant. */
+/* Bend is an angle, so a widely spaced chunk must swing further to trace the
+   same curve: bendScale is that ratio against trunk spacing, and it is 1
+   everywhere in a uniformly spaced creature like the example. */
+const middle = Math.floor(model.chunks.length / 2);
+assert.equal(model.chunks[middle].bendScale, 1);
+const spread = copy(source);
+spread.chain.sections.head.spacing = 24;
+spread.chain.sections.head.chunks = 4;
+const spreadModel = BeefwifeModel.compile(spread);
+// Chunk 2 has a head link on both sides; chunk 3 straddles the seam.
+assert.equal(spreadModel.chunks[2].bendScale, 2);
+assert.ok(spreadModel.chunks[3].bendScale < 2);
+assert.equal(spreadModel.chunks.at(-3).bendScale, 1);
+/* A link gathers by what the chunks at its ends are willing to gather. */
+const uneven = copy(source);
+uneven.chain.sections.head.motionScale.gather = 0;
+uneven.chain.sections.trunk.motionScale.gather = 1;
+const unevenModel = BeefwifeModel.compile(uneven);
+const seam = unevenModel.links.find(
+  (link) =>
+    unevenModel.chunks[link.from].section !==
+    unevenModel.chunks[link.to].section,
+);
+assert.equal(
+  seam.gatherScale,
+  (unevenModel.chunks[seam.from].motionScale.gather +
+    unevenModel.chunks[seam.to].motionScale.gather) /
+    2,
+);
+assert.ok(seam.gatherScale > 0 && seam.gatherScale < 1);
+assert.equal(model.skin.loadScale, source.chain.skin.loadScale);
+assert.equal(
+  model.legs.skin.foot.plantedScale,
+  source.legs.skin.foot.plantedScale,
+);
+assert.equal(model.skin.hasRibbon, true);
+const bald = copy(source);
+for (const section of Object.values(bald.chain.sections))
+  section.profile.ribbonWidth = { start: 0, end: 0 };
+assert.equal(BeefwifeModel.compile(bald).skin.hasRibbon, false);
+checks += 10;
 assert.equal(
   model.skin.plates[0].shape,
   model.descriptor.definitions.shapes.headPlate,

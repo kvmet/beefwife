@@ -91,7 +91,20 @@ runtimeFor(longer).skin.writeRenderState(state);
 assert.notEqual(state.chunks, chunkStorage);
 assert.equal(state.legs, legStorage);
 assert.ok(finite(state.chunks) && finite(state.legs));
-checks += 7;
+/* A band that is now too long has to go as well: reusing it would leave the
+   tail of the array holding the previous creature, which the renderer reads
+   as vertices. */
+const shorter = JSON.parse(JSON.stringify(descriptor));
+shorter.chain.sections.tail.chunks -= 1;
+const shortRuntime = runtimeFor(shorter);
+const grownStorage = state.chunks;
+shortRuntime.skin.writeRenderState(state);
+assert.notEqual(state.chunks, grownStorage);
+assert.equal(
+  state.chunks.length,
+  shortRuntime.body.chunks.length * state.layout.chunkStride,
+);
+checks += 9;
 
 const beforeTranslation = runtime.skin.writeRenderState();
 runtime.body.translate({ x: 7, y: -11 });
