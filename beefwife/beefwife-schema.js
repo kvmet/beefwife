@@ -80,7 +80,7 @@ const BeefwifeSchema = (() => {
     stroke: nullable(
       object({
         colour: string(1, 256),
-        width: number(0, 1000),
+        width: px(0, 1000),
       }),
     ),
   });

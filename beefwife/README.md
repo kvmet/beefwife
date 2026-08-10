@@ -183,9 +183,8 @@ their declared bounds are errors.
 Descriptor px are world pixels, and `scale(descriptor, factor)` is the one way
 to resize a creature. It returns a new descriptor with every
 length-dimensioned field transformed (px multiply, radians-per-px divide), so
-the pose trace scales by the factor with timing and feel unchanged. Paint
-stroke widths are exempt by rule. A product outside its field's bounds is an
-error, not a clamp.
+the pose trace scales by the factor with timing and feel unchanged. A product
+outside its field's bounds is an error, not a clamp.
 
 `bounds(path)` reports what the schema enforces for one field, so an editor can
 read a range from the schema that checks it instead of keeping a second copy.

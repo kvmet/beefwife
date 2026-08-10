@@ -96,7 +96,7 @@ strokedPaint.definitions.paints.ribbon.stroke = {
 assert.equal(
   BeefwifeDescriptor.scale(strokedPaint, k).definitions.paints.ribbon.stroke
     .width,
-  3,
+  3 * k,
 );
 assert.deepEqual(BeefwifeDescriptor.scale(source, 1), canonical);
 for (const factor of [0, -1, NaN, Infinity, "2"])
