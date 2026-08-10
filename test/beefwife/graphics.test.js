@@ -14,6 +14,7 @@ const {
   PIXI,
   fillsOf,
   pointsOf,
+  strokesOf,
   colourNumber,
   colourText,
   drawnWidthOf,
@@ -251,6 +252,37 @@ assert.ok(drawnScales.every((scale) => scale > 0));
 assert.ok(drawnScales.some((scale) => Math.abs(scale / 0.002 - 1) < 0.02));
 tiny.destroy();
 checks += 2;
+
+/* An outline is a length, so a shape drawn at a fraction of its size wears a
+   fraction of its stroke. Held at descriptor width, a plate at the schema's
+   smallest scale disappears under an outline hundreds of times its own width. */
+const outlined = copy(tinyPlate);
+outlined.chain.skin.plates[0].scale = 0.5;
+outlined.definitions.paints.shell.stroke = { colour: "#00ff00", width: 3 };
+const outlinedPlate = new Beefwife(outlined, { random: () => 0.5 });
+const widthsOf = (colour) =>
+  partsOf(outlinedPlate)
+    .filter((child) => child.context)
+    .flatMap((child) => strokesOf(child.context))
+    .filter(({ color }) => color === colourNumber(colour))
+    .map(({ width }) => width);
+const plateWidths = widthsOf("#00ff00");
+// The eye rides at scale 1, so it is the control that says 3 became 1.5 by
+// halving rather than by some blanket factor.
+const eyeWidths = widthsOf(outlined.definitions.paints.eye.stroke.colour);
+assert.ok(plateWidths.length > 0 && eyeWidths.length > 0);
+assert.ok(
+  plateWidths.every((width) => Math.abs(width / 1.5 - 1) < 0.02),
+  `half-scale outlines drew at ${plateWidths}, wanted 1.5`,
+);
+assert.ok(
+  eyeWidths.every(
+    (width) => width === outlined.definitions.paints.eye.stroke.width,
+  ),
+  `full-scale outlines drew at ${eyeWidths}, wanted 3.1`,
+);
+outlinedPlate.destroy();
+checks += 3;
 
 /* A mesh rebuilt for a new vertex count must take its geometry with it: Pixi
    drops the reference without destroying it, and the renderer holds the

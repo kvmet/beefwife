@@ -1816,7 +1816,7 @@ pixi_js = __toESM(pixi_js, 1);
 		if (paint.fill !== null) context.fill(paint.fill);
 		if (paint.stroke !== null && paint.strokeWidth > 0) context.stroke({
 			color: paint.stroke,
-			width: paint.strokeWidth,
+			width: paint.strokeWidth * scale,
 			cap: "butt",
 			join: "miter"
 		});

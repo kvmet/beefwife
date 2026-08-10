@@ -57,9 +57,12 @@ const contextFor = (shape, paint, scaleBucket) => {
   context = new PIXI.GraphicsContext().path(path);
   if (paint.fill !== null) context.fill(paint.fill);
   if (paint.stroke !== null && paint.strokeWidth > 0) {
+    /* The scale is baked into the path, so an unscaled width would swell to
+       hundreds of times the shape it outlines at the schema's smallest draw
+       scales. Stroke width is a length and travels with the geometry. */
     context.stroke({
       color: paint.stroke,
-      width: paint.strokeWidth,
+      width: paint.strokeWidth * scale,
       cap: "butt",
       join: "miter",
     });
