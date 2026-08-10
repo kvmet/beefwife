@@ -2542,75 +2542,16 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = { BeefwifeSkin };
 }
 
-/** Pixi geometry and display ownership for one Beefwife. */
+/** Vertex math and pixel snapping for a Beefwife's meshes and outlines. */
 
-const BeefwifeGraphics = (() => {
-  if (typeof PIXI === "undefined") {
-    return class HeadlessGraphics {
-      static available = false;
-      static prepare() {}
-    };
-  }
-
-  const sharedContexts = new WeakMap();
-
-  const contextFor = (shape, paint, scaleBucket) => {
-    let paintContexts = sharedContexts.get(shape);
-    if (!paintContexts) {
-      paintContexts = new WeakMap();
-      sharedContexts.set(shape, paintContexts);
-    }
-    let scaleContexts = paintContexts.get(paint);
-    if (!scaleContexts) {
-      scaleContexts = new Map();
-      paintContexts.set(paint, scaleContexts);
-    }
-    let context = scaleContexts.get(scaleBucket);
-    if (context) return context;
-    const scale = scaleBucket / 64;
-    const path = new PIXI.GraphicsPath(shape.path).transform(
-      new PIXI.Matrix(scale, 0, 0, scale, 0, 0),
-    );
-    context = new PIXI.GraphicsContext().path(path);
-    if (paint.fill !== null) context.fill(paint.fill);
-    if (paint.stroke !== null && paint.strokeWidth > 0) {
-      context.stroke({
-        color: paint.stroke,
-        width: paint.strokeWidth,
-        cap: "butt",
-        join: "miter",
-      });
-    }
-    scaleContexts.set(scaleBucket, context);
-    return context;
-  };
-
-  const meshFor = (vertexCount, indices, color) => {
-    const positions = new Float32Array(vertexCount * 2);
-    const geometry = new PIXI.MeshGeometry({
-      positions,
-      uvs: new Float32Array(positions.length),
-      indices,
-      shrinkBuffersToFit: false,
-    });
-    const mesh = new PIXI.Mesh({
-      geometry,
-      texture: PIXI.Texture.WHITE,
-      roundPixels: false,
-    });
-    mesh.tint = color;
-    mesh.dynamicPositions = positions;
-    mesh.positionBuffer = geometry.getBuffer("aPosition");
-    return mesh;
-  };
-
+const BeefwifeGeometry = (() => {
   /* A limb is one closed outline, wound down one side and back up the other:
      hip, knee, foot, foot, knee, hip. Both halves share each knee vertex, so
      they cannot part company there. */
   const LIMB_VERTICES = 6;
   const LIMB_FLOATS = LIMB_VERTICES * 2;
 
-  const limbMeshFor = (legCount, paint) => {
+  const limbIndicesFor = (legCount) => {
     const indices = new Uint32Array(legCount * 12);
     for (let leg = 0; leg < legCount; leg++) {
       const vertex = leg * LIMB_VERTICES;
@@ -2632,19 +2573,44 @@ const BeefwifeGraphics = (() => {
         leg * 12,
       );
     }
-    return meshFor(legCount * LIMB_VERTICES, indices, paint.fill);
+    return indices;
   };
 
-  const ribbonMeshFor = (chunkCount, paint) => {
-    const indices = new Uint32Array(Math.max(0, chunkCount - 1) * 6);
-    for (let chunk = 0; chunk < chunkCount - 1; chunk++) {
+  /* Each end of the ribbon closes with a half turn of rim points fanned from
+     a hub at the chunk. Twelve segments hold a 20px cap within a third of a
+     pixel of a true arc. */
+  const CAP_SEGMENTS = 12;
+  const CAP_VERTICES = CAP_SEGMENTS + 2;
+  const CAP_COSINE = new Float64Array(CAP_SEGMENTS + 1);
+  const CAP_SINE = new Float64Array(CAP_SEGMENTS + 1);
+  for (let step = 0; step <= CAP_SEGMENTS; step++) {
+    const angle = (Math.PI * step) / CAP_SEGMENTS;
+    CAP_COSINE[step] = Math.cos(angle);
+    CAP_SINE[step] = Math.sin(angle);
+  }
+
+  const ribbonPositionsFor = (chunkCount) =>
+    new Float32Array((chunkCount * 2 + CAP_VERTICES * 2) * 2);
+
+  const ribbonIndicesFor = (chunkCount) => {
+    const quads = Math.max(0, chunkCount - 1);
+    const indices = new Uint32Array(quads * 6 + CAP_SEGMENTS * 6);
+    let at = 0;
+    for (let chunk = 0; chunk < quads; chunk++) {
       const vertex = chunk * 2;
       indices.set(
         [vertex, vertex + 1, vertex + 2, vertex + 2, vertex + 1, vertex + 3],
-        chunk * 6,
+        at,
       );
+      at += 6;
     }
-    return meshFor(chunkCount * 2, indices, paint.fill);
+    for (const hub of [chunkCount * 2, chunkCount * 2 + CAP_VERTICES]) {
+      for (let step = 0; step < CAP_SEGMENTS; step++) {
+        indices.set([hub, hub + 1 + step, hub + 2 + step], at);
+        at += 3;
+      }
+    }
+    return indices;
   };
 
   const snapCoordinate = (value, pixelResolution, inversePixelResolution) =>
@@ -2669,6 +2635,40 @@ const BeefwifeGraphics = (() => {
         positions[index] =
           Math.round(positions[index] * pixelResolution) *
           inversePixelResolution;
+  };
+
+  /* Sweeps the rim a half turn from `fromX,fromY` through `overX,overY` to the
+     opposite of `from`, so its two ends land on the ribbon's own edge vertices.
+     Both directions are unit and perpendicular. */
+  const writeCap = (
+    positions,
+    offset,
+    x,
+    y,
+    radius,
+    fromX,
+    fromY,
+    overX,
+    overY,
+    pixelResolution,
+    inversePixelResolution,
+  ) => {
+    positions[offset] = x;
+    positions[offset + 1] = y;
+    for (let step = 0; step <= CAP_SEGMENTS; step++) {
+      const at = offset + 2 + step * 2;
+      const cosine = CAP_COSINE[step];
+      const sine = CAP_SINE[step];
+      positions[at] = x + radius * (cosine * fromX + sine * overX);
+      positions[at + 1] = y + radius * (cosine * fromY + sine * overY);
+    }
+    snapPositions(
+      positions,
+      offset,
+      offset + CAP_VERTICES * 2,
+      pixelResolution,
+      inversePixelResolution,
+    );
   };
 
   /* Each side of the outline turns a corner at the knee where its two offset
@@ -2733,6 +2733,110 @@ const BeefwifeGraphics = (() => {
     );
   };
 
+  return Object.freeze({
+    LIMB_FLOATS,
+    CAP_SEGMENTS,
+    CAP_VERTICES,
+    limbIndicesFor,
+    ribbonPositionsFor,
+    ribbonIndicesFor,
+    snapCoordinate,
+    snapPositions,
+    writeCap,
+    writeLimb,
+  });
+})();
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = BeefwifeGeometry;
+}
+
+/** Pixi display ownership for one Beefwife. */
+
+const BeefwifeGraphics = (() => {
+  if (typeof PIXI === "undefined") {
+    return class HeadlessGraphics {
+      static available = false;
+      static prepare() {}
+    };
+  }
+
+  const Geometry =
+    typeof BeefwifeGeometry !== "undefined"
+      ? BeefwifeGeometry
+      : typeof module !== "undefined" && module.exports
+        ? require("./beefwife-geometry.js")
+        : null;
+  if (!Geometry)
+    throw new Error("Beefwife graphics requires beefwife-geometry.js");
+  const {
+    LIMB_FLOATS,
+    CAP_SEGMENTS,
+    CAP_VERTICES,
+    limbIndicesFor,
+    ribbonPositionsFor,
+    ribbonIndicesFor,
+    snapCoordinate,
+    snapPositions,
+    writeCap,
+    writeLimb,
+  } = Geometry;
+
+  const sharedContexts = new WeakMap();
+
+  const contextFor = (shape, paint, scaleBucket) => {
+    let paintContexts = sharedContexts.get(shape);
+    if (!paintContexts) {
+      paintContexts = new WeakMap();
+      sharedContexts.set(shape, paintContexts);
+    }
+    let scaleContexts = paintContexts.get(paint);
+    if (!scaleContexts) {
+      scaleContexts = new Map();
+      paintContexts.set(paint, scaleContexts);
+    }
+    let context = scaleContexts.get(scaleBucket);
+    if (context) return context;
+    const scale = scaleBucket / 64;
+    const path = new PIXI.GraphicsPath(shape.path).transform(
+      new PIXI.Matrix(scale, 0, 0, scale, 0, 0),
+    );
+    context = new PIXI.GraphicsContext().path(path);
+    if (paint.fill !== null) context.fill(paint.fill);
+    if (paint.stroke !== null && paint.strokeWidth > 0) {
+      context.stroke({
+        color: paint.stroke,
+        width: paint.strokeWidth,
+        cap: "butt",
+        join: "miter",
+      });
+    }
+    scaleContexts.set(scaleBucket, context);
+    return context;
+  };
+
+  /* Fill always comes from a mesh and stroke always from a path, so a shape
+     that wants both hands the same vertices to each. Stated triangles cannot
+     be mistriangulated, which is what a body crossing over itself does to a
+     filled closed path. */
+  const meshFor = (positions, indices, color) => {
+    const geometry = new PIXI.MeshGeometry({
+      positions,
+      uvs: new Float32Array(positions.length),
+      indices,
+      shrinkBuffersToFit: false,
+    });
+    const mesh = new PIXI.Mesh({
+      geometry,
+      texture: PIXI.Texture.WHITE,
+      roundPixels: false,
+    });
+    mesh.tint = color;
+    mesh.dynamicPositions = positions;
+    mesh.positionBuffer = geometry.getBuffer("aPosition");
+    return mesh;
+  };
+
   const setShapeTransform = (
     graphics,
     spec,
@@ -2789,23 +2893,38 @@ const BeefwifeGraphics = (() => {
       this.parent = parent;
       this.model = state.model;
       this.options = options || {};
-      /* A mesh carries a tint and nothing else, so a limb that wants an
-         outline as well draws through Graphics, as the ribbon does. */
+      /* One set of vertices per shape, written once a frame; the mesh reads it
+         for the fill and the path traces it for the stroke. */
       const legPaint = this.model.legs.skin.limbPaint;
-      this.limbIsMesh =
-        legPaint.fill !== null &&
-        (legPaint.stroke === null || legPaint.strokeWidth <= 0);
-      this.limbs = this.limbIsMesh
-        ? limbMeshFor(state.legs.length / state.layout.legStride, legPaint)
-        : new PIXI.Graphics();
-      this.limbPoints = this.limbIsMesh ? null : new Float64Array(LIMB_FLOATS);
+      const legCount = state.legs.length / state.layout.legStride;
+      this.limbPositions = new Float32Array(legCount * LIMB_FLOATS);
+      this.limbFill =
+        legPaint.fill === null
+          ? null
+          : meshFor(
+              this.limbPositions,
+              limbIndicesFor(legCount),
+              legPaint.fill,
+            );
+      this.limbStroke =
+        legPaint.stroke !== null && legPaint.strokeWidth > 0
+          ? new PIXI.Graphics()
+          : null;
       const ribbonPaint = this.model.skin.ribbonPaint;
-      this.ribbonIsMesh =
-        ribbonPaint.fill !== null &&
-        (ribbonPaint.stroke === null || ribbonPaint.strokeWidth <= 0);
-      this.ribbon = this.ribbonIsMesh
-        ? ribbonMeshFor(this.model.chunks.length, ribbonPaint)
-        : new PIXI.Graphics();
+      const chunkCount = this.model.chunks.length;
+      this.ribbonPositions = ribbonPositionsFor(chunkCount);
+      this.ribbonFill =
+        ribbonPaint.fill === null
+          ? null
+          : meshFor(
+              this.ribbonPositions,
+              ribbonIndicesFor(chunkCount),
+              ribbonPaint.fill,
+            );
+      this.ribbonStroke =
+        ribbonPaint.stroke !== null && ribbonPaint.strokeWidth > 0
+          ? new PIXI.Graphics()
+          : null;
       this.feet = [];
       this.ornaments = [];
       this.plates = [];
@@ -2823,14 +2942,16 @@ const BeefwifeGraphics = (() => {
         this.feet.push(foot);
         this.parent.addChild(foot);
       }
-      this.parent.addChild(this.limbs);
+      if (this.limbFill) this.parent.addChild(this.limbFill);
+      if (this.limbStroke) this.parent.addChild(this.limbStroke);
       for (let index = 0; index < this.model.skin.ornaments.length; index++) {
         const spec = this.model.skin.ornaments[index];
         const ornament = new PIXI.Graphics();
         this.ornaments[index] = ornament;
         if (spec.layer === "under") this.parent.addChild(ornament);
       }
-      this.parent.addChild(this.ribbon);
+      if (this.ribbonFill) this.parent.addChild(this.ribbonFill);
+      if (this.ribbonStroke) this.parent.addChild(this.ribbonStroke);
       for (
         let index = 0;
         index < this.model.skin.platesTailFirst.length;
@@ -2849,24 +2970,19 @@ const BeefwifeGraphics = (() => {
     _syncLimbs(state, pixelResolution, inversePixelResolution) {
       const legs = state.legs;
       const width = this.model.legs.skin.limbWidth;
-      const positions = this.limbIsMesh
-        ? this.limbs.dynamicPositions
-        : this.limbPoints;
-      if (!this.limbIsMesh) this.limbs.clear();
+      const positions = this.limbPositions;
+      if (this.limbStroke) this.limbStroke.clear();
       // A limb with no width is no limb; the feet still stand on their own.
       if (width <= 0) {
-        if (this.limbIsMesh) {
-          positions.fill(0);
-          this.limbs.positionBuffer.update();
-        }
+        positions.fill(0);
+        if (this.limbFill) this.limbFill.positionBuffer.update();
         return;
       }
       const stride = state.layout.legStride;
       const projection = this.options.kneeProjection ?? null;
       const jointLean = this.model.legs.jointLean;
       for (let offset = 0; offset < legs.length; offset += stride) {
-        const legIndex = offset / stride;
-        const vertexOffset = this.limbIsMesh ? legIndex * LIMB_FLOATS : 0;
+        const vertexOffset = (offset / stride) * LIMB_FLOATS;
         let kneeX = legs[offset + 2];
         let kneeY = legs[offset + 3];
         if (projection) {
@@ -2919,107 +3035,120 @@ const BeefwifeGraphics = (() => {
           pixelResolution,
           inversePixelResolution,
         );
-        if (this.limbIsMesh) continue;
-        this.limbs.moveTo(positions[0], positions[1]);
-        for (let vertex = 2; vertex < LIMB_FLOATS; vertex += 2)
-          this.limbs.lineTo(positions[vertex], positions[vertex + 1]);
-        this.limbs.closePath();
       }
-      if (this.limbIsMesh) {
-        this.limbs.positionBuffer.update();
-        return;
+      if (this.limbFill) this.limbFill.positionBuffer.update();
+      if (!this.limbStroke) return;
+      for (let base = 0; base < positions.length; base += LIMB_FLOATS) {
+        this.limbStroke.moveTo(positions[base], positions[base + 1]);
+        for (let vertex = 2; vertex < LIMB_FLOATS; vertex += 2)
+          this.limbStroke.lineTo(
+            positions[base + vertex],
+            positions[base + vertex + 1],
+          );
+        this.limbStroke.closePath();
       }
       const legPaint = this.model.legs.skin.limbPaint;
-      if (legPaint.fill !== null) this.limbs.fill(legPaint.fill);
-      if (legPaint.stroke !== null && legPaint.strokeWidth > 0)
-        this.limbs.stroke({
-          color: legPaint.stroke,
-          width: legPaint.strokeWidth,
-          cap: "butt",
-          join: "miter",
-        });
+      this.limbStroke.stroke({
+        color: legPaint.stroke,
+        width: legPaint.strokeWidth,
+        cap: "butt",
+        join: "miter",
+      });
     }
 
     _syncRibbon(state, pixelResolution, inversePixelResolution) {
       const chunks = state.chunks;
       const stride = state.layout.chunkStride;
-      const lastIndex = this.model.chunks.length - 1;
-      if (this.ribbonIsMesh) {
-        const positions = this.ribbon.dynamicPositions;
-        for (let index = 0; index < this.model.chunks.length; index++) {
-          const chunkOffset = index * stride;
-          const vertexOffset = index * 4;
-          const width = this.model.chunks[index].ribbonWidth;
-          positions[vertexOffset] =
-            chunks[chunkOffset] - chunks[chunkOffset + 3] * width;
-          positions[vertexOffset + 1] =
-            chunks[chunkOffset + 1] + chunks[chunkOffset + 2] * width;
-          positions[vertexOffset + 2] =
-            chunks[chunkOffset] + chunks[chunkOffset + 3] * width;
-          positions[vertexOffset + 3] =
-            chunks[chunkOffset + 1] - chunks[chunkOffset + 2] * width;
-          snapPositions(
-            positions,
-            vertexOffset,
-            vertexOffset + 4,
-            pixelResolution,
-            inversePixelResolution,
-          );
-        }
-        this.ribbon.positionBuffer.update();
-        return;
-      }
-      this.ribbon.clear();
-      if (!this.model.skin.hasRibbon) return;
-      const coordinate =
-        pixelResolution === 1
-          ? Math.round
-          : pixelResolution > 0
-            ? (value) =>
-                Math.round(value * pixelResolution) * inversePixelResolution
-            : (value) => value;
-      for (let index = 0; index < this.model.chunks.length; index++) {
-        const offset = index * stride;
+      const count = this.model.chunks.length;
+      const lastIndex = count - 1;
+      const positions = this.ribbonPositions;
+      /* Edge A runs down the left of the chain, edge B back up the right; each
+         chunk's facing turns them, so a vertex pair sits at every chunk. */
+      for (let index = 0; index < count; index++) {
+        const chunkOffset = index * stride;
+        const vertexOffset = index * 4;
         const width = this.model.chunks[index].ribbonWidth;
-        const x = chunks[offset] - chunks[offset + 3] * width;
-        const y = chunks[offset + 1] + chunks[offset + 2] * width;
-        if (index) this.ribbon.lineTo(coordinate(x), coordinate(y));
-        else this.ribbon.moveTo(coordinate(x), coordinate(y));
-      }
-      const tailOffset = lastIndex * stride;
-      const tailWidth = this.model.chunks[lastIndex].ribbonWidth;
-      const tailAngle = Math.atan2(
-        chunks[tailOffset + 2],
-        -chunks[tailOffset + 3],
-      );
-      this.ribbon.arc(
-        coordinate(chunks[tailOffset]),
-        coordinate(chunks[tailOffset + 1]),
-        tailWidth,
-        tailAngle,
-        tailAngle + Math.PI,
-      );
-      for (let index = lastIndex; index >= 0; index--) {
-        const offset = index * stride;
-        const width = this.model.chunks[index].ribbonWidth;
-        this.ribbon.lineTo(
-          coordinate(chunks[offset] + chunks[offset + 3] * width),
-          coordinate(chunks[offset + 1] - chunks[offset + 2] * width),
+        positions[vertexOffset] =
+          chunks[chunkOffset] - chunks[chunkOffset + 3] * width;
+        positions[vertexOffset + 1] =
+          chunks[chunkOffset + 1] + chunks[chunkOffset + 2] * width;
+        positions[vertexOffset + 2] =
+          chunks[chunkOffset] + chunks[chunkOffset + 3] * width;
+        positions[vertexOffset + 3] =
+          chunks[chunkOffset + 1] - chunks[chunkOffset + 2] * width;
+        snapPositions(
+          positions,
+          vertexOffset,
+          vertexOffset + 4,
+          pixelResolution,
+          inversePixelResolution,
         );
       }
-      const headAngle = Math.atan2(-chunks[2], chunks[3]);
-      this.ribbon.arc(
-        coordinate(chunks[0]),
-        coordinate(chunks[1]),
-        this.model.chunks[0].ribbonWidth,
-        headAngle,
-        headAngle + Math.PI,
+      const tailOffset = lastIndex * stride;
+      const tailX = chunks[tailOffset + 2];
+      const tailY = chunks[tailOffset + 3];
+      writeCap(
+        positions,
+        count * 4,
+        chunks[tailOffset],
+        chunks[tailOffset + 1],
+        this.model.chunks[lastIndex].ribbonWidth,
+        -tailY,
+        tailX,
+        -tailX,
+        -tailY,
+        pixelResolution,
+        inversePixelResolution,
       );
-      this.ribbon.closePath();
+      const headX = chunks[2];
+      const headY = chunks[3];
+      writeCap(
+        positions,
+        count * 4 + CAP_VERTICES * 2,
+        chunks[0],
+        chunks[1],
+        this.model.chunks[0].ribbonWidth,
+        headY,
+        -headX,
+        headX,
+        headY,
+        pixelResolution,
+        inversePixelResolution,
+      );
+      if (this.ribbonFill) this.ribbonFill.positionBuffer.update();
+      if (!this.ribbonStroke) return;
+      this.ribbonStroke.clear();
+      if (!this.model.skin.hasRibbon) return;
+      const tailRim = count * 4 + 2;
+      const headRim = count * 4 + CAP_VERTICES * 2 + 2;
+      this.ribbonStroke.moveTo(positions[0], positions[1]);
+      for (let index = 1; index < count; index++)
+        this.ribbonStroke.lineTo(
+          positions[index * 4],
+          positions[index * 4 + 1],
+        );
+      // The rim's first and last points are the edge vertices already drawn.
+      for (let step = 1; step < CAP_SEGMENTS; step++)
+        this.ribbonStroke.lineTo(
+          positions[tailRim + step * 2],
+          positions[tailRim + step * 2 + 1],
+        );
+      for (let index = lastIndex; index >= 0; index--)
+        this.ribbonStroke.lineTo(
+          positions[index * 4 + 2],
+          positions[index * 4 + 3],
+        );
+      for (let step = 1; step < CAP_SEGMENTS; step++)
+        this.ribbonStroke.lineTo(
+          positions[headRim + step * 2],
+          positions[headRim + step * 2 + 1],
+        );
+      this.ribbonStroke.closePath();
       const paint = this.model.skin.ribbonPaint;
-      if (paint.fill !== null) this.ribbon.fill(paint.fill);
-      if (paint.stroke !== null && paint.strokeWidth > 0)
-        this.ribbon.stroke({ color: paint.stroke, width: paint.strokeWidth });
+      this.ribbonStroke.stroke({
+        color: paint.stroke,
+        width: paint.strokeWidth,
+      });
     }
 
     sync(state) {
@@ -3086,12 +3215,15 @@ const BeefwifeGraphics = (() => {
     destroy() {
       const children = [
         ...this.feet,
-        this.limbs,
+        this.limbFill,
+        this.limbStroke,
         ...this.ornaments,
-        this.ribbon,
+        this.ribbonFill,
+        this.ribbonStroke,
         ...this.plates,
       ];
       for (const child of children) {
+        if (child === null) continue;
         if (child.parent === this.parent) this.parent.removeChild(child);
         child.destroy();
       }
