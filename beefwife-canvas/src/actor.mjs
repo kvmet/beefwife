@@ -1,5 +1,12 @@
 /** Route following and Beefwife control for one host-owned plan. */
 
+import { Beefwife } from "../../beefwife/src/beefwife.mjs";
+import {
+  BEEFWIFE_CANVAS_ROUTE_DEFAULTS,
+  newRoute,
+  stepRoute,
+} from "./steering.mjs";
+
 const BEEFWIFE_CANVAS_ACTOR_LOST_MARGIN = 200;
 
 const actorRandomBetween = (random, a, b) => a + random() * (b - a);
@@ -188,6 +195,4 @@ class BeefwifeCanvasActor {
   }
 }
 
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = BeefwifeCanvasActor;
-}
+export { BeefwifeCanvasActor };

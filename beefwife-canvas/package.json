@@ -1,0 +1,54 @@
+{
+  "name": "@kvmet/beefwife-canvas",
+  "version": "0.1.0",
+  "description": "Drop-in canvas runtime that populates a page with beefwives.",
+  "license": "MPL-2.0",
+  "author": "Kristen Metcalfe",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvmet/beefwife.git",
+    "directory": "beefwife-canvas"
+  },
+  "homepage": "https://github.com/kvmet/beefwife/tree/main/beefwife-canvas#readme",
+  "bugs": "https://github.com/kvmet/beefwife/issues",
+  "keywords": [
+    "animation",
+    "beefwife",
+    "browser",
+    "canvas",
+    "creature",
+    "pixi",
+    "procedural"
+  ],
+  "main": "./beefwife-canvas.js",
+  "browser": "./beefwife-canvas.js",
+  "unpkg": "./beefwife-canvas.min.js",
+  "jsdelivr": "./beefwife-canvas.min.js",
+  "exports": {
+    ".": "./beefwife-canvas.js",
+    "./beefwife-canvas.js": "./beefwife-canvas.js",
+    "./beefwife-canvas.min.js": "./beefwife-canvas.min.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "LICENSE",
+    "README.md",
+    "beefwife-canvas.js",
+    "beefwife-canvas.min.js"
+  ],
+  "peerDependencies": {
+    "pixi.js": "^8.19.0"
+  },
+  "scripts": {
+    "build": "rolldown -c rolldown.config.mjs",
+    "prepack": "npm run build && npm test",
+    "test": "node ../test/beefwife-canvas/run.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "pixi.js": "^8.19.0",
+    "rolldown": "1.2.2"
+  }
+}

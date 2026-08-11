@@ -158,6 +158,4 @@ const stepRoute = (route, router, head, dt, roam, result) => {
   return result;
 };
 
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = { BEEFWIFE_CANVAS_ROUTE_DEFAULTS, newRoute, stepRoute };
-}
+export { BEEFWIFE_CANVAS_ROUTE_DEFAULTS, newRoute, stepRoute };

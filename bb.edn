@@ -15,8 +15,10 @@
    :task (shell "node" "test/beefwife/api.test.js")}
 
   canvas-runtime
-  {:doc "Check BeefwifeCanvas runtime integration."
-   :task (shell "node" "test/beefwife-canvas/runtime.test.js")}
+  {:doc "Check BeefwifeCanvas routing and runtime integration."
+   :task (do
+           (shell "node" "test/beefwife-canvas/routing.test.js")
+           (shell "node" "test/beefwife-canvas/runtime.test.js"))}
 
   beefwife-build
   {:doc "Build standalone Beefwife browser artifacts."
@@ -47,19 +49,20 @@
   {:doc "Check the BeefwifeCanvas public boundary."
    :task (shell "node" "test/beefwife-canvas/canvas.test.js")}
 
-  bundle
-  {:doc "Build dist/beefwife-canvas.js."
-   :depends [beefwife-build terrain-build]
-   :task (load-file "bb/bundle.clj")}
+  canvas-build
+  {:doc "Build the standalone BeefwifeCanvas browser bundle."
+   :task (shell "npm" "--prefix" "beefwife-canvas" "run" "build")}
 
-  bundle-test
-  {:doc "Build and check the browser bundle."
-   :depends [bundle]
-   :task (shell "node" "test/beefwife-canvas/bundle.test.js")}
+  canvas-package
+  {:doc "Build and check the published BeefwifeCanvas package."
+   :depends [canvas-build]
+   :task (do
+           (shell "node" "test/beefwife-canvas/bundle.test.js")
+           (shell "node" "test/beefwife-canvas/package.test.mjs"))}
 
   test
   {:doc "Run the complete headless library test suite."
-   :depends [bundle-test]
+   :depends [canvas-build]
    :task (shell "node" "test/run.js")}
 
   test-lab

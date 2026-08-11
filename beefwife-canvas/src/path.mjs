@@ -81,6 +81,4 @@ class BeefwifeCanvasRouter {
   }
 }
 
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = { BeefwifeCanvasRouter };
-}
+export { BeefwifeCanvasRouter };
