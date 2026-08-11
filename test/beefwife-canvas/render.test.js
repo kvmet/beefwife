@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 
-const BeefwifeCanvasRender = require("../../beefwife-canvas/beefwife-canvas-render.js");
+const BeefwifeCanvasRender = require("../../beefwife-canvas/src/render.mjs");
 
 const graphics = () => {
   const calls = [];

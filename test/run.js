@@ -13,14 +13,18 @@ const files = [
   "test/beefwife/skin.test.js",
   "test/beefwife/graphics.test.js",
   "test/beefwife/geometry.test.js",
+  "test/beefwife/triangulation.test.js",
   "test/beefwife/api.test.js",
   "test/beefwife/package.test.mjs",
   "test/terrain/demo.test.mjs",
   "test/terrain/module.test.mjs",
   "test/terrain/terrain.test.js",
+  "test/beefwife-canvas/routing.test.js",
   "test/beefwife-canvas/runtime.test.js",
   "test/beefwife-canvas/render.test.js",
   "test/beefwife-canvas/canvas.test.js",
+  "test/beefwife-canvas/bundle.test.js",
+  "test/beefwife-canvas/package.test.mjs",
 ];
 
 for (const file of files) {

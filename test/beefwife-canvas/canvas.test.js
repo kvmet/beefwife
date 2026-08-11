@@ -7,7 +7,21 @@
 
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const path = require("node:path");
 const vm = require("node:vm");
+
+const { bundleFor } = require("./vm-bundle.js");
+
+/* Every cast entry is a real schema-v1 document, since the boundary hands each
+   one to the shipped reader. Only the name varies, so assertions still key on
+   a short one. */
+const template = JSON.parse(
+  fs.readFileSync(
+    path.join(__dirname, "..", "fixtures", "beefwives", "undulating.json"),
+    "utf8",
+  ),
+);
+const descriptorJson = (name) => JSON.stringify({ ...template, name });
 
 class Canvas {
   constructor(attributes = {}) {
@@ -116,28 +130,21 @@ const context = {
       this.detail = options.detail;
     }
   },
-  Beefwife: {
-    Descriptor: {
-      read(value) {
-        if (!value || typeof value.name !== "string")
-          throw new TypeError("descriptor needs a name");
-        return JSON.parse(JSON.stringify(value));
-      },
-    },
-  },
-  BeefwifeCanvasRuntime: { create: async (options) => newHost(options) },
   document,
+  /* The schema rejects an object from another realm, so a response body is
+     parsed by the page that receives it, exactly as a real one would be. */
   fetch: async (url) => {
-    const values = {
-      "https://example.test/cast/manifest.json": {
+    const bodies = {
+      "https://example.test/cast/manifest.json": JSON.stringify({
         schemaVersion: 1,
         sources: ["a.json", { src: "b.json", weight: 4 }],
-      },
-      "https://example.test/cast/a.json": { name: "a" },
-      "https://example.test/cast/b.json": { name: "b" },
+      }),
+      "https://example.test/cast/a.json": descriptorJson("a"),
+      "https://example.test/cast/b.json": descriptorJson("b"),
     };
-    return { ok: true, json: async () => values[url] };
+    return { ok: true, json: async () => parseInContext(bodies[url]) };
   },
+  hostFor: async (options) => newHost(options),
   IntersectionObserver: class IntersectionObserver {
     constructor(callback) {
       intersectionCallback = callback;
@@ -152,32 +159,19 @@ const context = {
 };
 context.window = context;
 vm.createContext(context);
-vm.runInContext(
-  fs.readFileSync(
-    `${__dirname}/../../beefwife-canvas/beefwife-canvas-cast.js`,
-    "utf8",
-  ),
-  context,
-  { filename: "beefwife-canvas-cast.js" },
-);
-vm.runInContext(
-  fs.readFileSync(
-    `${__dirname}/../../beefwife-canvas/beefwife-canvas-mount-options.js`,
-    "utf8",
-  ),
-  context,
-  { filename: "beefwife-canvas-mount-options.js" },
-);
-vm.runInContext(
-  fs.readFileSync(
-    `${__dirname}/../../beefwife-canvas/beefwife-canvas.js`,
-    "utf8",
-  ),
-  context,
-  { filename: "beefwife-canvas.js" },
-);
+const parseInContext = vm.runInContext("JSON.parse", context);
+const namedDescriptor = (name) => parseInContext(descriptorJson(name));
 
 (async () => {
+  /* Only the runtime stands in; the descriptors, the cast loader, and the
+     schema the mount boundary hands them to are the shipped ones. */
+  const code = await bundleFor({
+    source: 'export { default } from "./canvas.mjs";',
+    name: "BeefwifeCanvas",
+    aliases: { "./runtime.mjs": `${__dirname}/runtime-stub.mjs` },
+  });
+  vm.runInContext(code, context, { filename: "beefwife-canvas.js" });
+
   let checks = 0;
   const canvas = new Canvas({
     "data-beefwife-canvas": "",
@@ -299,7 +293,7 @@ vm.runInContext(
 
   const remounted = await context.BeefwifeCanvas.mount(canvas, {
     autoStart: false,
-    descriptors: [{ name: "again" }],
+    descriptors: [namedDescriptor("again")],
   });
   assert.equal(remounted.getActors()[0].name, "again");
   remounted.destroy();
@@ -316,7 +310,7 @@ vm.runInContext(
   await assert.rejects(
     context.BeefwifeCanvas.mount(duplicateCanvas, {
       autoStart: false,
-      descriptors: [{ name: "same" }, { name: "same" }],
+      descriptors: [namedDescriptor("same"), namedDescriptor("same")],
     }),
     /duplicate beefwife name/,
   );
@@ -326,7 +320,7 @@ vm.runInContext(
   assert.equal(context.BeefwifeCanvas.get(duplicateCanvas), null);
   const recovered = await context.BeefwifeCanvas.mount(duplicateCanvas, {
     autoStart: false,
-    descriptors: [{ name: "ok" }],
+    descriptors: [namedDescriptor("ok")],
   });
   assert.equal(recovered.getActors()[0].name, "ok");
   recovered.destroy();
@@ -357,7 +351,7 @@ vm.runInContext(
   ).value = "false";
   const corrected = await context.BeefwifeCanvas.mount(invalidCanvas, {
     autoStart: false,
-    descriptors: [{ name: "corrected" }],
+    descriptors: [namedDescriptor("corrected")],
   });
   assert.equal(corrected.getActors()[0].name, "corrected");
   corrected.destroy();
@@ -385,7 +379,10 @@ vm.runInContext(
       sources: [{ src: "https://example.test/cast/a.json", weight: 2 }],
     },
     sources: { src: "https://example.test/cast/b.json", weight: 3 },
-    descriptors: { descriptor: { name: "c" }, weight: 4 },
+    descriptors: {
+      descriptor: namedDescriptor("c"),
+      weight: 4,
+    },
   });
   const additiveOptions = hosts.at(-1).options;
   assert.deepEqual(Object.keys(additiveOptions.cast), ["c", "a", "b"]);
