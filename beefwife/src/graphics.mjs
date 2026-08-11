@@ -286,12 +286,19 @@ class Graphics {
     if (this.limbFill) this.limbFill.positionBuffer.update();
     if (!this.limbStroke) return;
     for (let base = 0; base < positions.length; base += LIMB_FLOATS) {
-      this.limbStroke.moveTo(positions[base], positions[base + 1]);
-      for (let vertex = 2; vertex < LIMB_FLOATS; vertex += 2)
-        this.limbStroke.lineTo(
-          positions[base + vertex],
-          positions[base + vertex + 1],
-        );
+      let lastX = positions[base];
+      let lastY = positions[base + 1];
+      this.limbStroke.moveTo(lastX, lastY);
+      for (let vertex = 2; vertex < LIMB_FLOATS; vertex += 2) {
+        const x = positions[base + vertex];
+        const y = positions[base + vertex + 1];
+        /* The inside of a knee stacks its points on one corner, and a stroke
+           divides by the length of every segment it is given. */
+        if (x === lastX && y === lastY) continue;
+        this.limbStroke.lineTo(x, y);
+        lastX = x;
+        lastY = y;
+      }
       this.limbStroke.closePath();
     }
     const legPaint = this.model.legs.skin.limbPaint;
@@ -299,7 +306,7 @@ class Graphics {
       color: legPaint.stroke,
       width: legPaint.strokeWidth,
       cap: "butt",
-      join: "miter",
+      join: "bevel",
     });
   }
 

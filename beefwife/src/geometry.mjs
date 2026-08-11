@@ -1,32 +1,35 @@
 /** Vertex math and pixel snapping for a Beefwife's meshes and outlines. */
 
-/* A limb is one closed outline, wound down one side and back up the other:
-   hip, knee, foot, foot, knee, hip. Both halves share each knee vertex, so
-   they cannot part company there. */
-const LIMB_VERTICES = 6;
+/* A limb is one closed outline, wound hip, knee, foot down one side and foot,
+   knee, hip back up the other. Both halves take the knee from one position,
+   so they cannot part company there.
+
+   The knee is the same count of points on both sides so one index list fits
+   every pose: the outside of the bend sweeps them as an arc, the inside
+   stacks them all on its one corner. Four segments hold the widest limb in
+   the fixtures within 0.36px of a true arc at a full fold, under the pixel
+   the vertices snap to. */
+const KNEE_SEGMENTS = 4;
+const KNEE_POINTS = KNEE_SEGMENTS + 1;
+const LIMB_SIDE_POINTS = KNEE_POINTS + 2;
+const LIMB_VERTICES = LIMB_SIDE_POINTS * 2;
 const LIMB_FLOATS = LIMB_VERTICES * 2;
 
+/* Both sides run head to foot, so the second one is read backwards and the
+   strip between them is a quad per step. */
 const limbIndicesFor = (legCount) => {
-  const indices = new Uint32Array(legCount * 12);
+  const quads = LIMB_SIDE_POINTS - 1;
+  const indices = new Uint32Array(legCount * quads * 6);
+  let at = 0;
   for (let leg = 0; leg < legCount; leg++) {
-    const vertex = leg * LIMB_VERTICES;
-    indices.set(
-      [
-        vertex,
-        vertex + 5,
-        vertex + 1,
-        vertex + 1,
-        vertex + 5,
-        vertex + 4,
-        vertex + 1,
-        vertex + 4,
-        vertex + 2,
-        vertex + 2,
-        vertex + 4,
-        vertex + 3,
-      ],
-      leg * 12,
-    );
+    const first = leg * LIMB_VERTICES;
+    const last = first + LIMB_VERTICES - 1;
+    for (let step = 0; step < quads; step++) {
+      const down = first + step;
+      const back = last - step;
+      indices.set([down, back, down + 1, down + 1, back, back - 1], at);
+      at += 6;
+    }
   }
   return indices;
 };
@@ -125,11 +128,6 @@ const writeCap = (
   );
 };
 
-/* Each side of the outline turns a corner at the knee where its two offset
-   edges cross. A leg folded back on itself throws that crossing towards
-   infinity, so the reach is capped; the outline stays closed either way. */
-const LIMB_CORNER_REACH = 4;
-
 const writeLimb = (
   positions,
   offset,
@@ -154,30 +152,65 @@ const writeLimb = (
   const thighNormalY = thighX / thighLength;
   const shinNormalX = -shinY / shinLength;
   const shinNormalY = shinX / shinLength;
+  /* Inside the bend the two offset edges cross, and that crossing is the
+     armpit: a real corner of the shape, however far out it lands. It stops
+     being one once it passes the end of a bone, where it leaves the limb
+     altogether and would draw a spike over open ground. A leg folded flat
+     has no crossing at all and keeps the thigh's offset. */
   const spread = 1 + thighNormalX * shinNormalX + thighNormalY * shinNormalY;
   let cornerX = thighNormalX;
   let cornerY = thighNormalY;
   if (spread > 1e-6) {
     cornerX = (thighNormalX + shinNormalX) / spread;
     cornerY = (thighNormalY + shinNormalY) / spread;
-    const reach = Math.hypot(cornerX, cornerY);
-    if (reach > LIMB_CORNER_REACH) {
-      cornerX = (cornerX / reach) * LIMB_CORNER_REACH;
-      cornerY = (cornerY / reach) * LIMB_CORNER_REACH;
+    // The corner leans back along the thigh by as much as it leans on down
+    // the shin, so one measurement answers for both bones.
+    const along = (-(cornerX * thighX + cornerY * thighY) / thighLength) * half;
+    const bone = Math.min(thighLength, shinLength);
+    if (along > bone) {
+      cornerX = (cornerX * bone) / along;
+      cornerY = (cornerY * bone) / along;
     }
   }
+  /* Outside the bend the offset turns through the same angle the bones do,
+     one segment at a time, every point of it half a width from the knee. The
+     normals turn with the bones, so which side that is comes off the same
+     sign. */
+  const sweep = Math.atan2(
+    thighNormalX * shinNormalY - thighNormalY * shinNormalX,
+    thighNormalX * shinNormalX + thighNormalY * shinNormalY,
+  );
+  const stepCosine = Math.cos(sweep / KNEE_SEGMENTS);
+  const stepSine = Math.sin(sweep / KNEE_SEGMENTS);
+  const arcLeads = sweep <= 0;
+  let arcX = thighNormalX;
+  let arcY = thighNormalY;
+  const footAt = offset + (KNEE_POINTS + 1) * 2;
+  const heelAt = offset + LIMB_FLOATS - 2;
   positions[offset] = hipX + thighNormalX * half;
   positions[offset + 1] = hipY + thighNormalY * half;
-  positions[offset + 2] = kneeX + cornerX * half;
-  positions[offset + 3] = kneeY + cornerY * half;
-  positions[offset + 4] = footX + shinNormalX * half;
-  positions[offset + 5] = footY + shinNormalY * half;
-  positions[offset + 6] = footX - shinNormalX * half;
-  positions[offset + 7] = footY - shinNormalY * half;
-  positions[offset + 8] = kneeX - cornerX * half;
-  positions[offset + 9] = kneeY - cornerY * half;
-  positions[offset + 10] = hipX - thighNormalX * half;
-  positions[offset + 11] = hipY - thighNormalY * half;
+  positions[footAt] = footX + shinNormalX * half;
+  positions[footAt + 1] = footY + shinNormalY * half;
+  positions[footAt + 2] = footX - shinNormalX * half;
+  positions[footAt + 3] = footY - shinNormalY * half;
+  positions[heelAt] = hipX - thighNormalX * half;
+  positions[heelAt + 1] = hipY - thighNormalY * half;
+  for (let step = 0; step < KNEE_POINTS; step++) {
+    const leadX = arcLeads ? arcX : cornerX;
+    const leadY = arcLeads ? arcY : cornerY;
+    const trailX = arcLeads ? cornerX : arcX;
+    const trailY = arcLeads ? cornerY : arcY;
+    const leadAt = offset + (1 + step) * 2;
+    // The second side meets the first one turn for turn, read backwards.
+    const trailAt = offset + (2 * KNEE_POINTS + 2 - step) * 2;
+    positions[leadAt] = kneeX + leadX * half;
+    positions[leadAt + 1] = kneeY + leadY * half;
+    positions[trailAt] = kneeX - trailX * half;
+    positions[trailAt + 1] = kneeY - trailY * half;
+    const turnedX = arcX * stepCosine - arcY * stepSine;
+    arcY = arcX * stepSine + arcY * stepCosine;
+    arcX = turnedX;
+  }
   snapPositions(
     positions,
     offset,
@@ -189,6 +222,7 @@ const writeLimb = (
 
 export {
   LIMB_FLOATS,
+  KNEE_POINTS,
   CAP_SEGMENTS,
   CAP_VERTICES,
   limbIndicesFor,

@@ -2,8 +2,8 @@
  * Does a Beefwife's vertex math reach the scene intact? A minimal Pixi
  * implementation is the control. Fails if knee projection moves planted
  * endpoints, pulls any knee toward view center, leans end joints away from the
- * leg section middle, scales the lean by the section's length, leaves a gap
- * where a limb bends, takes limb thickness from the paint instead of
+ * leg section middle, scales the lean by the section's length, leaves a gap or
+ * a spike where a limb bends, takes limb thickness from the paint instead of
  * limbWidth, or a paint asking for both fill and stroke loses the outline or
  * draws it off the vertices the fill uses.
  */
@@ -41,10 +41,18 @@ const baselineLegs = new Beefwife(bentLeggedSource, { random: () => 0.5 });
 const baselinePositions = partsOf(baselineLegs).find(
   (child) => child instanceof Mesh,
 ).dynamicPositions;
-/* One limb is six vertices wound hip, knee, foot, foot, knee, hip, so a
-   skeleton point is the midpoint of the pair that faces each other. */
-const LIMB_FLOATS = 12;
-const LIMB_PAIRS = { hip: [0, 10], knee: [2, 8], foot: [4, 6] };
+/* One limb is fourteen vertices wound hip, five knee points, foot down one
+   side and foot, five knee points, hip back up the other, so a hip or a foot
+   is the midpoint of the pair that faces each other. The outside of the bend
+   sweeps its five points around the joint; the inside stacks all five on the
+   one corner where its edges cross. */
+const KNEE_POINTS = 5;
+const LIMB_VERTICES = (KNEE_POINTS + 2) * 2;
+const LIMB_FLOATS = LIMB_VERTICES * 2;
+const LIMB_PAIRS = {
+  hip: [0, LIMB_FLOATS - 2],
+  foot: [(KNEE_POINTS + 1) * 2, (KNEE_POINTS + 2) * 2],
+};
 const limbPoint = (positions, leg, part) => {
   const base = leg * LIMB_FLOATS;
   const [first, second] = LIMB_PAIRS[part];
@@ -53,11 +61,29 @@ const limbPoint = (positions, leg, part) => {
     y: (positions[base + first + 1] + positions[base + second + 1]) / 2,
   };
 };
+const limbVertex = (positions, leg, vertex) => ({
+  x: positions[leg * LIMB_FLOATS + vertex * 2],
+  y: positions[leg * LIMB_FLOATS + vertex * 2 + 1],
+});
+/* The swept side leaves the hip and reaches the joint on the same offset, so
+   the step from one to the other is the thigh itself. A straight limb sweeps
+   nothing and either side answers. */
+const limbKnee = (positions, leg) => {
+  const first = limbVertex(positions, leg, 1);
+  const last = limbVertex(positions, leg, KNEE_POINTS);
+  const swept = first.x !== last.x || first.y !== last.y;
+  const hipVertex = swept ? 0 : LIMB_VERTICES - 1;
+  const kneeVertex = swept ? 1 : LIMB_VERTICES - 2;
+  const hip = limbPoint(positions, leg, "hip");
+  const offset = limbVertex(positions, leg, hipVertex);
+  const knee = limbVertex(positions, leg, kneeVertex);
+  return { x: hip.x + knee.x - offset.x, y: hip.y + knee.y - offset.y };
+};
 /* Mesh positions are float32, so a coordinate a few hundred px from the origin
    resolves to about 3e-5; anything tighter than this tests the storage. */
 const near = (before, after) => Math.abs(before - after) < 1e-4;
 const baselineHip = limbPoint(baselinePositions, 0, "hip");
-const baselineKnee = limbPoint(baselinePositions, 0, "knee");
+const baselineKnee = limbKnee(baselinePositions, 0);
 const projectionCenterX = baselineKnee.x - 10;
 const projectionCenterY = baselineKnee.y;
 const localProjection = {
@@ -80,7 +106,7 @@ for (const part of ["hip", "foot"]) {
   assert.ok(near(baselinePoint.y, projectedPoint.y));
   checks += 2;
 }
-const projectedKnee = limbPoint(projectedPositions, 0, "knee");
+const projectedKnee = limbKnee(projectedPositions, 0);
 const baselineFoot = limbPoint(baselinePositions, 0, "foot");
 const elbowHeight = Math.hypot(
   baselineKnee.x - (baselineHip.x + baselineFoot.x) / 2,
@@ -88,9 +114,6 @@ const elbowHeight = Math.hypot(
 );
 assert.ok(near(projectedKnee.x, baselineKnee.x + elbowHeight));
 assert.ok(near(projectedKnee.y, baselineKnee.y));
-/* The outline's knee corner stands half a width off both bones at once. That
-   is what leaves no wedge between them where the leg bends, and it can only
-   hold if the corner reaches past a plain perpendicular offset. */
 const offsetFromBone = (point, from, to) => {
   const runX = to.x - from.x;
   const runY = to.y - from.y;
@@ -100,7 +123,47 @@ const offsetFromBone = (point, from, to) => {
   );
 };
 const halfWidth = bentLeggedSource.legs.skin.limbWidth / 2;
-const kneeCorner = { x: baselinePositions[2], y: baselinePositions[3] };
+/* A bend puts one side of the knee outside it and one side in, whichever way
+   this leg happens to fold. */
+const kneeSide = (positions, leg, hipFirst) =>
+  Array.from({ length: KNEE_POINTS }, (_, point) =>
+    limbVertex(
+      positions,
+      leg,
+      hipFirst ? 1 + point : LIMB_VERTICES - 2 - point,
+    ),
+  );
+const stacked = (side) =>
+  side.every((point) => point.x === side[0].x && point.y === side[0].y);
+const firstSide = kneeSide(baselinePositions, 0, true);
+const secondSide = kneeSide(baselinePositions, 0, false);
+assert.ok(stacked(firstSide) !== stacked(secondSide));
+const sweptKnee = stacked(firstSide) ? secondSide : firstSide;
+const kneeCorner = stacked(firstSide) ? firstSide[0] : secondSide[0];
+/* Outside the bend every knee point stands half a width from the joint and
+   nothing stands further, which is what leaves no wedge between the bones and
+   no spike on a limb the walk has folded. Both ends of the sweep are a bone's
+   own offset, so it meets each one square. */
+assert.ok(
+  sweptKnee.every((point) =>
+    near(
+      Math.hypot(point.x - baselineKnee.x, point.y - baselineKnee.y),
+      halfWidth,
+    ),
+  ),
+);
+assert.ok(
+  near(offsetFromBone(sweptKnee[0], baselineHip, baselineKnee), halfWidth),
+);
+assert.ok(
+  near(
+    offsetFromBone(sweptKnee[KNEE_POINTS - 1], baselineKnee, baselineFoot),
+    halfWidth,
+  ),
+);
+/* Inside the bend the one corner the five points share is where the offset
+   edges cross, which stands off both bones at once and so reaches past a
+   plain perpendicular offset. */
 assert.ok(
   near(offsetFromBone(kneeCorner, baselineHip, baselineKnee), halfWidth),
 );
@@ -111,10 +174,10 @@ assert.ok(
   Math.hypot(kneeCorner.x - baselineKnee.x, kneeCorner.y - baselineKnee.y) >
     halfWidth,
 );
-checks += 5;
+checks += 9;
 for (let leg = 0; leg * LIMB_FLOATS < baselinePositions.length; leg++) {
-  const before = limbPoint(baselinePositions, leg, "knee");
-  const after = limbPoint(projectedPositions, leg, "knee");
+  const before = limbKnee(baselinePositions, leg);
+  const after = limbKnee(projectedPositions, leg);
   const radialX = before.x - projectionCenterX;
   const radialY = before.y - projectionCenterY;
   const displacementX = after.x - before.x;
@@ -174,7 +237,7 @@ const centeredLegs = new Beefwife(bentLeggedSource, {
 const centeredPositions = partsOf(centeredLegs).find(
   (child) => child instanceof Mesh,
 ).dynamicPositions;
-const centeredKnee = limbPoint(centeredPositions, 0, "knee");
+const centeredKnee = limbKnee(centeredPositions, 0);
 assert.ok(near(centeredKnee.x, baselineKnee.x));
 assert.ok(near(centeredKnee.y, baselineKnee.y));
 checks += 2;
@@ -194,7 +257,7 @@ const cappedLegs = new Beefwife(bentLeggedSource, {
 const cappedPositions = partsOf(cappedLegs).find(
   (child) => child instanceof Mesh,
 ).dynamicPositions;
-const cappedKnee = limbPoint(cappedPositions, 0, "knee");
+const cappedKnee = limbKnee(cappedPositions, 0);
 assert.ok(
   near(
     Math.hypot(cappedKnee.x - baselineKnee.x, cappedKnee.y - baselineKnee.y),
@@ -211,12 +274,12 @@ const leaningPositions = partsOf(leaningLegs).find(
   (child) => child instanceof Mesh,
 ).dynamicPositions;
 const legCount = baselinePositions.length / LIMB_FLOATS;
-const firstLeftBefore = limbPoint(baselinePositions, 0, "knee");
-const firstLeftAfter = limbPoint(leaningPositions, 0, "knee");
-const firstRightBefore = limbPoint(baselinePositions, 1, "knee");
-const firstRightAfter = limbPoint(leaningPositions, 1, "knee");
-const lastLeftBefore = limbPoint(baselinePositions, legCount - 2, "knee");
-const lastLeftAfter = limbPoint(leaningPositions, legCount - 2, "knee");
+const firstLeftBefore = limbKnee(baselinePositions, 0);
+const firstLeftAfter = limbKnee(leaningPositions, 0);
+const firstRightBefore = limbKnee(baselinePositions, 1);
+const firstRightAfter = limbKnee(leaningPositions, 1);
+const lastLeftBefore = limbKnee(baselinePositions, legCount - 2);
+const lastLeftAfter = limbKnee(leaningPositions, legCount - 2);
 assert.ok(firstLeftAfter.x < firstLeftBefore.x);
 assert.ok(lastLeftAfter.x > lastLeftBefore.x);
 assert.ok(
@@ -252,8 +315,8 @@ const longTrunkLeaningPositions = partsOf(longTrunkLeaningLegs).find(
 ).dynamicPositions;
 assert.ok(
   near(
-    limbPoint(longTrunkPositions, 0, "knee").x -
-      limbPoint(longTrunkLeaningPositions, 0, "knee").x,
+    limbKnee(longTrunkPositions, 0).x -
+      limbKnee(longTrunkLeaningPositions, 0).x,
     leanShift,
   ),
 );
@@ -272,12 +335,10 @@ const offsetCenterLegs = new Beefwife(offsetCenterSource, {
 const offsetCenterPositions = partsOf(offsetCenterLegs).find(
   (child) => child instanceof Mesh,
 ).dynamicPositions;
-assert.ok(
-  near(limbPoint(offsetCenterPositions, 0, "knee").x, firstLeftBefore.x),
-);
+assert.ok(near(limbKnee(offsetCenterPositions, 0).x, firstLeftBefore.x));
 assert.ok(
   near(
-    limbPoint(offsetCenterPositions, legCount - 2, "knee").x - lastLeftBefore.x,
+    limbKnee(offsetCenterPositions, legCount - 2).x - lastLeftBefore.x,
     leanShift * 2,
   ),
 );
@@ -340,10 +401,30 @@ assert.equal(
   colourNumber("#ffffff"),
 );
 assert.equal(strokesOf(strokedOutline.context)[0].width, 2);
-assert.equal(pointsOf(strokedOutline).length, limbCount * 6);
-assert.deepEqual(
-  pointsOf(strokedOutline).flat(),
-  Array.from(strokedFill.dynamicPositions),
+/* The outline walks the mesh's own vertices in the mesh's own order. It drops
+   the repeats the stacked side of a knee leaves behind, because a stroke
+   divides by the length of every segment it is handed. */
+const withoutRepeats = (points) =>
+  points.filter(
+    (point, index) =>
+      index === 0 ||
+      point[0] !== points[index - 1][0] ||
+      point[1] !== points[index - 1][1],
+  );
+const filledOutlines = [];
+for (let leg = 0; leg < limbCount; leg++)
+  filledOutlines.push(
+    withoutRepeats(
+      Array.from({ length: LIMB_VERTICES }, (_, vertex) => {
+        const point = limbVertex(strokedFill.dynamicPositions, leg, vertex);
+        return [point.x, point.y];
+      }),
+    ),
+  );
+assert.deepEqual(pointsOf(strokedOutline), filledOutlines.flat());
+assert.equal(
+  pointsOf(strokedOutline).length,
+  limbCount * (LIMB_VERTICES - KNEE_POINTS + 1),
 );
 checks += 8;
 strokedLegs.destroy();
@@ -481,7 +562,7 @@ const straightLegs = new Beefwife(straightSource, { random: () => 0.5 });
 const straightPositions = partsOf(straightLegs).find(
   (child) => child instanceof Mesh,
 ).dynamicPositions;
-const straightKnee = limbPoint(straightPositions, 0, "knee");
+const straightKnee = limbKnee(straightPositions, 0);
 const straightHip = limbPoint(straightPositions, 0, "hip");
 const straightFoot = limbPoint(straightPositions, 0, "foot");
 assert.ok(near(straightKnee.x, (straightHip.x + straightFoot.x) / 2));
@@ -490,10 +571,9 @@ assert.ok(near(straightKnee.y, (straightHip.y + straightFoot.y) / 2));
 const mirroredSource = copy(bentLeggedSource);
 mirroredSource.legs.jointBend = -1;
 const mirroredLegs = new Beefwife(mirroredSource, { random: () => 0.5 });
-const mirroredKnee = limbPoint(
+const mirroredKnee = limbKnee(
   partsOf(mirroredLegs).find((child) => child instanceof Mesh).dynamicPositions,
   0,
-  "knee",
 );
 assert.ok(near(mirroredKnee.x, 2 * straightKnee.x - baselineKnee.x));
 assert.ok(near(mirroredKnee.y, 2 * straightKnee.y - baselineKnee.y));
@@ -502,18 +582,27 @@ straightLegs.destroy();
 mirroredLegs.destroy();
 baselineLegs.destroy();
 
-// hip, knee, foot down one side and foot, knee, hip back up the other.
+/* Hip, the knee swept outside the bend, foot down one side and foot, the one
+   corner inside it, hip back up the other. */
 const outline = [
   [0, 1],
   [1, 1.5],
-  [2, 1],
-  [2, -1],
-  [1, -1.5],
+  [1.3, 1.45],
+  [1.55, 1.3],
+  [1.7, 1.05],
+  [1.75, 0.8],
+  [2.2, 0.2],
+  [1.4, -0.3],
+  [1.2, 0.4],
+  [1.2, 0.4],
+  [1.2, 0.4],
+  [1.2, 0.4],
+  [1.2, 0.4],
   [0, -1],
 ];
 const limbPositions = new Float32Array(outline.flat());
 const limbIndices = Geometry.limbIndicesFor(1);
-assert.equal(limbIndices.length, 12);
+assert.equal(limbIndices.length, (outline.length / 2 - 1) * 6);
 assert.ok(
   near(unsignedArea(limbPositions, limbIndices), shoelace(outline)),
   "limb triangles do not cover the outline exactly once",
