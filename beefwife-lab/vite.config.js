@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { readFileSync } from "node:fs";
 
-const runtimePath = new URL("../dist/beefwife-canvas.js", import.meta.url);
+const runtimePath = new URL("../beefwife-canvas/beefwife-canvas.js", import.meta.url);
 
 function beefwifeCanvasRuntime() {
   const fileName = "vendor/beefwife-canvas.js";

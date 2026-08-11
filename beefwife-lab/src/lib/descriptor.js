@@ -13,6 +13,26 @@ export const applyError = writable(null);
 /** The chain's sections, head to tail. */
 export const SECTION_NAMES = ["head", "trunk", "tail"];
 
+/* Read on use rather than on import: the runtime is a classic script that
+   loads after these modules evaluate. */
+
+/** The ids the validator accepts, for shapes, paints, and materials. */
+export const idPattern = () => window.BeefwifeCanvas.Descriptor.ID_PATTERN;
+
+/* Only a hyphen at the edge of a character class stands for itself; escaping
+   one between two characters would turn a range into three literals. */
+const escapeBareHyphens = (source) =>
+  source.replace(/\[-/g, "[\\-").replace(/-(?=\])/g, "\\-");
+
+/**
+ * The names the validator accepts, as an `input` pattern. The attribute
+ * compiles in unicodeSets mode, where a bare hyphen is an invalid character
+ * class, and a pattern that fails to compile is ignored rather than reported:
+ * every name would pass.
+ */
+export const namePattern = () =>
+  escapeBareHyphens(window.BeefwifeCanvas.Descriptor.NAME_PATTERN.source);
+
 /**
  * Chain-wide chunk indices a placement resolves to.
  * TODO: mirrors BeefwifeDescriptor's resolvedChunks; sample via a beefwife
