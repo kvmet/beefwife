@@ -238,4 +238,4 @@ const schema = object({
   }),
 });
 
-export { VERSION, LIMITS, SECTIONS, ID_PATTERN, schema };
+export { VERSION, LIMITS, SECTIONS, ID_PATTERN, NAME_PATTERN, schema };

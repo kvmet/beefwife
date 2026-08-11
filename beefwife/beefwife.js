@@ -313,7 +313,9 @@ pixi_js = __toESM(pixi_js, 1);
 	* `bounds` reports what the schema enforces for one field.
 	*/
 	var descriptor_exports = /* @__PURE__ */ __exportAll({
+		ID_PATTERN: () => ID_PATTERN,
 		LIMITS: () => LIMITS,
+		NAME_PATTERN: () => NAME_PATTERN,
 		VERSION: () => 1,
 		bounds: () => bounds,
 		parse: () => parse,
@@ -1662,26 +1664,30 @@ pixi_js = __toESM(pixi_js, 1);
 //#endregion
 //#region src/geometry.mjs
 /** Vertex math and pixel snapping for a Beefwife's meshes and outlines. */
-	var LIMB_VERTICES = 6;
-	var LIMB_FLOATS = 12;
+	var KNEE_SEGMENTS = 4;
+	var KNEE_POINTS = 5;
+	var LIMB_VERTICES = 14;
+	var LIMB_FLOATS = 28;
 	var limbIndicesFor = (legCount) => {
-		const indices = new Uint32Array(legCount * 12);
+		const quads = 6;
+		const indices = new Uint32Array(legCount * quads * 6);
+		let at = 0;
 		for (let leg = 0; leg < legCount; leg++) {
-			const vertex = leg * LIMB_VERTICES;
-			indices.set([
-				vertex,
-				vertex + 5,
-				vertex + 1,
-				vertex + 1,
-				vertex + 5,
-				vertex + 4,
-				vertex + 1,
-				vertex + 4,
-				vertex + 2,
-				vertex + 2,
-				vertex + 4,
-				vertex + 3
-			], leg * 12);
+			const first = leg * LIMB_VERTICES;
+			const last = first + LIMB_VERTICES - 1;
+			for (let step = 0; step < quads; step++) {
+				const down = first + step;
+				const back = last - step;
+				indices.set([
+					down,
+					back,
+					down + 1,
+					down + 1,
+					back,
+					back - 1
+				], at);
+				at += 6;
+			}
 		}
 		return indices;
 	};
@@ -1738,7 +1744,6 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		snapPositions(positions, offset, offset + 28, pixelResolution, inversePixelResolution);
 	};
-	var LIMB_CORNER_REACH = 4;
 	var writeLimb = (positions, offset, hipX, hipY, kneeX, kneeY, footX, footY, width, pixelResolution = 0, inversePixelResolution = 0) => {
 		const half = width * .5;
 		const thighX = kneeX - hipX;
@@ -1757,25 +1762,45 @@ pixi_js = __toESM(pixi_js, 1);
 		if (spread > 1e-6) {
 			cornerX = (thighNormalX + shinNormalX) / spread;
 			cornerY = (thighNormalY + shinNormalY) / spread;
-			const reach = Math.hypot(cornerX, cornerY);
-			if (reach > LIMB_CORNER_REACH) {
-				cornerX = cornerX / reach * LIMB_CORNER_REACH;
-				cornerY = cornerY / reach * LIMB_CORNER_REACH;
+			const along = -(cornerX * thighX + cornerY * thighY) / thighLength * half;
+			const bone = Math.min(thighLength, shinLength);
+			if (along > bone) {
+				cornerX = cornerX * bone / along;
+				cornerY = cornerY * bone / along;
 			}
 		}
+		const sweep = Math.atan2(thighNormalX * shinNormalY - thighNormalY * shinNormalX, thighNormalX * shinNormalX + thighNormalY * shinNormalY);
+		const stepCosine = Math.cos(sweep / KNEE_SEGMENTS);
+		const stepSine = Math.sin(sweep / KNEE_SEGMENTS);
+		const arcLeads = sweep <= 0;
+		let arcX = thighNormalX;
+		let arcY = thighNormalY;
+		const footAt = offset + 12;
+		const heelAt = offset + 28 - 2;
 		positions[offset] = hipX + thighNormalX * half;
 		positions[offset + 1] = hipY + thighNormalY * half;
-		positions[offset + 2] = kneeX + cornerX * half;
-		positions[offset + 3] = kneeY + cornerY * half;
-		positions[offset + 4] = footX + shinNormalX * half;
-		positions[offset + 5] = footY + shinNormalY * half;
-		positions[offset + 6] = footX - shinNormalX * half;
-		positions[offset + 7] = footY - shinNormalY * half;
-		positions[offset + 8] = kneeX - cornerX * half;
-		positions[offset + 9] = kneeY - cornerY * half;
-		positions[offset + 10] = hipX - thighNormalX * half;
-		positions[offset + 11] = hipY - thighNormalY * half;
-		snapPositions(positions, offset, offset + 12, pixelResolution, inversePixelResolution);
+		positions[footAt] = footX + shinNormalX * half;
+		positions[footAt + 1] = footY + shinNormalY * half;
+		positions[footAt + 2] = footX - shinNormalX * half;
+		positions[footAt + 3] = footY - shinNormalY * half;
+		positions[heelAt] = hipX - thighNormalX * half;
+		positions[heelAt + 1] = hipY - thighNormalY * half;
+		for (let step = 0; step < 5; step++) {
+			const leadX = arcLeads ? arcX : cornerX;
+			const leadY = arcLeads ? arcY : cornerY;
+			const trailX = arcLeads ? cornerX : arcX;
+			const trailY = arcLeads ? cornerY : arcY;
+			const leadAt = offset + (1 + step) * 2;
+			const trailAt = offset + (12 - step) * 2;
+			positions[leadAt] = kneeX + leadX * half;
+			positions[leadAt + 1] = kneeY + leadY * half;
+			positions[trailAt] = kneeX - trailX * half;
+			positions[trailAt + 1] = kneeY - trailY * half;
+			const turnedX = arcX * stepCosine - arcY * stepSine;
+			arcY = arcX * stepSine + arcY * stepCosine;
+			arcX = turnedX;
+		}
+		snapPositions(positions, offset, offset + 28, pixelResolution, inversePixelResolution);
 	};
 
 //#endregion
@@ -1925,7 +1950,7 @@ pixi_js = __toESM(pixi_js, 1);
 			let changed = false;
 			if (resized) {
 				this.limbCount = legCount;
-				this.limbPositions = new Float32Array(legCount * 12);
+				this.limbPositions = new Float32Array(legCount * 28);
 			}
 			if (this.limbFill && (resized || !wantFill)) {
 				this._drop(this.limbFill);
@@ -2003,7 +2028,7 @@ pixi_js = __toESM(pixi_js, 1);
 			const projection = this.options.kneeProjection ?? null;
 			const jointLean = this.model.legs.jointLean;
 			for (let offset = 0; offset < legs.length; offset += stride) {
-				const vertexOffset = offset / stride * 12;
+				const vertexOffset = offset / stride * 28;
 				let kneeX = legs[offset + 2];
 				let kneeY = legs[offset + 3];
 				if (projection) {
@@ -2027,9 +2052,18 @@ pixi_js = __toESM(pixi_js, 1);
 			}
 			if (this.limbFill) this.limbFill.positionBuffer.update();
 			if (!this.limbStroke) return;
-			for (let base = 0; base < positions.length; base += 12) {
-				this.limbStroke.moveTo(positions[base], positions[base + 1]);
-				for (let vertex = 2; vertex < 12; vertex += 2) this.limbStroke.lineTo(positions[base + vertex], positions[base + vertex + 1]);
+			for (let base = 0; base < positions.length; base += 28) {
+				let lastX = positions[base];
+				let lastY = positions[base + 1];
+				this.limbStroke.moveTo(lastX, lastY);
+				for (let vertex = 2; vertex < 28; vertex += 2) {
+					const x = positions[base + vertex];
+					const y = positions[base + vertex + 1];
+					if (x === lastX && y === lastY) continue;
+					this.limbStroke.lineTo(x, y);
+					lastX = x;
+					lastY = y;
+				}
 				this.limbStroke.closePath();
 			}
 			const legPaint = this.model.legs.skin.limbPaint;
@@ -2037,7 +2071,7 @@ pixi_js = __toESM(pixi_js, 1);
 				color: legPaint.stroke,
 				width: legPaint.strokeWidth,
 				cap: "butt",
-				join: "miter"
+				join: "bevel"
 			});
 		}
 		_syncRibbon(state, pixelResolution, inversePixelResolution) {
