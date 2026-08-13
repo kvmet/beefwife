@@ -74,4 +74,4 @@ class Gait {
   }
 }
 
-export { Gait };
+export { Gait, positiveModulo };

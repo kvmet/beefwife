@@ -1,7 +1,18 @@
 /** Schema-v1 Verlet chain. Private state is owned by one Beefwife instance. */
 
+import { positiveModulo } from "./drive.mjs";
+import { ChainTables } from "./tables.mjs";
+import { carryChunks } from "./carry.mjs";
+
 const TAU = Math.PI * 2;
 const PHYSICS_STEP = 1 / 120;
+/* Link relaxation converges on passes per second, so this and the substep
+   rate trade against each other: their product is the budget, and 480 a
+   second holds the shipped descriptors inside 6.6% link error. A slower
+   substep rate needs proportionally more passes to hold the same chain.
+   Grip and jointCorrection do not trade this way; both take a fixed share
+   per substep, so changing the rate alone changes how far a creature
+   travels in a second. */
 const RELAX_PASSES = 4;
 const AXIS_RATE = 1.5;
 /* Bend displaces a chunk and relaxation pulls back only a `linkCorrection`
@@ -67,18 +78,7 @@ class Body {
     this.liftOrder = model.chunks.map((_, index) => index);
     this.liftTargets = new Float64Array(model.chunks.length);
     this.correction = { x: 0, y: 0 };
-    this.retention = new Float64Array(model.chunks.length);
-    this._refreshRetention();
-  }
-
-  /* velocityRetention is per second; the substep factor is its dt power.
-     pow keeps the endpoints exact: 0 stops in one step, 1 is frictionless. */
-  _refreshRetention() {
-    for (let index = 0; index < this.model.chunks.length; index++)
-      this.retention[index] = Math.pow(
-        this.model.chunks[index].material.velocityRetention,
-        PHYSICS_STEP,
-      );
+    this.tables = new ChainTables(model, model.gait, PHYSICS_STEP);
   }
 
   reconfigure(model, gait, throttle = 1, breathingPhase = this.breathingPhase) {
@@ -87,7 +87,7 @@ class Body {
     this.model = model;
     this.gait = gait;
     this.breathingPhase = breathingPhase;
-    this._refreshRetention();
+    this.tables.refresh(model, model.gait, PHYSICS_STEP);
     this.refreshContacts(throttle);
   }
 
@@ -110,66 +110,10 @@ class Body {
     this.refreshContacts(1);
   }
 
-  /* Carries chunk state onto a chain whose section counts changed. A chunk
-     the descriptor still names keeps its position and velocity; an added one
-     is seeded from its neighbours. The creature settles from where it was
-     rather than snapping straight, and since head always holds a chunk the
-     new chain always has something to carry. */
+  /* Takes on the state of the body it replaces. The chain itself is carried
+     chunk by chunk; these are the values that belong to the whole creature. */
   adopt(previous) {
-    const source = new Map();
-    previous.model.chunks.forEach((spec, index) =>
-      source.set(`${spec.section}:${spec.localIndex}`, previous.chunks[index]),
-    );
-    const carried = this.model.chunks.map((spec, index) => {
-      const from = source.get(`${spec.section}:${spec.localIndex}`);
-      if (!from) return false;
-      const chunk = this.chunks[index];
-      chunk.x = from.x;
-      chunk.y = from.y;
-      chunk.px = from.px;
-      chunk.py = from.py;
-      chunk.dx = from.dx;
-      chunk.dy = from.dy;
-      chunk.idle = from.idle;
-      chunk.gain = from.gain;
-      return true;
-    });
-    for (let index = 0; index < this.chunks.length; index++) {
-      if (carried[index]) continue;
-      let before = index - 1;
-      while (before >= 0 && !carried[before]) before--;
-      let after = index + 1;
-      while (after < this.chunks.length && !carried[after]) after++;
-      const chunk = this.chunks[index];
-      if (before >= 0 && after < this.chunks.length) {
-        const start = this.chunks[before];
-        const end = this.chunks[after];
-        const along = (index - before) / (after - before);
-        chunk.x = start.x + (end.x - start.x) * along;
-        chunk.y = start.y + (end.y - start.y) * along;
-        chunk.px = start.px + (end.px - start.px) * along;
-        chunk.py = start.py + (end.py - start.py) * along;
-        chunk.dx = start.dx;
-        chunk.dy = start.dy;
-      } else {
-        /* dx points headward, so a chunk added past the tail extends the
-           other way. A chunk that did not exist carries no velocity. */
-        const anchorIndex = before >= 0 ? before : after;
-        const anchor = this.chunks[anchorIndex];
-        const heading = before >= 0 ? -1 : 1;
-        const link = this.model.links[before >= 0 ? index - 1 : index];
-        const reach =
-          (link ? link.restLength : 0) * Math.abs(index - anchorIndex);
-        chunk.x = anchor.x + anchor.dx * heading * reach;
-        chunk.y = anchor.y + anchor.dy * heading * reach;
-        chunk.px = chunk.x;
-        chunk.py = chunk.y;
-        chunk.dx = anchor.dx;
-        chunk.dy = anchor.dy;
-      }
-      chunk.idle = 0;
-      chunk.gain = 0;
-    }
+    carryChunks(this.chunks, this.model, previous.chunks, previous.model);
     this.axis = { ...previous.axis };
     this.steeringBias = previous.steeringBias;
     this.accumulator = previous.accumulator;
@@ -305,16 +249,18 @@ class Body {
   }
 
   _updateTangentsAndAxis(dt) {
-    const last = this.chunks.length - 1;
+    const chunks = this.chunks;
+    const count = chunks.length;
+    const last = count - 1;
     let axisX = 0;
     let axisY = 0;
-    for (let index = 0; index < this.chunks.length; index++) {
-      const chunk = this.chunks[index];
-      const ahead = this.chunks[Math.max(0, index - 1)];
-      const behind = this.chunks[Math.min(last, index + 1)];
+    for (let index = 0; index < count; index++) {
+      const chunk = chunks[index];
+      const ahead = chunks[index === 0 ? 0 : index - 1];
+      const behind = chunks[index === last ? last : index + 1];
       const x = ahead.x - behind.x;
       const y = ahead.y - behind.y;
-      const tangentLength = magnitude(x, y);
+      const tangentLength = Math.sqrt(x * x + y * y);
       if (tangentLength >= 1e-9) {
         chunk.dx = x / tangentLength;
         chunk.dy = y / tangentLength;
@@ -322,7 +268,7 @@ class Body {
       axisX += chunk.x - chunk.px;
       axisY += chunk.y - chunk.py;
     }
-    const axisLength = magnitude(axisX, axisY);
+    const axisLength = Math.sqrt(axisX * axisX + axisY * axisY);
     if (axisLength < 1e-9) return;
     const amount = Math.min(1, dt * AXIS_RATE);
     this.axis.x += (axisX / axisLength - this.axis.x) * amount;
@@ -334,57 +280,94 @@ class Body {
 
   _integrate(dt, throttle) {
     const dtSquared = dt * dt;
-    for (let index = 0; index < this.chunks.length; index++) {
-      const chunk = this.chunks[index];
-      const spec = this.model.chunks[index];
-      const retention = this.retention[index];
-      const velocityX = (chunk.x - chunk.px) * retention;
-      const velocityY = (chunk.y - chunk.py) * retention;
+    const chunks = this.chunks;
+    const count = chunks.length;
+    const gait = this.gait.gait;
+    const phase = this.gait.phase;
+    const contact = gait.contact;
+    const thrust = gait.thrust;
+    const contactHarmonic = contact.harmonic;
+    const thrustHarmonic = thrust.harmonic;
+    const contactPhaseOffset = contact.phaseOffset;
+    const thrustPhaseOffset = thrust.phaseOffset;
+    const contactDuty = contact.dutyCycle;
+    const thrustDuty = thrust.dutyCycle;
+    const contactAmplitude = contact.amplitude;
+    const thrustAcceleration = thrust.acceleration;
+    const autoLift = this.model.physics.autoLift.amount;
+    const axisX = this.axis.x;
+    const axisY = this.axis.y;
+    const {
+      retention,
+      gripForward,
+      gripBackward,
+      gripLateral,
+      motionContact,
+      motionThrust,
+      phaseLag,
+    } = this.tables;
+
+    for (let index = 0; index < count; index++) {
+      const chunk = chunks[index];
+      const hold = retention[index];
+      const velocityX = (chunk.x - chunk.px) * hold;
+      const velocityY = (chunk.y - chunk.py) * hold;
       chunk.px = chunk.x;
       chunk.py = chunk.y;
       chunk.x += velocityX;
       chunk.y += velocityY;
 
-      const grip = spec.material.grip;
+      const dx = chunk.dx;
+      const dy = chunk.dy;
       const x = chunk.x - chunk.px;
       const y = chunk.y - chunk.py;
-      const along = x * chunk.dx + y * chunk.dy;
-      const lateral = x * -chunk.dy + y * chunk.dx;
-      chunk.gaitContact = this.gait.contactAt(
-        spec.restDistance,
-        throttle,
-        spec.motionScale.contact,
-      );
-      const contact = Math.max(
+      const along = x * dx + y * dy;
+      const lateral = x * -dy + y * dx;
+
+      const lagged = phase - phaseLag[index];
+      const contactCycle =
+        positiveModulo(
+          contactHarmonic * lagged + contactPhaseOffset,
+          TAU,
+        ) / TAU;
+      const gaitContact =
+        contactCycle >= contactDuty
+          ? 1
+          : 1 -
+            contactAmplitude *
+              motionContact[index] *
+              throttle *
+              Math.sin((Math.PI * contactCycle) / contactDuty);
+      chunk.gaitContact = gaitContact;
+      const grounded = Math.max(
         0,
-        Math.min(
-          1,
-          chunk.gaitContact *
-            (1 - this.model.physics.autoLift.amount * chunk.idle * throttle),
-        ),
+        Math.min(1, gaitContact * (1 - autoLift * chunk.idle * throttle)),
       );
-      chunk.contact = contact;
+      chunk.contact = grounded;
+
       const retainedAlong =
-        along * (1 - contact * (along < 0 ? grip.backward : grip.forward));
-      const retainedLateral = lateral * (1 - contact * grip.lateral);
-      chunk.x =
-        chunk.px + chunk.dx * retainedAlong - chunk.dy * retainedLateral;
-      chunk.y =
-        chunk.py + chunk.dy * retainedAlong + chunk.dx * retainedLateral;
+        along *
+        (1 -
+          grounded * (along < 0 ? gripBackward[index] : gripForward[index]));
+      const retainedLateral = lateral * (1 - grounded * gripLateral[index]);
+      chunk.x = chunk.px + dx * retainedAlong - dy * retainedLateral;
+      chunk.y = chunk.py + dy * retainedAlong + dx * retainedLateral;
       chunk.gain = -(
-        (along - retainedAlong) *
-          (chunk.dx * this.axis.x + chunk.dy * this.axis.y) +
-        (lateral - retainedLateral) *
-          (-chunk.dy * this.axis.x + chunk.dx * this.axis.y)
+        (along - retainedAlong) * (dx * axisX + dy * axisY) +
+        (lateral - retainedLateral) * (-dy * axisX + dx * axisY)
       );
 
-      const acceleration = this.gait.thrustAt(
-        spec.restDistance,
-        throttle,
-        spec.motionScale.thrust,
-      );
-      chunk.x += chunk.dx * acceleration * dtSquared;
-      chunk.y += chunk.dy * acceleration * dtSquared;
+      const thrustCycle =
+        positiveModulo(thrustHarmonic * lagged + thrustPhaseOffset, TAU) / TAU;
+      const acceleration =
+        thrustCycle >= thrustDuty
+          ? 0
+          : thrustAcceleration *
+            motionThrust[index] *
+            throttle *
+            Math.sin((Math.PI * thrustCycle) / thrustDuty);
+      chunk.x += dx * acceleration * dtSquared;
+      chunk.y += dy * acceleration * dtSquared;
     }
   }
 
@@ -409,23 +392,34 @@ class Body {
     const phase = channel.harmonic * this.gait.phase;
     const phaseSine = Math.sin(phase);
     const phaseCosine = Math.cos(phase);
-    for (let index = 1; index < this.chunks.length - 1; index++) {
-      const before = this.chunks[index - 1];
-      const chunk = this.chunks[index];
-      const after = this.chunks[index + 1];
+    const chunks = this.chunks;
+    const last = chunks.length - 1;
+    const amplitude = channel.amplitude;
+    const biasThrottle = bias * throttle;
+    const {
+      motionBend,
+      bendPhaseSine,
+      bendPhaseCosine,
+      bendScale,
+      jointCorrectionHalf,
+    } = this.tables;
+    let before = chunks[0];
+    let chunk = chunks[1];
+    for (let index = 1; index < last; index++) {
+      const after = chunks[index + 1];
       const ax = chunk.x - before.x;
       const ay = chunk.y - before.y;
       const bx = after.x - chunk.x;
       const by = after.y - chunk.y;
       const turn = Math.atan2(ax * by - ay * bx, ax * bx + ay * by);
-      const spec = this.model.chunks[index];
       const bend =
-        channel.amplitude *
-        spec.motionScale.bend *
+        amplitude *
+        motionBend[index] *
         throttle *
-        (phaseSine * spec.bendPhaseCosine + phaseCosine * spec.bendPhaseSine);
-      const target = (bend + bias * throttle) * spec.bendScale;
-      const correction = (target - turn) * spec.material.jointCorrection * 0.5;
+        (phaseSine * bendPhaseCosine[index] +
+          phaseCosine * bendPhaseSine[index]);
+      const target = (bend + biasThrottle) * bendScale[index];
+      const correction = (target - turn) * jointCorrectionHalf[index];
       const cosine = Math.cos(correction);
       const sine = Math.sin(correction);
       const nextBeforeX = chunk.x - (ax * cosine + ay * sine);
@@ -440,6 +434,8 @@ class Body {
       after.y = nextAfterY - shiftY;
       chunk.x -= shiftX;
       chunk.y -= shiftY;
+      before = chunk;
+      chunk = after;
     }
   }
 
@@ -448,52 +444,69 @@ class Body {
     const phase = channel.harmonic * this.gait.phase;
     const phaseSine = Math.sin(phase);
     const phaseCosine = Math.cos(phase);
-    for (let index = 0; index < this.model.links.length; index++) {
-      const link = this.model.links[index];
+    const amplitude = channel.amplitude;
+    const breathing = this.breathingScale;
+    const targets = this.linkTargets;
+    const {
+      linkRestLength,
+      gatherScale,
+      gatherPhaseSine,
+      gatherPhaseCosine,
+      linkBreathes,
+    } = this.tables;
+    for (let index = 0; index < targets.length; index++) {
       const wave =
-        phaseCosine * link.gatherPhaseCosine - phaseSine * link.gatherPhaseSine;
-      const gather = 1 + channel.amplitude * link.gatherScale * throttle * wave;
-      const breathing = 1 + (link.breathingScale ? this.breathingScale : 0);
-      this.linkTargets[index] = link.restLength * gather * breathing;
+        phaseCosine * gatherPhaseCosine[index] -
+        phaseSine * gatherPhaseSine[index];
+      const gather = 1 + amplitude * gatherScale[index] * throttle * wave;
+      targets[index] =
+        linkRestLength[index] * gather * (linkBreathes[index] ? 1 + breathing : 1);
     }
   }
 
+  /* Link k joins chunks k and k+1, so the chunk this link ends on is the one
+     the next link starts from and the walk carries it forward. */
   _relaxLinks() {
-    for (let index = 0; index < this.model.links.length; index++) {
-      const link = this.model.links[index];
-      const before = this.chunks[link.from];
-      const after = this.chunks[link.to];
+    const chunks = this.chunks;
+    const targets = this.linkTargets;
+    const correctionHalf = this.tables.linkCorrectionHalf;
+    const count = targets.length;
+    let before = chunks[0];
+    for (let index = 0; index < count; index++) {
+      const after = chunks[index + 1];
       const x = after.x - before.x;
       const y = after.y - before.y;
-      const distance = magnitude(x, y) || 0.001;
+      const distance = Math.sqrt(x * x + y * y) || 0.001;
       const shift =
-        ((distance - this.linkTargets[index]) / distance) *
-        0.5 *
-        link.linkCorrection;
+        ((distance - targets[index]) / distance) * correctionHalf[index];
       before.x += x * shift;
       before.y += y * shift;
       after.x -= x * shift;
       after.y -= y * shift;
+      before = after;
     }
   }
 
-  /* Link k joins chunks k and k+1, so a head-to-tail sweep that moves only
-     the trailing chunk settles every link in one pass: the link just fixed
-     cannot be disturbed by the next one. Holding the head still also keeps
-     a clamped chain's reported pose where the host last saw it. */
+  /* Holding the head still keeps a clamped chain's reported pose where the
+     host last saw it, and the sweep moves only the trailing chunk, so the
+     link just fixed cannot be disturbed by the next one. */
   _clampLinks() {
-    for (let index = 0; index < this.model.links.length; index++) {
-      const limit = this.linkTargets[index] * MAX_LINK_STRETCH;
-      const link = this.model.links[index];
-      const before = this.chunks[link.from];
-      const after = this.chunks[link.to];
+    const chunks = this.chunks;
+    const targets = this.linkTargets;
+    const count = targets.length;
+    let before = chunks[0];
+    for (let index = 0; index < count; index++) {
+      const after = chunks[index + 1];
+      const limit = targets[index] * MAX_LINK_STRETCH;
       const x = after.x - before.x;
       const y = after.y - before.y;
-      const distance = magnitude(x, y);
-      if (distance <= limit) continue;
-      const scale = limit / distance;
-      after.x = before.x + x * scale;
-      after.y = before.y + y * scale;
+      const distance = Math.sqrt(x * x + y * y);
+      if (distance > limit) {
+        const scale = limit / distance;
+        after.x = before.x + x * scale;
+        after.y = before.y + y * scale;
+      }
+      before = after;
     }
   }
 
