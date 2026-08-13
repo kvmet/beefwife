@@ -3,6 +3,7 @@
 import { positiveModulo } from "./drive.mjs";
 import { ChainTables } from "./tables.mjs";
 import { carryChunks } from "./carry.mjs";
+import { Bend } from "./bend.mjs";
 
 const TAU = Math.PI * 2;
 const PHYSICS_STEP = 1 / 60;
@@ -73,6 +74,7 @@ class Body {
       contact: 1,
     }));
     this.linkTargets = new Float64Array(model.links.length);
+    this.bend = new Bend(model.chunks.length);
     this.breathingShiftX = new Float64Array(model.chunks.length);
     this.breathingShiftY = new Float64Array(model.chunks.length);
     this.liftOrder = model.chunks.map((_, index) => index);
@@ -201,8 +203,16 @@ class Body {
     this._updateTangentsAndAxis(dt);
     this._applyBreathing();
     this._integrate(dt, throttle);
-    this._applyBend(throttle, this._steer(direction, dt));
     this._updateLinkTargets(throttle);
+    this.bend.update(
+      this.model,
+      this.gait,
+      this.tables,
+      this.linkTargets,
+      throttle,
+      this._steer(direction, dt),
+    );
+    this.bend.relax(this.chunks, this.tables.jointCorrectionHalf);
     for (let pass = 0; pass < RELAX_PASSES; pass++) this._relaxLinks();
     this._clampLinks();
     this._applyAutoLift(dt, throttle);
@@ -385,58 +395,6 @@ class Body {
     this.steeringBias +=
       (wanted - this.steeringBias) * Math.min(1, dt * steering.rate);
     return this.steeringBias;
-  }
-
-  _applyBend(throttle, bias) {
-    const channel = this.model.gait.bend;
-    const phase = channel.harmonic * this.gait.phase;
-    const phaseSine = Math.sin(phase);
-    const phaseCosine = Math.cos(phase);
-    const chunks = this.chunks;
-    const last = chunks.length - 1;
-    const amplitude = channel.amplitude;
-    const biasThrottle = bias * throttle;
-    const {
-      motionBend,
-      bendPhaseSine,
-      bendPhaseCosine,
-      bendScale,
-      jointCorrectionHalf,
-    } = this.tables;
-    let before = chunks[0];
-    let chunk = chunks[1];
-    for (let index = 1; index < last; index++) {
-      const after = chunks[index + 1];
-      const ax = chunk.x - before.x;
-      const ay = chunk.y - before.y;
-      const bx = after.x - chunk.x;
-      const by = after.y - chunk.y;
-      const turn = Math.atan2(ax * by - ay * bx, ax * bx + ay * by);
-      const bend =
-        amplitude *
-        motionBend[index] *
-        throttle *
-        (phaseSine * bendPhaseCosine[index] +
-          phaseCosine * bendPhaseSine[index]);
-      const target = (bend + biasThrottle) * bendScale[index];
-      const correction = (target - turn) * jointCorrectionHalf[index];
-      const cosine = Math.cos(correction);
-      const sine = Math.sin(correction);
-      const nextBeforeX = chunk.x - (ax * cosine + ay * sine);
-      const nextBeforeY = chunk.y - (ay * cosine - ax * sine);
-      const nextAfterX = chunk.x + (bx * cosine - by * sine);
-      const nextAfterY = chunk.y + (bx * sine + by * cosine);
-      const shiftX = (nextBeforeX - before.x + (nextAfterX - after.x)) / 3;
-      const shiftY = (nextBeforeY - before.y + (nextAfterY - after.y)) / 3;
-      before.x = nextBeforeX - shiftX;
-      before.y = nextBeforeY - shiftY;
-      after.x = nextAfterX - shiftX;
-      after.y = nextAfterY - shiftY;
-      chunk.x -= shiftX;
-      chunk.y -= shiftY;
-      before = chunk;
-      chunk = after;
-    }
   }
 
   _updateLinkTargets(throttle) {

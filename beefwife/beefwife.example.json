@@ -5,7 +5,7 @@
     "materials": {
       "body": {
         "velocityRetention": 0.06928872574536875,
-        "jointCorrection": 0.79,
+        "jointCorrection": 0.5,
         "linkCorrection": 0.6,
         "grip": {
           "forward": 0.05,
@@ -81,7 +81,7 @@
     "contact": {
       "amplitude": 0.97,
       "harmonic": 1,
-      "phaseOffset": 0.36,
+      "phaseOffset": -0.25,
       "dutyCycle": 0.5
     }
   },

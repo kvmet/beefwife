@@ -977,6 +977,140 @@ pixi_js = __toESM(pixi_js, 1);
 	};
 
 //#endregion
+//#region ../beefwife/src/bend.mjs
+/**
+	* The chain's angular constraint. One joint on its own reaches the turn it is
+	* asked for exactly, but a chain of them barely bends: each joint pushes its
+	* outer chunks one way and its middle the other, so a smooth run of targets
+	* makes a smooth displacement field, and a joint angle is the second
+	* difference of that field. Sweeping wider spans first gives the solver a
+	* curvature a single joint cannot see, and the single joints then finish.
+	*
+	* Nothing here is state between substeps. The arrays are scratch, sized once
+	* so a substep allocates nothing.
+	*/
+	var MAX_BEND_SPAN = 2;
+	var Bend = class {
+		constructor(count) {
+			this.targets = new Float64Array(count);
+			this.wantedX = new Float64Array(count);
+			this.wantedY = new Float64Array(count);
+			this.spanX = new Float64Array(count);
+			this.spanY = new Float64Array(count);
+		}
+		update(model, gait, tables, restLengths, throttle, bias) {
+			const channel = model.gait.bend;
+			const phase = channel.harmonic * gait.phase;
+			const phaseSine = Math.sin(phase);
+			const phaseCosine = Math.cos(phase);
+			const amplitude = channel.amplitude;
+			const biasThrottle = bias * throttle;
+			const { motionBend, bendPhaseSine, bendPhaseCosine, bendScale } = tables;
+			const targets = this.targets;
+			const wantedX = this.wantedX;
+			const wantedY = this.wantedY;
+			const last = targets.length - 1;
+			let heading = 0;
+			wantedX[0] = 0;
+			wantedY[0] = 0;
+			for (let index = 0; index < last; index++) {
+				if (index > 0) {
+					const bend = amplitude * motionBend[index] * throttle * (phaseSine * bendPhaseCosine[index] + phaseCosine * bendPhaseSine[index]);
+					targets[index] = (bend + biasThrottle) * bendScale[index];
+					heading += targets[index];
+				}
+				wantedX[index + 1] = wantedX[index] + Math.cos(heading) * restLengths[index];
+				wantedY[index + 1] = wantedY[index] + Math.sin(heading) * restLengths[index];
+			}
+		}
+		relax(chunks, jointCorrectionHalf) {
+			for (let span = Math.min(2, chunks.length >> 2); span >= 1; span >>= 1) this.relaxSpan(chunks, jointCorrectionHalf, span);
+		}
+		relaxSpan(chunks, jointCorrectionHalf, span) {
+			const count = chunks.length;
+			const wantedX = this.wantedX;
+			const wantedY = this.wantedY;
+			const nextX = this.spanX;
+			const nextY = this.spanY;
+			for (let pivot = span; pivot + span < count; pivot += span) {
+				const from = pivot - span;
+				const to = pivot + span;
+				const chunk = chunks[pivot];
+				const before = chunks[from];
+				const after = chunks[to];
+				const ax = chunk.x - before.x;
+				const ay = chunk.y - before.y;
+				const bx = after.x - chunk.x;
+				const by = after.y - chunk.y;
+				const turn = Math.atan2(ax * by - ay * bx, ax * bx + ay * by);
+				const wx = wantedX[pivot] - wantedX[from];
+				const wy = wantedY[pivot] - wantedY[from];
+				const vx = wantedX[to] - wantedX[pivot];
+				const vy = wantedY[to] - wantedY[pivot];
+				const correction = (Math.atan2(wx * vy - wy * vx, wx * vx + wy * vy) - turn) * jointCorrectionHalf[pivot];
+				const cosine = Math.cos(correction);
+				const sine = Math.sin(correction);
+				for (let index = from; index <= to; index++) {
+					const x = chunks[index].x - chunk.x;
+					const y = chunks[index].y - chunk.y;
+					const away = index < pivot ? -sine : sine;
+					nextX[index] = chunk.x + x * cosine - y * away;
+					nextY[index] = chunk.y + x * away + y * cosine;
+				}
+				const width = to - from + 1;
+				let driftX = 0;
+				let driftY = 0;
+				let centerX = 0;
+				let centerY = 0;
+				for (let index = from; index <= to; index++) {
+					driftX += nextX[index] - chunks[index].x;
+					driftY += nextY[index] - chunks[index].y;
+					centerX += chunks[index].x;
+					centerY += chunks[index].y;
+				}
+				driftX /= width;
+				driftY /= width;
+				centerX /= width;
+				centerY /= width;
+				let moment = 0;
+				let inertia = 0;
+				for (let index = from; index <= to; index++) {
+					const rx = chunks[index].x - centerX;
+					const ry = chunks[index].y - centerY;
+					moment += rx * (nextY[index] - chunks[index].y - driftY) - ry * (nextX[index] - chunks[index].x - driftX);
+					inertia += rx * rx + ry * ry;
+				}
+				const spin = inertia > 1e-12 ? moment / inertia : 0;
+				for (let index = from; index <= to; index++) {
+					const rx = chunks[index].x - centerX;
+					const ry = chunks[index].y - centerY;
+					chunks[index].x = nextX[index] - driftX + spin * ry;
+					chunks[index].y = nextY[index] - driftY - spin * rx;
+				}
+			}
+		}
+		response(chunks, into = []) {
+			const targets = this.targets;
+			into.length = 0;
+			for (let index = 1; index < chunks.length - 1; index++) {
+				const before = chunks[index - 1];
+				const chunk = chunks[index];
+				const after = chunks[index + 1];
+				const ax = chunk.x - before.x;
+				const ay = chunk.y - before.y;
+				const bx = after.x - chunk.x;
+				const by = after.y - chunk.y;
+				into.push({
+					joint: index,
+					commanded: targets[index],
+					delivered: Math.atan2(ax * by - ay * bx, ax * bx + ay * by)
+				});
+			}
+			return into;
+		}
+	};
+
+//#endregion
 //#region ../beefwife/src/body.mjs
 /** Schema-v1 Verlet chain. Private state is owned by one Beefwife instance. */
 	var TAU$1 = Math.PI * 2;
@@ -1034,6 +1168,7 @@ pixi_js = __toESM(pixi_js, 1);
 				contact: 1
 			}));
 			this.linkTargets = new Float64Array(model.links.length);
+			this.bend = new Bend(model.chunks.length);
 			this.breathingShiftX = new Float64Array(model.chunks.length);
 			this.breathingShiftY = new Float64Array(model.chunks.length);
 			this.liftOrder = model.chunks.map((_, index) => index);
@@ -1144,8 +1279,9 @@ pixi_js = __toESM(pixi_js, 1);
 			this._updateTangentsAndAxis(dt);
 			this._applyBreathing();
 			this._integrate(dt, throttle);
-			this._applyBend(throttle, this._steer(direction, dt));
 			this._updateLinkTargets(throttle);
+			this.bend.update(this.model, this.gait, this.tables, this.linkTargets, throttle, this._steer(direction, dt));
+			this.bend.relax(this.chunks, this.tables.jointCorrectionHalf);
 			for (let pass = 0; pass < RELAX_PASSES; pass++) this._relaxLinks();
 			this._clampLinks();
 			this._applyAutoLift(dt, throttle);
@@ -1271,44 +1407,6 @@ pixi_js = __toESM(pixi_js, 1);
 			const wanted = -Math.max(-steering.limit, Math.min(steering.limit, error * steering.gain));
 			this.steeringBias += (wanted - this.steeringBias) * Math.min(1, dt * steering.rate);
 			return this.steeringBias;
-		}
-		_applyBend(throttle, bias) {
-			const channel = this.model.gait.bend;
-			const phase = channel.harmonic * this.gait.phase;
-			const phaseSine = Math.sin(phase);
-			const phaseCosine = Math.cos(phase);
-			const chunks = this.chunks;
-			const last = chunks.length - 1;
-			const amplitude = channel.amplitude;
-			const biasThrottle = bias * throttle;
-			const { motionBend, bendPhaseSine, bendPhaseCosine, bendScale, jointCorrectionHalf } = this.tables;
-			let before = chunks[0];
-			let chunk = chunks[1];
-			for (let index = 1; index < last; index++) {
-				const after = chunks[index + 1];
-				const ax = chunk.x - before.x;
-				const ay = chunk.y - before.y;
-				const bx = after.x - chunk.x;
-				const by = after.y - chunk.y;
-				const turn = Math.atan2(ax * by - ay * bx, ax * bx + ay * by);
-				const correction = ((amplitude * motionBend[index] * throttle * (phaseSine * bendPhaseCosine[index] + phaseCosine * bendPhaseSine[index]) + biasThrottle) * bendScale[index] - turn) * jointCorrectionHalf[index];
-				const cosine = Math.cos(correction);
-				const sine = Math.sin(correction);
-				const nextBeforeX = chunk.x - (ax * cosine + ay * sine);
-				const nextBeforeY = chunk.y - (ay * cosine - ax * sine);
-				const nextAfterX = chunk.x + (bx * cosine - by * sine);
-				const nextAfterY = chunk.y + (bx * sine + by * cosine);
-				const shiftX = (nextBeforeX - before.x + (nextAfterX - after.x)) / 3;
-				const shiftY = (nextBeforeY - before.y + (nextAfterY - after.y)) / 3;
-				before.x = nextBeforeX - shiftX;
-				before.y = nextBeforeY - shiftY;
-				after.x = nextAfterX - shiftX;
-				after.y = nextAfterY - shiftY;
-				chunk.x -= shiftX;
-				chunk.y -= shiftY;
-				before = chunk;
-				chunk = after;
-			}
 		}
 		_updateLinkTargets(throttle) {
 			const channel = this.model.gait.gather;

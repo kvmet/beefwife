@@ -64,6 +64,7 @@ try {
     "beefwife.min.js",
     "package.json",
     "src/beefwife.mjs",
+    "src/bend.mjs",
     "src/body.mjs",
     "src/carry.mjs",
     "src/descriptor.mjs",

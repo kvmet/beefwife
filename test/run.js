@@ -9,6 +9,7 @@ const files = [
   "test/beefwife/model.test.js",
   "test/beefwife/gait.test.js",
   "test/beefwife/body.test.js",
+  "test/beefwife/bend.test.js",
   "test/beefwife/legs.test.js",
   "test/beefwife/rates.test.js",
   "test/beefwife/limb.test.js",
