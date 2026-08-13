@@ -1,12 +1,15 @@
 /**
  * What a shape instance costs to place, retained against batched.
  *
- * Every foot, plate and ornament is its own Graphics, and the library only
- * writes a transform onto each one per frame; Pixi turns those into vertices
- * at render time. The alternative is one mesh per shape family with the
- * instances written into a vertex buffer directly. Which wins depends on how
- * many vertices a shape has, so the buffer side is swept rather than sampled,
- * and the crossover is the number the answer turns on.
+ * The library draws its feet, plates and ornaments as particles out of a baked
+ * atlas. The two arms here are what that replaced and what it could have been
+ * instead: a Graphics apiece carrying a transform, which is `retained`, and one
+ * mesh per shape family with the instances written into a vertex buffer, which
+ * is `batched`. Which of those wins depends on how many vertices a shape has,
+ * so the buffer side is swept rather than sampled, and the crossover is the
+ * number the answer turns on. The retained arm keeps its own copy of the
+ * transform write and its scale-bucket cache, because the library no longer
+ * has one to borrow.
  */
 
 import fs from "node:fs";
@@ -14,7 +17,30 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { PIXI } from "../../beefwife/src/pixi.mjs";
-import { setShapeTransform } from "../../beefwife/src/display.mjs";
+import { contextFor } from "../../beefwife/src/display.mjs";
+
+/* Contexts were cached per quantised step, 1.6% of the scale apiece, so a
+   plate riding on contact reused one instead of minting one a frame. */
+const SCALE_STEPS_PER_E = 63;
+const contexts = new Map();
+const cachedContextFor = (shape, paint, bucket) => {
+  let context = contexts.get(bucket);
+  if (!context) {
+    context = contextFor(shape, paint, Math.exp(bucket / SCALE_STEPS_PER_E));
+    contexts.set(bucket, context);
+  }
+  return context;
+};
+const setShapeTransform = (graphics, spec, x, y, dx, dy, scale, mirror) => {
+  const bucket = Math.round(Math.log(scale) * SCALE_STEPS_PER_E);
+  if (graphics.scaleBucket !== bucket) {
+    graphics.context = cachedContextFor(spec.shape, spec.paint, bucket);
+    graphics.scaleBucket = bucket;
+  }
+  graphics.position.set(x, y);
+  graphics.rotation = Math.atan2(dy, dx);
+  graphics.scale.set(1, mirror);
+};
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const descriptor = JSON.parse(
@@ -73,8 +99,6 @@ const retained = () => {
       dx[index],
       dy[index],
       scale[index],
-      1,
-      1,
       1,
     );
 };
