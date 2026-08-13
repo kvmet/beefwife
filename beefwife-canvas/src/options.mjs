@@ -14,6 +14,12 @@ const config = {
   MAX_COUNT: 1024,
   MAX_TIME_SCALE: ActorClass.MAX_TIME_SCALE,
   REBUILD_DELAY: 150, // ms debounce for terrain measurements
+  /* The frame rates live here because this layer owns them, and are stated
+     once so a mount and a direct construction cannot drift apart. A draw
+     landing between two physics updates repeats the frame before it, so
+     drawing faster than the body moves buys nothing. */
+  DEFAULT_RENDER_FPS: 24,
+  DEFAULT_PHYSICS_FPS: 60,
 };
 
 const countOf = (value) => {
@@ -49,18 +55,20 @@ const imageRenderingOf = (value) => {
     throw new RangeError("imageRendering must be auto or pixelated");
   return value;
 };
-const renderFpsOf = (value) => {
-  if (value === undefined || value === 0) return 0;
+/* Absent takes the default; an explicit 0 asks for every frame. The two read
+   the same and mean opposite things, so they are kept apart here rather than
+   at each call. */
+const rateOf = (value, fallback, name) => {
+  if (value === undefined) return fallback;
+  if (value === 0) return 0;
   if (!Number.isFinite(value) || value < 1 || value > 240)
-    throw new RangeError("renderFps must be 0 or from 1 to 240");
+    throw new RangeError(`${name} must be 0 or from 1 to 240`);
   return value;
 };
-const physicsFpsOf = (value) => {
-  if (value === undefined || value === 0) return 0;
-  if (!Number.isFinite(value) || value < 1 || value > 240)
-    throw new RangeError("physicsFps must be 0 or from 1 to 240");
-  return value;
-};
+const renderFpsOf = (value) =>
+  rateOf(value, config.DEFAULT_RENDER_FPS, "renderFps");
+const physicsFpsOf = (value) =>
+  rateOf(value, config.DEFAULT_PHYSICS_FPS, "physicsFps");
 const chooseName = (cast, weights, random) => {
   const names = Object.keys(cast);
   if (!names.length) throw new Error("cast must contain at least one beefwife");

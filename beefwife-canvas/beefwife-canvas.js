@@ -3039,10 +3039,7 @@ pixi_js = __toESM(pixi_js, 1);
 			default: false
 		},
 		descriptors: { attribute: false },
-		drawFps: {
-			type: "number",
-			default: 24
-		},
+		drawFps: { type: "number" },
 		edgeMargin: {
 			type: "number",
 			default: 25
@@ -3089,10 +3086,7 @@ pixi_js = __toESM(pixi_js, 1);
 			type: "boolean",
 			default: true
 		},
-		simulationFps: {
-			type: "number",
-			default: 60
-		},
+		simulationFps: { type: "number" },
 		sources: { type: "sources" },
 		stuckReplanSeconds: { type: "number" },
 		targetMode: {
@@ -4193,7 +4187,9 @@ pixi_js = __toESM(pixi_js, 1);
 		MAX_DT: BeefwifeCanvasActor.MAX_DT,
 		MAX_COUNT: 1024,
 		MAX_TIME_SCALE: BeefwifeCanvasActor.MAX_TIME_SCALE,
-		REBUILD_DELAY: 150
+		REBUILD_DELAY: 150,
+		DEFAULT_RENDER_FPS: 24,
+		DEFAULT_PHYSICS_FPS: 60
 	};
 	var countOf = (value) => {
 		if (!Number.isInteger(value) || value < 0 || value > config.MAX_COUNT) throw new RangeError(`count must be an integer from 0 to ${config.MAX_COUNT}`);
@@ -4223,16 +4219,14 @@ pixi_js = __toESM(pixi_js, 1);
 		if (!["auto", "pixelated"].includes(value)) throw new RangeError("imageRendering must be auto or pixelated");
 		return value;
 	};
-	var renderFpsOf = (value) => {
-		if (value === void 0 || value === 0) return 0;
-		if (!Number.isFinite(value) || value < 1 || value > 240) throw new RangeError("renderFps must be 0 or from 1 to 240");
+	var rateOf = (value, fallback, name) => {
+		if (value === void 0) return fallback;
+		if (value === 0) return 0;
+		if (!Number.isFinite(value) || value < 1 || value > 240) throw new RangeError(`${name} must be 0 or from 1 to 240`);
 		return value;
 	};
-	var physicsFpsOf = (value) => {
-		if (value === void 0 || value === 0) return 0;
-		if (!Number.isFinite(value) || value < 1 || value > 240) throw new RangeError("physicsFps must be 0 or from 1 to 240");
-		return value;
-	};
+	var renderFpsOf = (value) => rateOf(value, config.DEFAULT_RENDER_FPS, "renderFps");
+	var physicsFpsOf = (value) => rateOf(value, config.DEFAULT_PHYSICS_FPS, "physicsFps");
 	var chooseName = (cast, weights, random) => {
 		const names = Object.keys(cast);
 		if (!names.length) throw new Error("cast must contain at least one beefwife");
@@ -4425,10 +4419,17 @@ pixi_js = __toESM(pixi_js, 1);
 			this.renderOptions.pixelResolution = this.dpr;
 		}
 		syncDisplays(displays) {
+			if (this._displaysUnchanged(displays)) return;
 			const currentSet = new Set(displays);
 			for (const beefwife of this.displayed) if (!currentSet.has(beefwife) && !beefwife.destroyed) beefwife.destroy();
 			for (let index = 0; index < displays.length; index++) this.world.addChildAt(displays[index], index);
 			this.displayed = displays.slice();
+		}
+		_displaysUnchanged(displays) {
+			const displayed = this.displayed;
+			if (displayed.length !== displays.length) return false;
+			for (let index = 0; index < displays.length; index++) if (displayed[index] !== displays[index]) return false;
+			return true;
 		}
 		render() {
 			this.application.render();

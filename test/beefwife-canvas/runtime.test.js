@@ -376,6 +376,16 @@ const sceneBoundary = async () => {
       /renderFps/,
     );
   });
+  /* One knob, one meaning: a mount and a direct construction start from the
+     same rates, because only this layer states them. */
+  browser.rates = { count: 0, timeScale: 0 };
+  assert.equal(
+    vm.runInContext(
+      "((host) => `${host.renderFps},${host.physicsFps}`)(new BeefwifeCanvasRuntime(rates))",
+      browser,
+    ),
+    "24,60",
+  );
   /* Drawing faster than the simulation repeats frames, so the draw rate is
      held at the physics rate however high it was asked for, including the 0
      that otherwise means every frame. */
@@ -401,7 +411,7 @@ const sceneBoundary = async () => {
   browser.layer.destroy();
   assert.ok(log.some(([operation]) => operation === "remove"));
   assert.ok(log.some(([operation]) => operation === "destroy"));
-  return 42;
+  return 43;
 };
 
 (async () => {
