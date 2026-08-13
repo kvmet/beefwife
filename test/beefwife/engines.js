@@ -1,10 +1,15 @@
 /**
- * One substep hot loop, timed on whichever JavaScript engine runs this file.
+ * One bend-solver trigonometry choice, timed on whichever JavaScript engine
+ * runs this file.
  *
  * Beefwife ships to other people's browsers, and the engines disagree: the
  * built-in trigonometry that wins on V8 loses on JavaScriptCore, which every
  * browser on iOS uses. So this is plain script with no imports, and runs
  * anywhere.
+ *
+ * Its companion `engines-layout.js` asks the same question about how chunk
+ * state is laid out. Two files because one grew past what a reader can hold,
+ * and neither can import the other and still run under jsc.
  *
  * It times one named case per process because the cases share helpers and
  * share Math. Run together, an earlier case warms the code a later one calls,
@@ -215,69 +220,6 @@ var bendAllPoly = function () {
   }
 };
 
-/* ---- Chain state: objects against typed arrays ------------------------ */
-
-var CHUNKS = 49;
-var LINKS = CHUNKS - 1;
-var restLength = new Float64Array(LINKS);
-var linkCorrection = new Float64Array(LINKS);
-for (var k = 0; k < LINKS; k++) {
-  restLength[k] = 12 + 0.01 * k;
-  linkCorrection[k] = 0.35;
-}
-var records = [];
-for (var c = 0; c < CHUNKS; c++)
-  records.push({
-    x: c * 12,
-    y: 0,
-    px: c * 12,
-    py: 0,
-    dx: 1,
-    dy: 0,
-    idle: 0,
-    gain: 0,
-    gaitContact: 1,
-    contact: 1,
-  });
-var relaxRecords = function () {
-  var before = records[0];
-  for (var i = 0; i < LINKS; i++) {
-    var after = records[i + 1];
-    var x = after.x - before.x;
-    var y = after.y - before.y;
-    var distance = Math.sqrt(x * x + y * y) || 0.001;
-    var shift = ((distance - restLength[i]) / distance) * linkCorrection[i];
-    before.x += x * shift;
-    before.y += y * shift;
-    after.x -= x * shift;
-    after.y -= y * shift;
-    before = after;
-  }
-};
-var chunkX = new Float64Array(CHUNKS);
-var chunkY = new Float64Array(CHUNKS);
-for (var q = 0; q < CHUNKS; q++) chunkX[q] = q * 12;
-var relaxArrays = function () {
-  var beforeX = chunkX[0];
-  var beforeY = chunkY[0];
-  for (var i = 0; i < LINKS; i++) {
-    var afterX = chunkX[i + 1];
-    var afterY = chunkY[i + 1];
-    var x = afterX - beforeX;
-    var y = afterY - beforeY;
-    var distance = Math.sqrt(x * x + y * y) || 0.001;
-    var shift = ((distance - restLength[i]) / distance) * linkCorrection[i];
-    chunkX[i] = beforeX + x * shift;
-    chunkY[i] = beforeY + y * shift;
-    beforeX = afterX - x * shift;
-    beforeY = afterY - y * shift;
-  }
-  chunkX[LINKS] = beforeX;
-  chunkY[LINKS] = beforeY;
-};
-
-/* ---- Cases ------------------------------------------------------------ */
-
 /* Each reports nanoseconds for the unit named in `per`, so the driver can
    put two cases in one column without knowing what either one does. */
 var CASES = {
@@ -286,10 +228,7 @@ var CASES = {
   poly9: { run: bendPoly9, per: JOINTS },
   poly5: { run: bendPoly5, per: JOINTS },
   "all-poly": { run: bendAllPoly, per: JOINTS },
-  objects: { run: relaxRecords, per: 1 },
-  typed: { run: relaxArrays, per: 1 },
 };
-
 var argv =
   typeof process !== "undefined" && process.argv
     ? process.argv.slice(2)
