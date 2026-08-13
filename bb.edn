@@ -18,6 +18,14 @@
   {:doc "Benchmark Beefwife's per-frame cost against population size."
    :task (shell "node" "test/beefwife/benchmark.mjs")}
 
+  beefwife-engines
+  {:doc "Compare the substep hot loops on every JavaScript engine present."
+   :task (shell "node" "test/beefwife/engine-report.mjs")}
+
+  beefwife-instancing
+  {:doc "Compare retained shape transforms against batched vertices."
+   :task (shell "node" "test/beefwife/instancing.mjs")}
+
   canvas-runtime
   {:doc "Check BeefwifeCanvas routing and runtime integration."
    :task (do
