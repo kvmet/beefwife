@@ -107,6 +107,7 @@ class Graphics {
     this.ribbonCount = -1;
     // True between booking a bake and running it. See `afterPass`.
     this.baking = false;
+    this.state = null;
     this.adopt(state);
   }
 
@@ -290,6 +291,12 @@ class Graphics {
     this.atlasResolution = resolution;
     this.plan = plan;
     this._buildParticles(plan);
+    const pixelResolution = this._snapResolution();
+    this._placeParticles(
+      this.state,
+      pixelResolution,
+      pixelResolution > 0 ? 1 / pixelResolution : 0,
+    );
     for (const container of replaced) if (container) container.destroy();
     releaseAtlas(spent);
   }
@@ -512,16 +519,28 @@ class Graphics {
   sync(state, renderer = null, drawable = true) {
     if (state.model !== this.model)
       throw new Error("render state model does not match Beefwife graphics");
+    /* Held for the bake, which builds its particles between frames and has to
+       stand them somewhere. An edit arriving before the next sync leaves the
+       cast at the origin, which a dragged slider does every frame. */
+    this.state = state;
     this._syncAtlas(renderer);
     if (!drawable) return;
-    const pixelResolution =
-      this.options.roundVertices === true
-        ? (this.options.pixelResolution ?? 1)
-        : 0;
+    const pixelResolution = this._snapResolution();
     const inversePixelResolution =
       pixelResolution > 0 ? 1 / pixelResolution : 0;
     this._syncLimbs(state, pixelResolution, inversePixelResolution);
     this._syncRibbon(state, pixelResolution, inversePixelResolution);
+    this._placeParticles(state, pixelResolution, inversePixelResolution);
+  }
+
+  // Zero is what `roundVertices` false means: no snapping at all.
+  _snapResolution() {
+    return this.options.roundVertices === true
+      ? (this.options.pixelResolution ?? 1)
+      : 0;
+  }
+
+  _placeParticles(state, pixelResolution, inversePixelResolution) {
     const legs = state.legs;
     for (let index = 0; index < this.footParticles.length; index++) {
       const offset = index * state.layout.legStride;

@@ -161,6 +161,24 @@ const particlesOf = (beefwife, label) =>
   assert.equal(particlesOf(beefwife, "feet").length, morePairs.legs.pairs * 2);
   checks += 4;
 
+  /* The bake stands its new particles where the state it was booked from had
+     them. It runs between frames, so a cast left for the next sync to place
+     draws at the origin whenever an edit lands first, which is every frame of
+     a dragged slider. */
+  const rescaled = copy(morePairs);
+  rescaled.legs.skin.foot.scale *= 2;
+  beefwife.setDescriptor(rescaled);
+  await draw(beefwife);
+  const placed = particlesOf(beefwife, "feet").map(({ x, y }) => [x, y]);
+  assert.ok(placed.some(([x, y]) => x !== 0 || y !== 0));
+  await draw(beefwife);
+  assert.deepEqual(
+    particlesOf(beefwife, "feet").map(({ x, y }) => [x, y]),
+    placed,
+    "the bake left its particles for a later sync to place",
+  );
+  checks += 2;
+
   /* Overlap order is the whole promise of the retained scene, and half of it is
      invisible in a scene with no stroke and no under-layer ornament. This one
      carries every kind at once, so a swap anywhere in `_arrange` moves a band

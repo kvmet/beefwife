@@ -2342,6 +2342,7 @@ pixi_js = __toESM(pixi_js, 1);
 			this.ribbonStroke = null;
 			this.ribbonCount = -1;
 			this.baking = false;
+			this.state = null;
 			this.adopt(state);
 		}
 		adopt(state) {
@@ -2482,6 +2483,8 @@ pixi_js = __toESM(pixi_js, 1);
 			this.atlasResolution = resolution;
 			this.plan = plan;
 			this._buildParticles(plan);
+			const pixelResolution = this._snapResolution();
+			this._placeParticles(this.state, pixelResolution, pixelResolution > 0 ? 1 / pixelResolution : 0);
 			for (const container of replaced) if (container) container.destroy();
 			releaseAtlas(spent);
 		}
@@ -2597,12 +2600,19 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		sync(state, renderer = null, drawable = true) {
 			if (state.model !== this.model) throw new Error("render state model does not match Beefwife graphics");
+			this.state = state;
 			this._syncAtlas(renderer);
 			if (!drawable) return;
-			const pixelResolution = this.options.roundVertices === true ? this.options.pixelResolution ?? 1 : 0;
+			const pixelResolution = this._snapResolution();
 			const inversePixelResolution = pixelResolution > 0 ? 1 / pixelResolution : 0;
 			this._syncLimbs(state, pixelResolution, inversePixelResolution);
 			this._syncRibbon(state, pixelResolution, inversePixelResolution);
+			this._placeParticles(state, pixelResolution, inversePixelResolution);
+		}
+		_snapResolution() {
+			return this.options.roundVertices === true ? this.options.pixelResolution ?? 1 : 0;
+		}
+		_placeParticles(state, pixelResolution, inversePixelResolution) {
 			const legs = state.legs;
 			for (let index = 0; index < this.footParticles.length; index++) {
 				const offset = index * state.layout.legStride;
