@@ -27,11 +27,14 @@
   $: markerVisible = showTarget && hasTarget && targetMode === "manual";
 
   /* The runtime validates on apply; a rejected document leaves the actor on
-     its last good state, so the error is reported instead of thrown. */
+     its last good state, so the error is reported instead of thrown. The
+     library freezes what it is handed and compiles one model per object, so
+     the panels keep editing their own copy and each apply sends a new one. */
   function applyDescriptor(value) {
     if (!runtime) return;
     try {
-      for (const actor of runtime.getActors()) actor.setDescriptor(value);
+      const handed = structuredClone(value);
+      for (const actor of runtime.getActors()) actor.setDescriptor(handed);
       applyError.set(null);
     } catch (error) {
       applyError.set(error.message);
@@ -133,7 +136,7 @@
   async function mountCanvas(token = mountToken) {
     try {
       const mounted = await window.BeefwifeCanvas.mount(canvas, {
-        descriptors: [get(descriptor)],
+        descriptors: [structuredClone(get(descriptor))],
         count: 1,
         resolutionScale: Math.min(
           1,

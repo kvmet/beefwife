@@ -13,13 +13,20 @@ import {
   writeCap,
   writeLimb,
 } from "./geometry.mjs";
-import {
-  discard,
-  resizeGraphics,
-  contextFor,
-  meshFor,
-  setShapeTransform,
-} from "./display.mjs";
+import { discard, meshFor } from "./display.mjs";
+import { planAtlas, acquireAtlas, releaseAtlas } from "./atlas.mjs";
+
+// In draw order, and each band has to stay contiguous to hold that order.
+const BAND_LABELS = ["feet", "ornaments-under", "plates", "ornaments-over"];
+/* Every part moves, turns and changes size every frame; only its frame and
+   its colour hold still. */
+const PARTICLE_PROPERTIES = {
+  position: true,
+  vertex: true,
+  rotation: true,
+  uvs: false,
+  color: false,
+};
 
 class HeadlessGraphics {
   static available = false;
@@ -28,6 +35,19 @@ class HeadlessGraphics {
 
 // The widest a Beefwife world may be, so a knee cannot be pushed outside it.
 const MAX_KNEE_OFFSET = 2e9;
+
+/**
+ * Runs work once the renderer is between frames.
+ *
+ * Pixi calls `onRender` partway through executing a frame's instructions, and
+ * the renderer is one state machine: a nested `render` leaves the outer pass
+ * holding a bind group the inner one replaced, and every display object still
+ * queued draws from a texture with no source. Baking a sheet renders, and
+ * destroying one frees what the pass is reading, so neither may happen there.
+ * A microtask runs after the frame's callback returns and before the next, so
+ * work booked here sees a renderer at rest.
+ */
+const afterPass = (work) => queueMicrotask(work);
 
 class Graphics {
   static available = true;
@@ -64,9 +84,17 @@ class Graphics {
     this.parent = host.addChild(new PIXI.Container());
     this.model = state.model;
     this.options = options || {};
-    this.feet = [];
-    this.ornaments = [];
-    this.plates = [];
+    /* The shapes live in their containers, in draw order; these hold the same
+       particles flat, in the order the render state writes them. */
+    this.footParticles = [];
+    this.ornamentParticles = [];
+    this.plateParticles = [];
+    this.shapeContainers = [];
+    this.atlas = null;
+    this.atlasResolution = 0;
+    // Dropped whenever the model moves, which is what makes the frames follow.
+    this.plan = null;
+    this.legCount = 0;
     /* One set of vertices per shape, written once a frame; the mesh reads it
        for the fill and the path traces it for the stroke. */
     this.limbPositions = null;
@@ -77,42 +105,31 @@ class Graphics {
     this.ribbonFill = null;
     this.ribbonStroke = null;
     this.ribbonCount = -1;
-    this.layers = null;
+    // True between booking a bake and running it. See `afterPass`.
+    this.baking = false;
+    this.state = null;
     this.adopt(state);
   }
 
-  /* Takes on a model by changing only what it disagrees with: children come
-     and go by count, a mesh is rebuilt only when its vertex count moves or
-     its paint gains or loses a pass, and the order is settled only when the
-     cast changed. Shapes and paints are new objects on every compile, so
-     cached contexts always go. */
+  /* Takes on a model by changing only what it disagrees with: a mesh is
+     rebuilt only when its vertex count moves or its paint gains or loses a
+     pass, and the order is settled only when the cast changed. The shapes
+     follow the plan, which every compile drops, because shapes and paints are
+     new objects each time and the frames are named by what they draw. */
   adopt(state) {
     this.model = state.model;
-    const legCount = state.legs.length / state.layout.legStride;
-    const layers = this.model.skin.ornaments
-      .map((ornament) => ornament.layer)
-      .join("");
-    let changed = resizeGraphics(this.parent, this.feet, legCount);
-    changed =
-      resizeGraphics(
-        this.parent,
-        this.plates,
-        this.model.skin.platesTailFirst.length,
-      ) || changed;
-    changed =
-      resizeGraphics(
-        this.parent,
-        this.ornaments,
-        this.model.skin.ornaments.length,
-      ) || changed;
-    changed = this._syncLimbParts(legCount) || changed;
+    this.legCount = state.legs.length / state.layout.legStride;
+    /* The plan goes, and with it the particles it named: they hold frames
+       baked for the model being replaced, and the state arriving now is
+       written for the new one. They draw where they last stood until the
+       bake lands. */
+    this.plan = null;
+    this.footParticles = [];
+    this.ornamentParticles = [];
+    this.plateParticles = [];
+    let changed = this._syncLimbParts(this.legCount);
     changed = this._syncRibbonParts() || changed;
-    if (changed || layers !== this.layers) {
-      this.layers = layers;
-      this._arrange();
-    }
-    for (const child of [...this.feet, ...this.ornaments, ...this.plates])
-      child.scaleBucket = null;
+    if (changed) this._arrange();
     this.sync(state);
   }
 
@@ -192,23 +209,116 @@ class Graphics {
   /* Feet sit under the limbs, then the under ornaments, the ribbon, the
      plates tail to head, and the over ornaments. Re-adding a child the
      parent already holds moves it to the end, so this one pass settles the
-     whole order however the cast changed. */
+     whole order however the cast changed. A container is one display object,
+     which is why each of the four bands has to be contiguous. */
   _arrange() {
-    const onLayer = (layer) =>
-      this.ornaments.filter(
-        (_, index) => this.model.skin.ornaments[index].layer === layer,
-      );
+    const [feet, under, plates, over] = this.shapeContainers;
     for (const child of [
-      ...this.feet,
+      feet,
       this.limbFill,
       this.limbStroke,
-      ...onLayer("under"),
+      under,
       this.ribbonFill,
       this.ribbonStroke,
-      ...this.plates,
-      ...onLayer("over"),
+      plates,
+      over,
     ])
       if (child) this.parent.addChild(child);
+  }
+
+  /* One particle per placement, holding the frame baked for the largest that
+     placement ever draws. A placement with no frame, which is a plate a
+     profile scaled to nothing, keeps its slot and draws nothing. */
+  _buildParticles(plan) {
+    const bands = [null, null, null, null];
+    const bandFor = (index) => {
+      if (!bands[index])
+        bands[index] = new PIXI.ParticleContainer({
+          label: BAND_LABELS[index],
+          dynamicProperties: PARTICLE_PROPERTIES,
+        });
+      return bands[index];
+    };
+    const place = (index, key) => {
+      const frame = key === null ? null : this.atlas.frames.get(key);
+      if (!frame) return null;
+      const particle = new PIXI.Particle({
+        texture: frame.texture,
+        anchorX: frame.anchorX,
+        anchorY: frame.anchorY,
+      });
+      particle.bakeScale = frame.scale;
+      bandFor(index).addParticle(particle);
+      return particle;
+    };
+    this.footParticles = Array.from({ length: this.legCount }, () =>
+      place(0, plan.feet),
+    );
+    this.ornamentParticles = plan.ornaments.map((key, index) =>
+      place(this.model.skin.ornaments[index].layer === "under" ? 1 : 3, key),
+    );
+    this.plateParticles = plan.plates.map((key) => place(2, key));
+    this.shapeContainers = bands;
+    this._arrange();
+  }
+
+  /* The renderer arrives with Pixi's own render callback, which is the first
+     moment a beefwife is certain to have one. Until then the shapes have no
+     frames and the creature draws as its meshes alone, for one frame. The
+     bake itself waits for the pass to end, so this only books it. */
+  _syncAtlas(renderer) {
+    if (
+      this.plan &&
+      this.atlasResolution === (this.options.pixelResolution ?? 1)
+    )
+      return;
+    if (!renderer || this.baking) return;
+    this.baking = true;
+    afterPass(() => {
+      this.baking = false;
+      if (!this.parent.destroyed) this._bake(renderer);
+    });
+  }
+
+  _bake(renderer) {
+    const resolution = this.options.pixelResolution ?? 1;
+    const plan = planAtlas(this.model, resolution);
+    // Acquired before the old one goes, so a shared atlas is never rebuilt.
+    const atlas = acquireAtlas(plan, renderer);
+    const spent = this.atlas;
+    const replaced = this.shapeContainers;
+    this.atlas = atlas;
+    this.atlasResolution = resolution;
+    this.plan = plan;
+    this._buildParticles(plan);
+    const pixelResolution = this._snapResolution();
+    this._placeParticles(
+      this.state,
+      pixelResolution,
+      pixelResolution > 0 ? 1 / pixelResolution : 0,
+    );
+    for (const container of replaced) if (container) container.destroy();
+    releaseAtlas(spent);
+  }
+
+  _place(
+    particle,
+    x,
+    y,
+    directionX,
+    directionY,
+    scale,
+    mirror,
+    pixelResolution,
+    inversePixelResolution,
+  ) {
+    if (!particle) return;
+    particle.x = snapCoordinate(x, pixelResolution, inversePixelResolution);
+    particle.y = snapCoordinate(y, pixelResolution, inversePixelResolution);
+    particle.rotation = Math.atan2(directionY, directionX);
+    const drawn = scale / particle.bakeScale;
+    particle.scaleX = drawn;
+    particle.scaleY = drawn * mirror;
   }
 
   _syncLimbs(state, pixelResolution, inversePixelResolution) {
@@ -402,22 +512,40 @@ class Graphics {
     });
   }
 
-  sync(state) {
+  /* The atlas is tended before anything a caller can skip. A creature's own
+     visibility does not decide whether it rebakes: skipping that leaves
+     frames baked for a resolution the renderer has left, and strands the
+     sheet they came from. Only the geometry below answers to `drawable`. */
+  sync(state, renderer = null, drawable = true) {
     if (state.model !== this.model)
       throw new Error("render state model does not match Beefwife graphics");
-    const pixelResolution =
-      this.options.roundVertices === true
-        ? (this.options.pixelResolution ?? 1)
-        : 0;
+    /* Held for the bake, which builds its particles between frames and has to
+       stand them somewhere. An edit arriving before the next sync leaves the
+       cast at the origin, which a dragged slider does every frame. */
+    this.state = state;
+    this._syncAtlas(renderer);
+    if (!drawable) return;
+    const pixelResolution = this._snapResolution();
     const inversePixelResolution =
       pixelResolution > 0 ? 1 / pixelResolution : 0;
     this._syncLimbs(state, pixelResolution, inversePixelResolution);
+    this._syncRibbon(state, pixelResolution, inversePixelResolution);
+    this._placeParticles(state, pixelResolution, inversePixelResolution);
+  }
+
+  // Zero is what `roundVertices` false means: no snapping at all.
+  _snapResolution() {
+    return this.options.roundVertices === true
+      ? (this.options.pixelResolution ?? 1)
+      : 0;
+  }
+
+  _placeParticles(state, pixelResolution, inversePixelResolution) {
     const legs = state.legs;
-    for (let index = 0; index < this.feet.length; index++) {
+    for (let index = 0; index < this.footParticles.length; index++) {
       const offset = index * state.layout.legStride;
-      setShapeTransform(
-        this.feet[index],
-        this.model.legs.skin.foot,
+      this._place(
+        this.footParticles[index],
         legs[offset + 4],
         legs[offset + 5],
         legs[offset + 6],
@@ -429,11 +557,10 @@ class Graphics {
       );
     }
     const ornaments = state.ornaments;
-    for (let index = 0; index < this.ornaments.length; index++) {
+    for (let index = 0; index < this.ornamentParticles.length; index++) {
       const offset = index * state.layout.ornamentStride;
-      setShapeTransform(
-        this.ornaments[index],
-        this.model.skin.ornaments[index],
+      this._place(
+        this.ornamentParticles[index],
         ornaments[offset],
         ornaments[offset + 1],
         ornaments[offset + 2],
@@ -444,13 +571,11 @@ class Graphics {
         inversePixelResolution,
       );
     }
-    this._syncRibbon(state, pixelResolution, inversePixelResolution);
     const plates = state.plates;
-    for (let index = 0; index < this.plates.length; index++) {
+    for (let index = 0; index < this.plateParticles.length; index++) {
       const offset = index * state.layout.plateStride;
-      setShapeTransform(
-        this.plates[index],
-        this.model.skin.platesTailFirst[index],
+      this._place(
+        this.plateParticles[index],
         plates[offset],
         plates[offset + 1],
         plates[offset + 2],
@@ -465,17 +590,17 @@ class Graphics {
 
   destroy() {
     const children = [
-      ...this.feet,
+      ...this.shapeContainers,
       this.limbFill,
       this.limbStroke,
-      ...this.ornaments,
       this.ribbonFill,
       this.ribbonStroke,
-      ...this.plates,
     ];
     for (const child of children) {
-      if (child !== null) discard(this.parent, child);
+      if (child) discard(this.parent, child);
     }
+    releaseAtlas(this.atlas);
+    this.atlas = null;
     this.parent.destroy();
   }
 }

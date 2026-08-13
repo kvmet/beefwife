@@ -321,6 +321,40 @@ const sceneBoundary = async () => {
   browser.embeddedLayer.refreshTerrain();
   assert.equal(browser.embeddedLayer.router.viewport().width, 300);
   assert.equal(browser.embeddedLayer.router.viewport().height, 200);
+
+  /* A layer of its own is fixed over the viewport, so the page scrolling
+     under it moves every obstacle it measured. An embedded canvas scrolls
+     with those obstacles and keeps its measurement, unless its knee field is
+     centred on the viewport, which the scroll moves. */
+  const scrolls = (layer) => {
+    layer.rebuildTimer = null;
+    layer._onScroll();
+    return layer.rebuildTimer !== null;
+  };
+  assert.ok(scrolls(browser.layer), "a fixed layer ignored a scroll");
+  assert.ok(
+    scrolls(browser.embeddedLayer),
+    "a viewport-centred knee field ignored a scroll",
+  );
+  browser.stillCanvas = {
+    style: {},
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 300, height: 200 }),
+    remove() {},
+  };
+  browser.stillLayer = await vm.runInContext(
+    `BeefwifeCanvasRuntime.create({
+      canvas: stillCanvas,
+      cast: { [testDescriptor.name]: testDescriptor },
+      count: 0,
+    })`,
+    browser,
+  );
+  assert.equal(
+    scrolls(browser.stillLayer),
+    false,
+    "an embedded layer re-measured a scroll that moved nothing",
+  );
+  browser.stillLayer.destroy();
   browser.embeddedLayer.destroy();
   assert.ok(!log.some(([operation]) => operation === "embedded-remove"));
 
@@ -344,6 +378,53 @@ const sceneBoundary = async () => {
     browser.physicsSteps.every((seconds) => Math.abs(seconds - 1 / 60) < 1e-12),
   );
   assert.equal(browser.renderTicks, 3);
+
+  /* The rate is a ceiling on ticks, not a promise about wall time. A frame
+     that arrives 12 slots late drops the 11 it missed and steps once, because
+     replaying them costs a host that is already behind more than it owes.
+     `timeScale` multiplies whatever this step is, so a step that grows under
+     load grows the stall that produced it. */
+  vm.runInContext(
+    `globalThis.stalledSteps = [];
+     globalThis.stalled = new BeefwifeCanvasRuntime({
+       cast: { [testDescriptor.name]: testDescriptor },
+       count: 0,
+       physicsFps: 60,
+     });
+     stalled.terrain.build();
+     stalled.population.actors = [{ update: (dt) => stalledSteps.push(dt) }];
+     stalled._draw = () => {};
+     [1000, 1016.7, 1216.7, 1233.4].forEach((time) => stalled._tick(time));`,
+    browser,
+  );
+  assert.equal(browser.stalledSteps.length, 3);
+  assert.ok(
+    browser.stalledSteps.every((seconds) => Math.abs(seconds - 1 / 60) < 1e-12),
+    "a stalled frame replayed the slots it missed",
+  );
+
+  /* A slow rate asks for fewer, larger steps, not for slow motion. The
+     substep size is fixed, so a tenth of a second here is six substeps at
+     ordinary speed, and lowering the rate saves the routing between them
+     rather than any of the physics. */
+  vm.runInContext(
+    `globalThis.sparseSteps = [];
+     globalThis.sparse = new BeefwifeCanvasRuntime({
+       cast: { [testDescriptor.name]: testDescriptor },
+       count: 0,
+       physicsFps: 10,
+     });
+     sparse.terrain.build();
+     sparse.population.actors = [{ update: (dt) => sparseSteps.push(dt) }];
+     sparse._draw = () => {};
+     for (let n = 0; n <= 5; n++) sparse._tick(1000 + n * 100);`,
+    browser,
+  );
+  assert.equal(browser.sparseSteps.length, 5);
+  assert.ok(
+    browser.sparseSteps.every((seconds) => Math.abs(seconds - 0.1) < 1e-12),
+    "a slow physics rate ran in slow motion",
+  );
 
   [0.125, 0.2, 1].forEach((resolutionScale) => {
     browser.goodValue = resolutionScale;
@@ -376,10 +457,54 @@ const sceneBoundary = async () => {
       /renderFps/,
     );
   });
+  /* One knob, one meaning: a mount and a direct construction start from the
+     same rates, because only this layer states them. */
+  browser.rates = { count: 0, timeScale: 0 };
+  assert.equal(
+    vm.runInContext(
+      "((host) => `${host.renderFps},${host.physicsFps}`)(new BeefwifeCanvasRuntime(rates))",
+      browser,
+    ),
+    "24,60",
+  );
+  /* A draw rate of 0 asks to match the physics rate. A physics rate has no
+     such reading: the substep size is fixed, so ticking above the rate
+     simulates nothing more and there is nothing above it to match. */
+  [-1, 0, 0.5, 241, Infinity].forEach((physicsFps) => {
+    browser.badValue = physicsFps;
+    assert.throws(
+      () =>
+        vm.runInContext(
+          "new BeefwifeCanvasRuntime({ physicsFps: badValue })",
+          browser,
+        ),
+      /physicsFps/,
+    );
+  });
+  /* Drawing faster than the simulation repeats frames, so the draw rate is
+     held at the physics rate however high it was asked for. */
+  [
+    [0, 60, 60],
+    [120, 60, 60],
+    [60, 30, 30],
+    [24, 60, 24],
+    [120, 10, 10],
+  ].forEach(([renderFps, physicsFps, expected]) => {
+    browser.rates = { renderFps, physicsFps, count: 0, timeScale: 0 };
+    const capped = vm.runInContext(
+      "new BeefwifeCanvasRuntime(rates).renderFps",
+      browser,
+    );
+    assert.equal(
+      capped,
+      expected,
+      `renderFps ${renderFps} with physicsFps ${physicsFps}`,
+    );
+  });
   browser.layer.destroy();
   assert.ok(log.some(([operation]) => operation === "remove"));
   assert.ok(log.some(([operation]) => operation === "destroy"));
-  return 42;
+  return 55;
 };
 
 (async () => {

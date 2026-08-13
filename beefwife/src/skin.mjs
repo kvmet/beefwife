@@ -44,18 +44,20 @@ const springCoefficients = (ornament, rate, zeta, dt) => {
   ornament.velocityVelocity = decay * (cosine - lean * sine);
 };
 
-const rootFor = (ornament, body, root) => {
-  const chunk = body.chunks[ornament.chunk];
+const rootFor = (ornament, chain, root) => {
+  const at = ornament.chunk;
+  const dx = chain.dx[at];
+  const dy = chain.dy[at];
   root.x =
-    chunk.x +
-    chunk.dx * ornament.offset.forward -
-    chunk.dy * ornament.offset.outward * ornament.sideSign;
+    chain.x[at] +
+    dx * ornament.offset.forward -
+    dy * ornament.offset.outward * ornament.sideSign;
   root.y =
-    chunk.y +
-    chunk.dy * ornament.offset.forward +
-    chunk.dx * ornament.offset.outward * ornament.sideSign;
-  root.dx = chunk.dx * ornament.angleCosine - chunk.dy * ornament.angleSine;
-  root.dy = chunk.dy * ornament.angleCosine + chunk.dx * ornament.angleSine;
+    chain.y[at] +
+    dy * ornament.offset.forward +
+    dx * ornament.offset.outward * ornament.sideSign;
+  root.dx = dx * ornament.angleCosine - dy * ornament.angleSine;
+  root.dy = dy * ornament.angleCosine + dx * ornament.angleSine;
   return root;
 };
 
@@ -81,6 +83,9 @@ class Skin {
     this.body = body;
     this.legs = legs;
     this.joint = { x: 0, y: 0 };
+    /* A leg needs its hip as a point record, and there are a dozen legs
+       against fifty chunks, so one reused record costs nothing here. */
+    this.hip = { x: 0, y: 0, dx: 0, dy: 0 };
     this.ornaments = [];
     this._buildOrnaments();
   }
@@ -100,7 +105,7 @@ class Skin {
 
   _buildOrnaments() {
     this.ornaments = this.model.skin.ornaments.map((spec) => {
-      const root = rootFor(spec, this.body, {});
+      const root = rootFor(spec, this.body.chain, {});
       return {
         spec,
         root,
@@ -125,7 +130,7 @@ class Skin {
     if (!state) state = { layout: RENDER_LAYOUT };
     state.model = this.model;
     const lengths = {
-      chunks: this.body.chunks.length * RENDER_LAYOUT.chunkStride,
+      chunks: this.body.chain.count * RENDER_LAYOUT.chunkStride,
       legs: this.legs.legs.length * RENDER_LAYOUT.legStride,
       ornaments: this.ornaments.length * RENDER_LAYOUT.ornamentStride,
       plates:
@@ -140,14 +145,14 @@ class Skin {
 
   writeRenderState(state) {
     state = this._fitRenderState(state);
+    const chain = this.body.chain;
     const chunkStride = RENDER_LAYOUT.chunkStride;
-    for (let index = 0; index < this.body.chunks.length; index++) {
-      const chunk = this.body.chunks[index];
+    for (let index = 0; index < chain.count; index++) {
       const offset = index * chunkStride;
-      state.chunks[offset] = chunk.x;
-      state.chunks[offset + 1] = chunk.y;
-      state.chunks[offset + 2] = chunk.dx;
-      state.chunks[offset + 3] = chunk.dy;
+      state.chunks[offset] = chain.x[index];
+      state.chunks[offset + 1] = chain.y[index];
+      state.chunks[offset + 2] = chain.dx[index];
+      state.chunks[offset + 3] = chain.dy[index];
     }
 
     const foot = this.model.legs.skin.foot;
@@ -161,7 +166,11 @@ class Skin {
     const { jointBend, jointLeanCenter } = this.model.legs;
     for (let index = 0; index < this.legs.legs.length; index++) {
       const leg = this.legs.legs[index];
-      const hip = this.body.chunks[leg.anchor];
+      const hip = this.hip;
+      hip.x = chain.x[leg.anchor];
+      hip.y = chain.y[leg.anchor];
+      hip.dx = chain.dx[leg.anchor];
+      hip.dy = chain.dy[leg.anchor];
       const arm = this.legs.armLength(leg);
       const joint = jointFor(
         hip,
@@ -209,16 +218,16 @@ class Skin {
     const plateStride = RENDER_LAYOUT.plateStride;
     for (let index = 0; index < plates.length; index++) {
       const plate = plates[index];
-      const chunk = this.body.chunks[plate.chunk];
+      const at = plate.chunk;
       const offset = index * plateStride;
-      state.plates[offset] = chunk.x;
-      state.plates[offset + 1] = chunk.y;
-      state.plates[offset + 2] = chunk.dx;
-      state.plates[offset + 3] = chunk.dy;
+      state.plates[offset] = chain.x[at];
+      state.plates[offset + 1] = chain.y[at];
+      state.plates[offset + 2] = chain.dx[at];
+      state.plates[offset + 3] = chain.dy[at];
       state.plates[offset + 4] =
         plate.scale *
-        this.model.chunks[plate.chunk].plateScale *
-        (1 + this.model.skin.loadScale * this.body.chunks[plate.chunk].contact);
+        this.model.chunks[at].plateScale *
+        (1 + this.model.skin.loadScale * chain.contact[at]);
     }
     return state;
   }
@@ -228,7 +237,7 @@ class Skin {
       const ornament = this.ornaments[index];
       const { spec } = ornament;
       const previousRoot = ornament.root;
-      const root = rootFor(spec, this.body, ornament.nextRoot);
+      const root = rootFor(spec, this.body.chain, ornament.nextRoot);
       if (ornament.coefficientDt !== dt) {
         ornament.coefficientDt = dt;
         springCoefficients(

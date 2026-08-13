@@ -17,7 +17,44 @@ class HeadlessContainer {
 }
 const Container = available ? PIXI.Container : HeadlessContainer;
 
-const MAX_STEP_SECONDS = 0.05;
+/* One compiled model per descriptor, shared by every creature built from it.
+   `Model.compile` deep-freezes what it returns, so topology is the same object
+   for the whole cast and only body state differs between instances. Held
+   weakly against the descriptor the caller passed, so a model lives exactly as
+   long as something still refers to what made it.
+
+   A descriptor is a value. Mutating one in place and handing the same object
+   back returns the model compiled for its old contents; pass a replacement
+   instead. */
+const compiled = new WeakMap();
+
+const freezeDeep = (value) => {
+  if (!value || typeof value !== "object" || Object.isFrozen(value))
+    return value;
+  Object.values(value).forEach(freezeDeep);
+  return Object.freeze(value);
+};
+
+/**
+ * One model per descriptor object, so a cast of a thousand compiles once.
+ *
+ * The cache is keyed on the object, which makes the object the promise: edit
+ * one in place after handing it over and every creature drawn from it keeps
+ * the model built before the edit. Freezing it turns that into a throw at the
+ * line doing the editing. Pass a copy to change a descriptor.
+ */
+const modelFor = (descriptor) => {
+  /* A primitive key reads as a miss rather than throwing, so an invalid
+     descriptor reaches the validator and fails there as it always did. */
+  const held = compiled.get(descriptor);
+  if (held) return held;
+  const model = Model.compile(descriptor);
+  Graphics.prepare(model);
+  compiled.set(descriptor, model);
+  freezeDeep(descriptor);
+  return model;
+};
+
 const MAX_WORLD_COORDINATE = 1e9;
 const MIN_PIXEL_RESOLUTION = 1e-6;
 const MAX_PIXEL_RESOLUTION = 1e6;
@@ -196,7 +233,7 @@ const newPose = () => ({
 });
 
 const bodyFitsWorld = (body) =>
-  body.fitsTranslation({ x: 0, y: 0 }, MAX_WORLD_COORDINATE);
+  body.chain.fitsTranslation({ x: 0, y: 0 }, MAX_WORLD_COORDINATE);
 
 const sameTopology = (before, after) =>
   ["head", "trunk", "tail"].every(
@@ -255,8 +292,7 @@ class Beefwife extends Container {
     this.#random = options.random ?? Math.random;
     this.#renderOptions = renderOptionsOf(options.render);
     this.#requestedDirection = { ...facing };
-    this.#model = Model.compile(descriptor);
-    Graphics.prepare(this.#model);
+    this.#model = modelFor(descriptor);
     this.#gait = new Gait(this.#model.gait, phase);
     const breathingPhase = this.#model.breathing.strain
       ? TAU * this.#sampleRandom()
@@ -275,7 +311,11 @@ class Beefwife extends Container {
     this.#skin = new Skin(this.#model, this.#body, this.#legs);
     this.#refreshPose();
     this.label = this.#model.descriptor.name;
-    this.onRender = Graphics.available ? () => this.#syncGraphics() : null;
+    /* Pixi hands the renderer to this callback, and it is the only place a
+       beefwife is sure to see one; the shape frames are baked from it. */
+    this.onRender = Graphics.available
+      ? (renderer) => this.#syncGraphics(renderer)
+      : null;
     this.#replaceGraphics();
   }
 
@@ -306,15 +346,15 @@ class Beefwife extends Container {
     );
     this.#stepThrottle = throttle;
     const stepped = this.#body.step(
-      Math.min(dt, MAX_STEP_SECONDS),
+      dt,
       throttle,
       wanted,
       this.#updateDependents,
     );
     if (stepped) {
-      const correction = this.#body.worldCorrection(MAX_WORLD_COORDINATE);
+      const correction = this.#body.chain.worldCorrection(MAX_WORLD_COORDINATE);
       if (correction.x || correction.y) {
-        this.#body.translate(correction);
+        this.#body.chain.translate(correction);
         this.#legs.translate(correction);
         this.#skin.translate(correction);
       }
@@ -324,8 +364,7 @@ class Beefwife extends Container {
 
   setDescriptor(descriptor) {
     this.#live("setDescriptor");
-    const nextModel = Model.compile(descriptor);
-    Graphics.prepare(nextModel);
+    const nextModel = modelFor(descriptor);
     const nextGait = new Gait(nextModel.gait, this.#gait.phase);
     const breathingPhase =
       !this.#model.breathing.strain && nextModel.breathing.strain
@@ -413,9 +452,9 @@ class Beefwife extends Container {
   translate(rawOffset) {
     this.#live("translate");
     const offset = worldPoint(rawOffset, null, "offset");
-    if (!this.#body.fitsTranslation(offset, MAX_WORLD_COORDINATE))
+    if (!this.#body.chain.fitsTranslation(offset, MAX_WORLD_COORDINATE))
       throw new RangeError("offset places the body outside the world");
-    this.#body.translate(offset);
+    this.#body.chain.translate(offset);
     this.#legs.translate(offset);
     this.#skin.translate(offset);
     this.#refreshPose();
@@ -423,6 +462,17 @@ class Beefwife extends Container {
 
   getPose() {
     return this.#pose;
+  }
+
+  /* The turn the gait asked each joint for against the turn it is making, so
+     an author can see what a `gait.bend` amplitude actually buys on this body.
+     Delivery is capped by `grip.lateral`, which resists the sideways motion
+     bending is, and by how far the solver gets in a substep, and neither is
+     visible in the descriptor. Both angles are radians, positive to the left.
+     Pass an array to fill to avoid allocating one a frame. */
+  getBendResponse(into) {
+    this.#live("getBendResponse");
+    return this.#body.bend.response(this.#body.chain, into);
   }
 
   destroy(options) {
@@ -467,16 +517,18 @@ class Beefwife extends Container {
       );
   }
 
-  #syncGraphics() {
-    this.#renderState = this.#skin.writeRenderState(this.#renderState);
-    this.#graphics.sync(this.#renderState);
+  /* Pixi runs a container's render callback whatever its visibility, so a
+     creature the host has hidden would otherwise rebuild every vertex and
+     place every particle for a frame nobody sees. Stepping is unaffected;
+     only the drawing is skipped. */
+  #syncGraphics(renderer = null) {
+    const drawable = this.visible && this.renderable;
+    if (drawable)
+      this.#renderState = this.#skin.writeRenderState(this.#renderState);
+    this.#graphics.sync(this.#renderState, renderer, drawable);
   }
 }
 
-Object.defineProperty(Beefwife, "MAX_STEP_SECONDS", {
-  value: MAX_STEP_SECONDS,
-  enumerable: true,
-});
 Object.defineProperty(Beefwife, "MAX_WORLD_COORDINATE", {
   value: MAX_WORLD_COORDINATE,
   enumerable: true,

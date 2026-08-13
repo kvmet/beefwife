@@ -120,7 +120,31 @@ for the life of that renderer, so a remount cannot change it.
 Performance and appearance options are `resolutionScale`, `roundVertices`,
 `antialias`, `simulationFps`, `drawFps`, `maxPixelRatio`, `imageRendering`,
 `kneePerspective`, `maxKneeOffset`, `kneeProjectionCenter`, and programmatic
-`filters`. Knee perspective affects leg-knee rendering only; planted feet and
+`filters`. `drawFps` is held at `simulationFps`, because a draw between two
+simulation steps repeats the frame before it. `simulationFps` defaults to 60
+and `drawFps` to 24; both accept 1 through 240, and a `drawFps` of zero asks
+for the `simulationFps` ceiling by name.
+
+The substep size is fixed, so a simulated second always costs the same number
+of substeps however `simulationFps` batches them. Lowering it buys fewer,
+larger steps and the routing saved between them, not cheaper physics: 10
+against 60 saves 8% of the simulation cost at 400 creatures. It also steers
+more coarsely, because a route advances once a tick, so creatures take
+visibly different paths. To spend less on physics, lower `timeScale`, which
+reduces simulated seconds per real second and says so by moving the creature
+slower. `drawFps` is the knob that pays without touching behaviour.
+
+A host that cannot deliver `simulationFps` is not the same as a lower
+`simulationFps`. It plays slower and follows the same path, because each tick
+steps once whatever the frame took, so the route still advances one 60th of a
+second at a time.
+
+Rates need not divide each other. A step that is not a whole number of
+substeps carries its remainder, so `simulationFps` of 24 or a `timeScale` of
+0.7 stays within one substep of exact for any run length rather than drifting.
+
+Knee perspective affects
+leg-knee rendering only; planted feet and
 the simulated body are unchanged. `kneeProjectionCenter` is
 `canvas` by default; `viewport` makes separate canvases share one apparent
 knee-projection field. `resolutionScale` accepts 0.125 through 1 and defaults

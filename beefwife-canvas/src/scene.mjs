@@ -128,7 +128,12 @@ class BeefwifeCanvasScene {
     this.renderOptions.pixelResolution = this.dpr;
   }
 
+  /* The cast changes only when a creature spawns or is recycled, but this
+     runs every draw, and re-adding a child is Pixi reordering the world's
+     children. Comparing first is one pass and no allocation, against a set,
+     a lookup a creature, an `addChildAt` a creature and a copy. */
   syncDisplays(displays) {
+    if (this._displaysUnchanged(displays)) return;
     const currentSet = new Set(displays);
     for (const beefwife of this.displayed) {
       if (!currentSet.has(beefwife) && !beefwife.destroyed) beefwife.destroy();
@@ -136,6 +141,15 @@ class BeefwifeCanvasScene {
     for (let index = 0; index < displays.length; index++)
       this.world.addChildAt(displays[index], index);
     this.displayed = displays.slice();
+  }
+
+  // Order carries the draw order, so a reshuffle counts as a change.
+  _displaysUnchanged(displays) {
+    const displayed = this.displayed;
+    if (displayed.length !== displays.length) return false;
+    for (let index = 0; index < displays.length; index++)
+      if (displayed[index] !== displays[index]) return false;
+    return true;
   }
 
   render() {

@@ -221,7 +221,7 @@ const stoppedPose = JSON.parse(JSON.stringify(actor.beefwife.getPose()));
 actor.update(1 / 60, 0);
 assert.deepEqual(actor.beefwife.getPose(), stoppedPose);
 assert.throws(() => actor.update(1 / 60, Infinity), /timeScale/);
-assert.throws(() => actor.update(1, 1), /dt/);
+assert.throws(() => actor.update(-1, 1), /dt/);
 actor.update(1 / 60, 1);
 assert.deepEqual(actor.heading, { x: 1, y: 0 });
 checks += 8;

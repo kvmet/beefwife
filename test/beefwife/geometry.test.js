@@ -385,8 +385,12 @@ const limbCount = bentLeggedSource.legs.pairs * 2;
 const strokedSource = copy(bentLeggedSource);
 strokedSource.definitions.paints.leg.stroke = { colour: "#ffffff", width: 2 };
 const strokedLegs = new Beefwife(strokedSource, { random: () => 0.5 });
-const strokedFill = partsOf(strokedLegs)[limbCount];
-const strokedOutline = partsOf(strokedLegs)[limbCount + 1];
+/* The shapes only take their places once a renderer has baked them, so an
+   undrawn creature holds its meshes alone and the outline follows its fill. */
+const outlineAfter = (beefwife, fill) =>
+  partsOf(beefwife)[partsOf(beefwife).indexOf(fill) + 1];
+const strokedFill = partsOf(strokedLegs).find((child) => child instanceof Mesh);
+const strokedOutline = outlineAfter(strokedLegs, strokedFill);
 assert.ok(strokedFill instanceof Mesh);
 assert.equal(
   strokedFill.tint,
@@ -432,7 +436,15 @@ strokedLegs.destroy();
 const barefootSource = copy(strokedSource);
 barefootSource.legs.skin.limbWidth = 0;
 const barefootLegs = new Beefwife(barefootSource, { random: () => 0.5 });
-assert.deepEqual(pointsOf(partsOf(barefootLegs)[limbCount + 1]), []);
+assert.deepEqual(
+  pointsOf(
+    outlineAfter(
+      barefootLegs,
+      partsOf(barefootLegs).find((child) => child instanceof Mesh),
+    ),
+  ),
+  [],
+);
 const hiddenSource = copy(bentLeggedSource);
 hiddenSource.legs.skin.limbWidth = 0;
 const hiddenLegs = new Beefwife(hiddenSource, { random: () => 0.5 });

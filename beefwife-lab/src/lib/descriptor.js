@@ -1,7 +1,8 @@
 import { writable } from "svelte/store";
 import { chevronGuy } from "./defaultBeefwife.js";
 
-/** The descriptor under edit. Stage applies every change to the live actor. */
+/* The descriptor under edit, which the panels write in place. Stage sends a
+   copy to the live actor, because the library freezes what it is handed. */
 export const descriptor = writable(structuredClone(chevronGuy));
 
 /** The values the editor started from; controls reset to these. */

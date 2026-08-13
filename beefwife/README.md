@@ -99,9 +99,10 @@ planted feet do not move. The object is retained so a host may update its center
 its viewport changes. Unknown render or projection fields are rejected.
 
 `step` owns fixed simulation substeps but never owns a clock or animation loop.
-`dt` must be finite and nonnegative seconds. Values above
-`Beefwife.MAX_STEP_SECONDS` simulate exactly that safety window and discard the
-excess, so resuming a background tab cannot create a backlog. The controls
+`dt` must be finite and nonnegative seconds, and all of it is simulated: a
+`dt` of one second costs sixty substeps. Only the host can tell a resumed
+background tab from a deliberate fast-forward, so the host bounds `dt` before
+passing it, usually to one frame of its own rate. The controls
 object is optional. Omitted direction retains the last requested direction;
 omitted throttle means full throttle. Throttle must be finite from zero to one;
 inputs are rejected rather than clamped. Throttle linearly scales gait phase
@@ -179,6 +180,14 @@ or renderer state, and changing the snapshot cannot change the simulation.
 Render bounds and collision geometry are not part of schema v1. Constructor
 input and the `descriptor` getter cannot be used to mutate the instance. Random
 variation comes only from the injected random function.
+
+A descriptor is a value. One model is compiled per descriptor object and
+shared by every creature given that object, so a cast of a thousand pays one
+compile. The object is deep-frozen when it is compiled, which is what makes
+that safe: an edit in place would otherwise leave every creature drawing the
+model built before it, silently. Pass a copy to change a descriptor, and pass
+the copy to `setDescriptor`. A host that loads its creatures once and never
+edits them, which is the ordinary case, need do nothing.
 
 `restLength` is the chain's resting arc length in world pixels, summed over
 every link and averaged across section boundaries. It follows `setDescriptor`.

@@ -42,9 +42,11 @@ const runBody = (frames, direction, throttle = 1) => {
   for (let frame = 0; frame < frames; frame++) {
     body.step(1 / 60, throttle, direction);
     model.links.forEach((link) => {
-      const before = body.chunks[link.from];
-      const after = body.chunks[link.to];
-      const actual = Math.hypot(after.x - before.x, after.y - before.y);
+      const { x, y } = body.chain;
+      const actual = Math.hypot(
+        x[link.to] - x[link.from],
+        y[link.to] - y[link.from],
+      );
       const phaseDistance =
         (model.chunks[link.from].restDistance +
           model.chunks[link.to].restDistance) /
@@ -71,21 +73,21 @@ assert.ok(maximumLinkError < 0.2);
 checks += 4;
 
 runBody(600, { x: 0, y: 1 }, 0);
-assert.ok(Math.max(...body.chunks.map((chunk) => chunk.idle)) < 1e-6);
+assert.ok(Math.max(...body.chain.idle) < 1e-6);
 checks++;
 
 const selectionGait = new Gait(model.gait);
 const selectionBody = new Body(model, selectionGait);
 selectionBody.place({ x: 0, y: 0 }, { x: 1, y: 0 });
 selectionBody.refreshContacts(0.75);
-selectionBody.chunks.forEach((chunk, index) => {
-  chunk.gain = (index % 7) - 3;
+selectionBody.chain.gain.forEach((_, index) => {
+  selectionBody.chain.gain[index] = (index % 7) - 3;
 });
 const lifted = Math.round(
-  model.physics.autoLift.share * selectionBody.chunks.length,
+  model.physics.autoLift.share * selectionBody.chain.count,
 );
-const expectedLifted = selectionBody.chunks
-  .map((chunk, index) => ({ gain: chunk.gain, index }))
+const expectedLifted = Array.from(selectionBody.chain.gain)
+  .map((gain, index) => ({ gain, index }))
   .sort(
     (before, after) => before.gain - after.gain || before.index - after.index,
   )
@@ -97,16 +99,19 @@ const actualLifted = Array.from(selectionBody.liftTargets)
   .flatMap((target, index) => (target ? [index] : []))
   .sort((before, after) => before - after);
 assert.deepEqual(actualLifted, expectedLifted);
-selectionBody.chunks.forEach((chunk) => {
+selectionBody.chain.contact.forEach((contact, index) => {
   assert.ok(
     Math.abs(
-      chunk.contact -
+      contact -
         Math.max(
           0,
           Math.min(
             1,
-            chunk.gaitContact *
-              (1 - model.physics.autoLift.amount * chunk.idle * 0.75),
+            selectionBody.chain.gaitContact[index] *
+              (1 -
+                model.physics.autoLift.amount *
+                  selectionBody.chain.idle[index] *
+                  0.75),
           ),
         ),
     ) < 1e-15,
@@ -230,9 +235,11 @@ for (const linkCorrection of [0.001, 0.05, 0.2, 0.5, 1])
     let rest = 0;
     for (let index = 0; index < model.links.length; index++) {
       const link = model.links[index];
-      const from = loose.chunks[link.from];
-      const to = loose.chunks[link.to];
-      const span = Math.hypot(to.x - from.x, to.y - from.y);
+      const { x, y } = loose.chain;
+      const span = Math.hypot(
+        x[link.to] - x[link.from],
+        y[link.to] - y[link.from],
+      );
       assert.ok(Number.isFinite(span), `${label} reached a non-finite pose`);
       const stretch = span / loose.linkTargets[index];
       if (stretch > worstStretch) worstStretch = stretch;
@@ -287,9 +294,11 @@ const seededMiddle = midGrown.nextModel.chunks
   .filter(({ spec }) => spec.section === "trunk" && spec.localIndex >= 6);
 assert.equal(seededMiddle.length, 2);
 for (const { index } of seededMiddle) {
-  const chunk = midGrown.next.chunks[index];
-  const start = midGrown.next.chunks[index - 1];
-  const end = midGrown.next.chunks[seededMiddle.at(-1).index + 1];
+  const chain = midGrown.next.chain;
+  const at = (which) => ({ x: chain.x[which], y: chain.y[which] });
+  const chunk = at(index);
+  const start = at(index - 1);
+  const end = at(seededMiddle.at(-1).index + 1);
   const along = Math.hypot(chunk.x - start.x, chunk.y - start.y);
   const span = Math.hypot(end.x - start.x, end.y - start.y);
   const off =
@@ -301,32 +310,34 @@ for (const { index } of seededMiddle) {
   assert.ok(along > 0 && along < span, "seeded chunk is outside the gap");
   // An interpolated chunk inherits the motion around it, never a dead stop.
   assert.ok(
-    Math.hypot(chunk.x - chunk.px, chunk.y - chunk.py) > 1e-9,
+    Math.hypot(chunk.x - chain.px[index], chunk.y - chain.py[index]) > 1e-9,
     "seeded chunk was given no velocity",
   );
   checks += 3;
 }
 
 const tailGrown = grown((d) => (d.chain.sections.tail.chunks = 5));
-const oldTail = tailGrown.next.chunks[tailGrown.model.chunks.length - 1];
-const tailHead = tailGrown.next.chunks[tailGrown.model.chunks.length - 2];
+const tailChain = tailGrown.next.chain;
+const lastOld = tailGrown.model.chunks.length - 1;
 const headward = {
-  x: tailHead.x - oldTail.x,
-  y: tailHead.y - oldTail.y,
+  x: tailChain.x[lastOld - 1] - tailChain.x[lastOld],
+  y: tailChain.y[lastOld - 1] - tailChain.y[lastOld],
 };
 for (
   let index = tailGrown.model.chunks.length;
   index < tailGrown.nextModel.chunks.length;
   index++
 ) {
-  const chunk = tailGrown.next.chunks[index];
-  const away = { x: chunk.x - oldTail.x, y: chunk.y - oldTail.y };
+  const away = {
+    x: tailChain.x[index] - tailChain.x[lastOld],
+    y: tailChain.y[index] - tailChain.y[lastOld],
+  };
   assert.ok(
     away.x * headward.x + away.y * headward.y < 0,
     "a chunk added past the tail was placed on the head side",
   );
-  assert.equal(chunk.px, chunk.x);
-  assert.equal(chunk.py, chunk.y);
+  assert.equal(tailChain.px[index], tailChain.x[index]);
+  assert.equal(tailChain.py[index], tailChain.y[index]);
   checks += 3;
 }
 
@@ -345,14 +356,15 @@ for (const share of [0, 0.1, 0.33, 0.5, 0.9, 1]) {
   const selection = new Body(shareModel, new Gait(shareModel.gait));
   selection.place({ x: 0, y: 0 }, { x: 1, y: 0 });
   selection.refreshContacts(0.75);
-  const lifted = Math.round(share * selection.chunks.length);
+  const lifted = Math.round(share * selection.chain.count);
   for (let trial = 0; trial < 40; trial++) {
     const spread = 1 + Math.floor(nextSample() * 8);
-    selection.chunks.forEach((chunk) => {
-      chunk.gain = Math.floor(nextSample() * spread) - spread / 2;
+    selection.chain.gain.forEach((_, index) => {
+      selection.chain.gain[index] =
+        Math.floor(nextSample() * spread) - spread / 2;
     });
-    const expected = selection.chunks
-      .map((chunk, index) => ({ gain: chunk.gain, index }))
+    const expected = Array.from(selection.chain.gain)
+      .map((gain, index) => ({ gain, index }))
       .sort(
         (before, after) =>
           before.gain - after.gain || before.index - after.index,

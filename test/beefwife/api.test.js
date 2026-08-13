@@ -49,6 +49,55 @@ assert.ok(Object.isFrozen(beefwife.descriptor.chain.sections.head));
 assert.ok(Object.isFrozen(beefwife.descriptor.chain.skin.plates[0].at));
 checks += 7;
 
+/* Topology is frozen, so a cast shares one compiled model rather than holding
+   a copy per creature: a population pays one compile, not one each. The
+   compiled descriptor is the observable end of it. */
+const shared = copy(example);
+const twin = new Beefwife(shared, { random: () => 0.5 });
+const otherTwin = new Beefwife(shared, { random: () => 0.5 });
+assert.equal(
+  twin.descriptor,
+  otherTwin.descriptor,
+  "two creatures from one descriptor compiled it twice",
+);
+/* Keyed on the object handed in, so a replacement is a different creature
+   even where its contents match. */
+const matching = new Beefwife(copy(example), { random: () => 0.5 });
+assert.notEqual(twin.descriptor, matching.descriptor);
+/* An invalid descriptor is never cached, so it fails the same way twice
+   rather than being remembered as good. */
+const broken = copy(example);
+broken.chain.sections.head.spacing = -1;
+assert.throws(() => new Beefwife(broken, {}));
+assert.throws(() => new Beefwife(broken, {}));
+/* A replacement carrying an edit compiles afresh. Editing the object already
+   handed over is the case the cache cannot see, so it is frozen on the way
+   in: the mutation throws where it is written rather than drawing the model
+   compiled before it. */
+const revised = copy(example);
+revised.definitions.paints.shell.fill = "#0abab5";
+twin.setDescriptor(revised);
+assert.equal(twin.descriptor.definitions.paints.shell.fill, "#0abab5");
+assert.ok(Object.isFrozen(shared.definitions.paints.shell));
+assert.ok(Object.isFrozen(revised.chain.sections.head));
+assert.ok(Object.isFrozen(revised.chain.skin.plates));
+/* Sloppy mode drops a write to a frozen property instead of throwing, so
+   these state the directive their callers would already have: a module. */
+assert.throws(() => {
+  "use strict";
+  shared.definitions.paints.shell.fill = "#c0ffee";
+}, TypeError);
+assert.throws(() => {
+  "use strict";
+  revised.chain.skin.plates.push({});
+}, TypeError);
+assert.equal(
+  shared.definitions.paints.shell.fill,
+  example.definitions.paints.shell.fill,
+);
+for (const creature of [twin, otherTwin, matching]) creature.destroy();
+checks += 12;
+
 const borrowedPose = beefwife.getPose();
 assert.equal(beefwife.getPose(), borrowedPose);
 borrowedPose.head.x = -100;
@@ -302,11 +351,14 @@ stressedBoundary.reset();
 assert.ok(finitePose(stressedBoundary.getPose()));
 checks += 2;
 
-const hitched = new Beefwife(example);
-const bounded = new Beefwife(example);
-hitched.step(10);
-bounded.step(Beefwife.MAX_STEP_SECONDS);
-assert.ok(samePose(hitched.getPose(), bounded.getPose()));
+/* All of dt is simulated, so one long step and the same span in slices land
+   together. Nothing here can tell a resumed background tab from a deliberate
+   fast-forward, so the host bounds dt and this does not. */
+const whole = new Beefwife(example);
+const sliced = new Beefwife(example);
+whole.step(0.5);
+for (let slice = 0; slice < 10; slice++) sliced.step(0.05);
+assert.ok(samePose(whole.getPose(), sliced.getPose()));
 checks++;
 
 const stopped = new Beefwife(example);
@@ -320,8 +372,11 @@ breathingExample.chain.breathing = 1;
 const breathAtZero = new Beefwife(breathingExample, { random: () => 0 });
 const breathAtQuarter = new Beefwife(breathingExample, { random: () => 0.25 });
 const matchingBreath = new Beefwife(breathingExample, { random: () => 0.25 });
+/* Long enough to land a substep whatever the library's substep size is; a
+   shorter step can leave every pose at its untouched starting value, which
+   would compare equal for reasons this check is not about. */
 for (const breathingBeefwife of [breathAtZero, breathAtQuarter, matchingBreath])
-  breathingBeefwife.step(1 / 120, { throttle: 0 });
+  breathingBeefwife.step(0.05, { throttle: 0 });
 assert.ok(!samePose(breathAtZero.getPose(), breathAtQuarter.getPose()));
 assert.ok(samePose(breathAtQuarter.getPose(), matchingBreath.getPose()));
 checks += 2;
@@ -342,6 +397,7 @@ assert.deepEqual(
     "constructor",
     "descriptor",
     "destroy",
+    "getBendResponse",
     "getPose",
     "reset",
     "restLength",

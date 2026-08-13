@@ -75,6 +75,11 @@
     rebuildTimer = setTimeout(onremount, 250);
   }
 
+  /* The runtime holds the draw rate at the physics rate, so a higher one here
+     would show a number the canvas does not run at. */
+  $: if (options.drawFps > options.simulationFps)
+    options.drawFps = options.simulationFps;
+
   onMount(() => (mounted = true));
   onDestroy(() => clearTimeout(rebuildTimer));
 </script>
@@ -191,7 +196,7 @@
           <div class="rows">
             <ControlRow
               label="Physics FPS"
-              tip="Simulation steps each second. Higher costs more and settles the body harder."
+              tip="Times a second the simulation wakes, and the ceiling on Draw FPS. Substep size is fixed, so a lower rate takes fewer, larger steps rather than doing less."
               digits={0}
               bind:value={options.simulationFps}
               reset={DEFAULT_OPTIONS.simulationFps}
@@ -235,12 +240,12 @@
             />
             <ControlRow
               label="Draw FPS"
-              tip="Frames drawn each second. The simulation keeps its own rate."
+              tip="Frames drawn each second. Held at Physics FPS, because a draw between two simulation steps repeats the frame before it."
               digits={0}
               bind:value={options.drawFps}
               reset={DEFAULT_OPTIONS.drawFps}
-              field={[1, 240, 1]}
-              slider={[1, 120, 1]}
+              field={[1, options.simulationFps, 1]}
+              slider={[1, Math.min(120, options.simulationFps), 1]}
             />
             <label>
               <Tooltip label="Colour treatment applied over the whole canvas."

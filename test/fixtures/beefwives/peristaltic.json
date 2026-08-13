@@ -5,7 +5,7 @@
     "materials": {
       "body": {
         "velocityRetention": 0.08853787272595737,
-        "jointCorrection": 0.179,
+        "jointCorrection": 0.5,
         "linkCorrection": 0.6,
         "grip": {
           "forward": 0.055,

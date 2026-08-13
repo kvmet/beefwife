@@ -94,8 +94,8 @@ class Legs {
         Object.assign(leg.hold, planted);
         Object.assign(leg.from, planted);
         leg.plantSpan = magnitude(
-          planted.x - this.body.chunks[anchor].x,
-          planted.y - this.body.chunks[anchor].y,
+          planted.x - this.body.chain.x[anchor],
+          planted.y - this.body.chain.y[anchor],
         );
         this.legs.push(leg);
       });
@@ -122,13 +122,14 @@ class Legs {
 
   _plantAt(leg) {
     const options = this.model.legs;
-    const hip = this.body.chunks[leg.anchor];
+    const { x, y, dx, dy } = this.body.chain;
+    const anchor = leg.anchor;
     const reach = options.reach * leg.reachScale;
     const ahead = reach * (0.5 + options.lead * 0.5) * leg.leadScale;
     const outward = options.spread * leg.spreadScale * leg.sideSign;
     return {
-      x: hip.x + hip.dx * ahead - hip.dy * outward,
-      y: hip.y + hip.dy * ahead + hip.dx * outward,
+      x: x[anchor] + dx[anchor] * ahead - dy[anchor] * outward,
+      y: y[anchor] + dy[anchor] * ahead + dx[anchor] * outward,
     };
   }
 
@@ -145,7 +146,7 @@ class Legs {
       ) *
         (1 -
           this.model.physics.autoLift.amount *
-            this.body.chunks[leg.anchor].idle *
+            this.body.chain.idle[leg.anchor] *
             throttle),
       0,
       1,
@@ -154,9 +155,13 @@ class Legs {
 
   update(dt, throttle) {
     const options = this.model.legs;
+    const chain = this.body.chain;
     for (let index = 0; index < this.legs.length; index++) {
       const leg = this.legs[index];
-      const hip = this.body.chunks[leg.anchor];
+      const hipX = chain.x[leg.anchor];
+      const hipY = chain.y[leg.anchor];
+      const hipDx = chain.dx[leg.anchor];
+      const hipDy = chain.dy[leg.anchor];
       const low = this.contactFor(leg, throttle) < leg.liftAt;
       const released = low && !leg.contactLow;
       leg.contactLow = low;
@@ -167,17 +172,17 @@ class Legs {
         const arc = Math.sin(Math.PI * leg.progress) * options.swingArc;
         leg.foot.x =
           lerp(leg.from.x, leg.hold.x, leg.progress) -
-          hip.dy * arc * leg.sideSign;
+          hipDy * arc * leg.sideSign;
         leg.foot.y =
           lerp(leg.from.y, leg.hold.y, leg.progress) +
-          hip.dx * arc * leg.sideSign;
+          hipDx * arc * leg.sideSign;
         continue;
       }
 
       Object.assign(leg.foot, leg.hold);
-      const footX = leg.foot.x - hip.x;
-      const footY = leg.foot.y - hip.y;
-      const forward = footX * hip.dx + footY * hip.dy;
+      const footX = leg.foot.x - hipX;
+      const footY = leg.foot.y - hipY;
+      const forward = footX * hipDx + footY * hipDy;
       const reach = options.reach * leg.reachScale;
       const behind = reach * (0.5 - options.lead * 0.5);
       const trailed = forward < -behind * leg.dragScale;
@@ -189,7 +194,7 @@ class Legs {
         const planted = this._plantAt(leg);
         leg.hold.x = planted.x + leg.scatter.x;
         leg.hold.y = planted.y + leg.scatter.y;
-        leg.plantSpan = magnitude(leg.hold.x - hip.x, leg.hold.y - hip.y);
+        leg.plantSpan = magnitude(leg.hold.x - hipX, leg.hold.y - hipY);
         leg.progress = 0;
         this._rollStep(leg);
         leg.contactLow = this.contactFor(leg, throttle) < leg.liftAt;

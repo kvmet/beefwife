@@ -5,10 +5,20 @@ import { BeefwifeCanvasActor as ActorClass } from "./actor.mjs";
 const DEBUG_KEYS = new Set(["routes", "targets", "terrain"]);
 // Step bounds are owned by BeefwifeCanvasActor; the host only re-exposes them.
 const config = {
-  MAX_DT: ActorClass.MAX_DT,
-  MAX_COUNT: 256, // hard limit against accidental unbounded spawning
+  /* A guard against a mistyped `count` on a mount, not a structural limit:
+     nothing here is sized against it. Set past where a page is unusable
+     anyway, so it never binds a real population. The cheapest shipped cast
+     costs 11.2us a creature a frame, which is 11.5ms of a 16.7ms frame at
+     this many. */
+  MAX_COUNT: 1024,
   MAX_TIME_SCALE: ActorClass.MAX_TIME_SCALE,
   REBUILD_DELAY: 150, // ms debounce for terrain measurements
+  /* The frame rates live here because this layer owns them, and are stated
+     once so a mount and a direct construction cannot drift apart. A draw
+     landing between two physics updates repeats the frame before it, so
+     drawing faster than the body moves buys nothing. */
+  DEFAULT_RENDER_FPS: 24,
+  DEFAULT_PHYSICS_FPS: 60,
 };
 
 const countOf = (value) => {
@@ -44,18 +54,23 @@ const imageRenderingOf = (value) => {
     throw new RangeError("imageRendering must be auto or pixelated");
   return value;
 };
+const rateOf = (value, name) => {
+  if (!Number.isFinite(value) || value < 1 || value > 240)
+    throw new RangeError(`${name} must be from 1 to 240`);
+  return value;
+};
+/* A draw rate of 0 asks to match the physics rate, which is also its ceiling.
+   A physics rate has no such reading: the substep size is fixed, so there is
+   nothing above it to match and no rate that simulates more. */
 const renderFpsOf = (value) => {
-  if (value === undefined || value === 0) return 0;
-  if (!Number.isFinite(value) || value < 1 || value > 240)
-    throw new RangeError("renderFps must be 0 or from 1 to 240");
-  return value;
+  if (value === undefined) return config.DEFAULT_RENDER_FPS;
+  if (value === 0) return 0;
+  return rateOf(value, "renderFps");
 };
-const physicsFpsOf = (value) => {
-  if (value === undefined || value === 0) return 0;
-  if (!Number.isFinite(value) || value < 1 || value > 240)
-    throw new RangeError("physicsFps must be 0 or from 1 to 240");
-  return value;
-};
+const physicsFpsOf = (value) =>
+  value === undefined
+    ? config.DEFAULT_PHYSICS_FPS
+    : rateOf(value, "physicsFps");
 const chooseName = (cast, weights, random) => {
   const names = Object.keys(cast);
   if (!names.length) throw new Error("cast must contain at least one beefwife");
