@@ -502,9 +502,15 @@ class Beefwife extends Container {
       );
   }
 
+  /* Pixi runs a container's render callback whatever its visibility, so a
+     creature the host has hidden would otherwise rebuild every vertex and
+     place every particle for a frame nobody sees. Stepping is unaffected;
+     only the drawing is skipped. */
   #syncGraphics(renderer = null) {
-    this.#renderState = this.#skin.writeRenderState(this.#renderState);
-    this.#graphics.sync(this.#renderState, renderer);
+    const drawable = this.visible && this.renderable;
+    if (drawable)
+      this.#renderState = this.#skin.writeRenderState(this.#renderState);
+    this.#graphics.sync(this.#renderState, renderer, drawable);
   }
 }
 

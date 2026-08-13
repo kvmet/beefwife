@@ -313,4 +313,48 @@ for (const [act, reason] of [
 assert.equal(beefwife.children.length, 0);
 checks++;
 
+/* Pixi runs the render callback whatever the container's visibility, so a
+   hidden creature is the library's to skip. Geometry stops moving, because
+   nobody can see it move. */
+const hidden = new Beefwife(copy(legged), { random: () => 0.5 });
+draw(hidden);
+const feetOf = (creature) =>
+  particlesOf(creature, "feet").map((particle) => particle.x);
+const meshOf = (creature) =>
+  Array.from(
+    partsOf(creature).find((child) => child instanceof Mesh).positionBuffer.data,
+  );
+for (let tick = 0; tick < 30; tick++) hidden.step(1 / 60);
+draw(hidden);
+const movedFeet = feetOf(hidden);
+const movedMesh = meshOf(hidden);
+hidden.visible = false;
+for (let tick = 0; tick < 30; tick++) hidden.step(1 / 60);
+draw(hidden);
+assert.deepEqual(feetOf(hidden), movedFeet, "a hidden creature placed particles");
+assert.deepEqual(meshOf(hidden), movedMesh, "a hidden creature rebuilt a mesh");
+checks += 2;
+
+/* But the atlas is not the creature's to skip. A hidden creature still has to
+   retire what a rebake replaced and follow the renderer's resolution, or it
+   comes back holding frames baked for a resolution that has gone. */
+const bands = bandsOf(hidden).size;
+hidden.setDescriptor(copy(legged));
+draw(hidden);
+assert.equal(
+  bandsOf(hidden).size,
+  bands,
+  "a hidden creature stopped tending its atlas",
+);
+hidden.visible = true;
+for (let tick = 0; tick < 30; tick++) hidden.step(1 / 60);
+draw(hidden);
+assert.notDeepEqual(
+  feetOf(hidden),
+  movedFeet,
+  "a creature shown again did not resume drawing",
+);
+checks += 2;
+hidden.destroy();
+
 console.log(`beefwife graphics: ${checks} retained-scene checks passed`);

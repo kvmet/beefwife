@@ -495,9 +495,16 @@ class Graphics {
     });
   }
 
-  sync(state, renderer = null) {
+  /* The atlas is tended before anything a caller can skip. It retires what
+     the last rebake replaced and rebakes when the resolution moves, and a
+     creature's own visibility decides neither: skipping that work strands a
+     sheet nothing will destroy, or leaves frames baked for a resolution the
+     renderer has left. Only the geometry below answers to `drawable`. */
+  sync(state, renderer = null, drawable = true) {
     if (state.model !== this.model)
       throw new Error("render state model does not match Beefwife graphics");
+    this._syncAtlas(renderer);
+    if (!drawable) return;
     const pixelResolution =
       this.options.roundVertices === true
         ? (this.options.pixelResolution ?? 1)
@@ -506,7 +513,6 @@ class Graphics {
       pixelResolution > 0 ? 1 / pixelResolution : 0;
     this._syncLimbs(state, pixelResolution, inversePixelResolution);
     this._syncRibbon(state, pixelResolution, inversePixelResolution);
-    this._syncAtlas(renderer);
     const legs = state.legs;
     for (let index = 0; index < this.footParticles.length; index++) {
       const offset = index * state.layout.legStride;
