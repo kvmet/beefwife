@@ -12,9 +12,9 @@ const BEEFWIFE_CANVAS_ACTOR_LOST_MARGIN = 200;
 const actorRandomBetween = (random, a, b) => a + random() * (b - a);
 
 class BeefwifeCanvasActor {
-  // Longest simulated step (s) accepted after a stalled host frame.
+  // Longest host frame (s) accepted. `timeScale` multiplies it into simulated
+  // seconds, so the two together bound the substeps one update can cost.
   static MAX_DT = 0.05;
-  // At most this many Beefwife steps per longest frame.
   static MAX_TIME_SCALE = 16;
 
   static timeScaleOf(value) {
@@ -186,12 +186,7 @@ class BeefwifeCanvasActor {
       this.heading.y = bearing.y;
     }
     this.controls.throttle = this.throttle;
-    let remaining = scaledDt;
-    while (remaining > 0) {
-      const seconds = Math.min(remaining, Beefwife.MAX_STEP_SECONDS);
-      this.beefwife.step(seconds, this.controls);
-      remaining -= seconds;
-    }
+    this.beefwife.step(scaledDt, this.controls);
   }
 }
 

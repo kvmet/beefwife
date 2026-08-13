@@ -99,9 +99,10 @@ planted feet do not move. The object is retained so a host may update its center
 its viewport changes. Unknown render or projection fields are rejected.
 
 `step` owns fixed simulation substeps but never owns a clock or animation loop.
-`dt` must be finite and nonnegative seconds. Values above
-`Beefwife.MAX_STEP_SECONDS` simulate exactly that safety window and discard the
-excess, so resuming a background tab cannot create a backlog. The controls
+`dt` must be finite and nonnegative seconds, and all of it is simulated: a
+`dt` of one second costs sixty substeps. Only the host can tell a resumed
+background tab from a deliberate fast-forward, so the host bounds `dt` before
+passing it, usually to one frame of its own rate. The controls
 object is optional. Omitted direction retains the last requested direction;
 omitted throttle means full throttle. Throttle must be finite from zero to one;
 inputs are rejected rather than clamped. Throttle linearly scales gait phase

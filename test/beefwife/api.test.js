@@ -333,11 +333,14 @@ stressedBoundary.reset();
 assert.ok(finitePose(stressedBoundary.getPose()));
 checks += 2;
 
-const hitched = new Beefwife(example);
-const bounded = new Beefwife(example);
-hitched.step(10);
-bounded.step(Beefwife.MAX_STEP_SECONDS);
-assert.ok(samePose(hitched.getPose(), bounded.getPose()));
+/* All of dt is simulated, so one long step and the same span in slices land
+   together. Nothing here can tell a resumed background tab from a deliberate
+   fast-forward, so the host bounds dt and this does not. */
+const whole = new Beefwife(example);
+const sliced = new Beefwife(example);
+whole.step(0.5);
+for (let slice = 0; slice < 10; slice++) sliced.step(0.05);
+assert.ok(samePose(whole.getPose(), sliced.getPose()));
 checks++;
 
 const stopped = new Beefwife(example);
@@ -355,7 +358,7 @@ const matchingBreath = new Beefwife(breathingExample, { random: () => 0.25 });
    shorter step can leave every pose at its untouched starting value, which
    would compare equal for reasons this check is not about. */
 for (const breathingBeefwife of [breathAtZero, breathAtQuarter, matchingBreath])
-  breathingBeefwife.step(Beefwife.MAX_STEP_SECONDS, { throttle: 0 });
+  breathingBeefwife.step(0.05, { throttle: 0 });
 assert.ok(!samePose(breathAtZero.getPose(), breathAtQuarter.getPose()));
 assert.ok(samePose(breathAtQuarter.getPose(), matchingBreath.getPose()));
 checks += 2;

@@ -39,7 +39,6 @@ const modelFor = (descriptor) => {
   return model;
 };
 
-const MAX_STEP_SECONDS = 0.05;
 const MAX_WORLD_COORDINATE = 1e9;
 const MIN_PIXEL_RESOLUTION = 1e-6;
 const MAX_PIXEL_RESOLUTION = 1e6;
@@ -331,7 +330,7 @@ class Beefwife extends Container {
     );
     this.#stepThrottle = throttle;
     const stepped = this.#body.step(
-      Math.min(dt, MAX_STEP_SECONDS),
+      dt,
       throttle,
       wanted,
       this.#updateDependents,
@@ -514,10 +513,6 @@ class Beefwife extends Container {
   }
 }
 
-Object.defineProperty(Beefwife, "MAX_STEP_SECONDS", {
-  value: MAX_STEP_SECONDS,
-  enumerable: true,
-});
 Object.defineProperty(Beefwife, "MAX_WORLD_COORDINATE", {
   value: MAX_WORLD_COORDINATE,
   enumerable: true,

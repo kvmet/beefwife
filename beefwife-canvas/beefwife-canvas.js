@@ -2611,7 +2611,6 @@ pixi_js = __toESM(pixi_js, 1);
 		compiled.set(descriptor, model);
 		return model;
 	};
-	var MAX_STEP_SECONDS = .05;
 	var MAX_WORLD_COORDINATE = 1e9;
 	var MIN_PIXEL_RESOLUTION = 1e-6;
 	var MAX_PIXEL_RESOLUTION = 1e6;
@@ -2810,7 +2809,7 @@ pixi_js = __toESM(pixi_js, 1);
 			if (throttle < 0 || throttle > 1) throw new RangeError("controls.throttle must be from 0 to 1");
 			const wanted = directionInto(controls.direction, this.#requestedDirection, "controls.direction", this.#requestedDirection);
 			this.#stepThrottle = throttle;
-			if (this.#body.step(Math.min(dt, MAX_STEP_SECONDS), throttle, wanted, this.#updateDependents)) {
+			if (this.#body.step(dt, throttle, wanted, this.#updateDependents)) {
 				const correction = this.#body.worldCorrection(MAX_WORLD_COORDINATE);
 				if (correction.x || correction.y) {
 					this.#body.translate(correction);
@@ -2918,10 +2917,6 @@ pixi_js = __toESM(pixi_js, 1);
 			this.#graphics.sync(this.#renderState, renderer, drawable);
 		}
 	};
-	Object.defineProperty(Beefwife, "MAX_STEP_SECONDS", {
-		value: MAX_STEP_SECONDS,
-		enumerable: true
-	});
 	Object.defineProperty(Beefwife, "MAX_WORLD_COORDINATE", {
 		value: MAX_WORLD_COORDINATE,
 		enumerable: true
@@ -4166,12 +4161,7 @@ pixi_js = __toESM(pixi_js, 1);
 				this.heading.y = bearing.y;
 			}
 			this.controls.throttle = this.throttle;
-			let remaining = scaledDt;
-			while (remaining > 0) {
-				const seconds = Math.min(remaining, Beefwife.MAX_STEP_SECONDS);
-				this.beefwife.step(seconds, this.controls);
-				remaining -= seconds;
-			}
+			this.beefwife.step(scaledDt, this.controls);
 		}
 	};
 
@@ -4908,7 +4898,7 @@ pixi_js = __toESM(pixi_js, 1);
 			else if (time >= this.nextPhysicsTime - 1e-7) {
 				const elapsedIntervals = Math.floor(Math.max(0, time - this.nextPhysicsTime) / this.physicsInterval) + 1;
 				this.nextPhysicsTime += elapsedIntervals * this.physicsInterval;
-				dt = Math.min(elapsedIntervals * this.physicsInterval / 1e3, config.MAX_DT);
+				dt = Math.min(this.physicsInterval / 1e3, config.MAX_DT);
 			}
 			if (this.terrain.ready && dt > 0) this.population.update(dt, this.timeScale);
 			if (!this.renderInterval) this._draw();
