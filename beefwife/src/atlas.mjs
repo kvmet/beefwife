@@ -1,8 +1,10 @@
 /**
  * One texture holding every shape a Beefwife places, so its feet, plates and
  * ornaments draw as particles out of a shared frame instead of a Graphics
- * apiece. Planning is separable from baking: the plan names the frames, sizes
- * them and packs them without a renderer, and only the bake needs a GPU.
+ * apiece. The work splits three ways: a plan names the frames from the
+ * descriptor alone, packing measures and places them, and only the bake needs
+ * a GPU. Naming is what a population repeats, so it is the step kept free of
+ * the other two.
  */
 
 import { PIXI } from "./pixi.mjs";
@@ -27,38 +29,24 @@ const ATLAS_TEXEL_LIMIT = 2048;
 const frameKeyFor = (shape, paint, scale) =>
   `${shape.path}|${paint.fill}|${paint.stroke}|${paint.strokeWidth}|${scale}`;
 
-const baked = new Map();
+const baked = new WeakMap();
 
+/**
+ * Names the frames a model needs, and nothing else. Measuring a frame means
+ * building its context, which is most of what an atlas costs, so a plan holds
+ * none: a population plans once per creature but bakes once in total, and the
+ * creatures that find the bake already done never pay for the measurement.
+ */
 const planAtlas = (model, renderResolution) => {
   const resolution = renderResolution * BAKE_SUPERSAMPLE;
-  const entries = new Map();
+  const specs = new Map();
   /* Frames are baked at the largest a part ever draws, so a live particle
      only ever scales down and never magnifies its own texels. */
   const claim = (shape, paint, scale) => {
     // A plate profiled down to nothing draws nothing, and needs no frame.
     if (!(scale > 0)) return null;
     const key = frameKeyFor(shape, paint, scale);
-    if (entries.has(key)) return key;
-    const context = contextFor(shape, paint, scale);
-    const bounds = context.bounds;
-    const pad = Math.max(
-      MIN_PAD_TEXELS,
-      Math.ceil(paint.strokeWidth * scale * PAD_STROKES * resolution),
-    );
-    entries.set(key, {
-      key,
-      shape,
-      paint,
-      scale,
-      context,
-      pad,
-      /* Where the shape's own origin sits inside the frame, rounded out to a
-         whole texel so the bake lands on the texture's grid. */
-      originX: pad + Math.ceil(-bounds.minX * resolution),
-      originY: pad + Math.ceil(-bounds.minY * resolution),
-      width: Math.ceil(bounds.width * resolution) + pad * 2,
-      height: Math.ceil(bounds.height * resolution) + pad * 2,
-    });
+    if (!specs.has(key)) specs.set(key, { key, shape, paint, scale });
     return key;
   };
 
@@ -81,13 +69,52 @@ const planAtlas = (model, renderResolution) => {
     claim(ornament.shape, ornament.paint, ornament.scale),
   );
 
+  return {
+    /* Sorted, so two models that name the same frames in a different order
+       still share one bake. */
+    key: `${resolution}\n${[...specs.keys()].sort().join("\n")}`,
+    resolution,
+    frames: [...specs.values()],
+    feet,
+    plates,
+    ornaments,
+  };
+};
+
+/**
+ * Measures each frame and lays the sheet out. The entries come back carrying
+ * a live context apiece, which the bake draws and then destroys.
+ */
+const packAtlas = (plan) => {
+  const resolution = plan.resolution;
+  const entries = plan.frames.map(({ key, shape, paint, scale }) => {
+    const context = contextFor(shape, paint, scale);
+    const bounds = context.bounds;
+    const pad = Math.max(
+      MIN_PAD_TEXELS,
+      Math.ceil(paint.strokeWidth * scale * PAD_STROKES * resolution),
+    );
+    return {
+      key,
+      scale,
+      context,
+      pad,
+      /* Where the shape's own origin sits inside the frame, rounded out to a
+         whole texel so the bake lands on the texture's grid. */
+      originX: pad + Math.ceil(-bounds.minX * resolution),
+      originY: pad + Math.ceil(-bounds.minY * resolution),
+      width: Math.ceil(bounds.width * resolution) + pad * 2,
+      height: Math.ceil(bounds.height * resolution) + pad * 2,
+    };
+  });
+
   // Shelf packed tallest first, which is enough for a handful of frames.
-  const packed = [...entries.values()].sort((a, b) => b.height - a.height);
+  entries.sort((a, b) => b.height - a.height);
   let shelfX = 0;
   let shelfY = 0;
   let shelfHeight = 0;
   let width = 0;
-  for (const entry of packed) {
+  for (const entry of entries) {
     if (shelfX > 0 && shelfX + entry.width > ATLAS_TEXEL_LIMIT) {
       shelfX = 0;
       shelfY += shelfHeight;
@@ -99,31 +126,34 @@ const planAtlas = (model, renderResolution) => {
     shelfHeight = Math.max(shelfHeight, entry.height);
     width = Math.max(width, shelfX);
   }
+  const height = shelfY + shelfHeight;
 
-  return {
-    key: `${resolution}\n${packed.map((entry) => entry.key).join("\n")}`,
-    resolution,
-    width,
-    height: shelfY + shelfHeight,
-    entries: packed,
-    feet,
-    plates,
-    ornaments,
-  };
+  /* Wrapping bounds the width unless one frame is wider than the whole sheet,
+     and nothing bounds the height at all. A texture past what the GPU takes
+     comes back blank rather than refused, so say which way it went over. */
+  if (width > ATLAS_TEXEL_LIMIT || height > ATLAS_TEXEL_LIMIT) {
+    for (const entry of entries) entry.context.destroy();
+    throw new RangeError(
+      `atlas needs ${width} by ${height} texels at resolution ${resolution}, past the ${ATLAS_TEXEL_LIMIT} limit`,
+    );
+  }
+
+  return { resolution, width, height, entries };
 };
 
 const bakeAtlas = (plan, renderer) => {
-  const texel = 1 / plan.resolution;
+  const sheet = packAtlas(plan);
+  const texel = 1 / sheet.resolution;
   const target = PIXI.RenderTexture.create({
-    width: plan.width * texel,
-    height: plan.height * texel,
-    resolution: plan.resolution,
+    width: sheet.width * texel,
+    height: sheet.height * texel,
+    resolution: sheet.resolution,
     antialias: false,
     scaleMode: "nearest",
   });
   const frames = new Map();
   let clear = true;
-  for (const entry of plan.entries) {
+  for (const entry of sheet.entries) {
     const graphics = new PIXI.Graphics(entry.context);
     renderer.render({
       container: graphics,
@@ -139,8 +169,8 @@ const bakeAtlas = (plan, renderer) => {
       ),
     });
     clear = false;
-    // The context came in from the plan, so destroying the holder keeps it.
     graphics.destroy();
+    entry.context.destroy();
     frames.set(entry.key, {
       texture: new PIXI.Texture({
         source: target.source,
@@ -156,32 +186,44 @@ const bakeAtlas = (plan, renderer) => {
       anchorY: entry.originY / entry.height,
     });
   }
-  return { key: plan.key, target, frames };
+  return { key: plan.key, renderer, target, frames };
 };
 
 /**
  * Hands back the atlas a plan names, baking it the first time anyone asks.
  * Populations share one descriptor's frames, and a live edit that abandons a
- * set of frames takes the texture with it.
+ * set of frames takes the texture with it. Held per renderer, because a page
+ * mounting two canvases gives each its own, and a texture belongs to the one
+ * that made it.
  */
 const acquireAtlas = (plan, renderer) => {
-  let held = baked.get(plan.key);
-  if (!held && plan.entries.length) {
+  if (!plan.frames.length) return null;
+  let sheets = baked.get(renderer);
+  if (!sheets) baked.set(renderer, (sheets = new Map()));
+  let held = sheets.get(plan.key);
+  if (!held) {
     held = { atlas: bakeAtlas(plan, renderer), uses: 0 };
-    baked.set(plan.key, held);
+    sheets.set(plan.key, held);
   }
-  for (const entry of plan.entries) entry.context.destroy();
-  if (!held) return null;
   held.uses++;
   return held.atlas;
 };
 
 const releaseAtlas = (atlas) => {
-  const held = atlas && baked.get(atlas.key);
+  const sheets = atlas && baked.get(atlas.renderer);
+  const held = sheets && sheets.get(atlas.key);
   if (!held || --held.uses > 0) return;
-  baked.delete(atlas.key);
+  sheets.delete(atlas.key);
   for (const frame of atlas.frames.values()) frame.texture.destroy();
   atlas.target.destroy(true);
 };
 
-export { planAtlas, bakeAtlas, acquireAtlas, releaseAtlas, BAKE_SUPERSAMPLE };
+export {
+  planAtlas,
+  packAtlas,
+  bakeAtlas,
+  acquireAtlas,
+  releaseAtlas,
+  BAKE_SUPERSAMPLE,
+  ATLAS_TEXEL_LIMIT,
+};

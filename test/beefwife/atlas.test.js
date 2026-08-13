@@ -1,10 +1,10 @@
 /**
  * Does the atlas name, size and place a frame for every shape a Beefwife
- * draws? Planning is the half that needs no renderer, so this is where the
- * drawn scale, the outline width and the packing are held. Fails if a frame
- * is baked below the largest a part reaches, if a shape's origin lands off
- * its frame, if two frames overlap, or if a population re-bakes what it
- * could share.
+ * draws? Naming and packing are the halves that need no renderer, so this is
+ * where the drawn scale, the outline width and the packing are held. Fails if
+ * a frame is baked below the largest a part reaches, if a shape's origin lands
+ * off its frame, if two frames overlap, if a population re-bakes what it could
+ * share, or if two renderers are handed one texture between them.
  */
 
 const assert = require("node:assert/strict");
@@ -22,9 +22,11 @@ const {
 const Model = require("../../beefwife/src/model.mjs");
 const {
   planAtlas,
+  packAtlas,
   acquireAtlas,
   releaseAtlas,
   BAKE_SUPERSAMPLE,
+  ATLAS_TEXEL_LIMIT,
 } = require("../../beefwife/src/atlas.mjs");
 
 const source = JSON.parse(
@@ -53,17 +55,25 @@ const legged = copy(source);
 legged.legs.pairs = 2;
 const model = Model.compile(legged);
 const plan = planAtlas(model, 0.5);
+const sheet = packAtlas(plan);
 assert.equal(plan.resolution, 0.5 * BAKE_SUPERSAMPLE);
 assert.equal(plan.plates.length, model.skin.platesTailFirst.length);
 assert.equal(plan.ornaments.length, model.skin.ornaments.length);
 assert.equal(typeof plan.feet, "string");
 checks += 4;
 
+/* Naming a frame is what a whole population repeats, so a plan carries no
+   context: measuring is the packing's job, and a creature joining a bake that
+   already exists never reaches it. */
+assert.ok(plan.frames.every((frame) => frame.context === undefined));
+checks += 1;
+
 /* One entry per distinct drawn shape, and every placement points at one. Two
    plates on chunks that profile alike share a frame; a shape drawn at two
    sizes does not. */
-const keys = new Set(plan.entries.map((entry) => entry.key));
-assert.equal(keys.size, plan.entries.length);
+const keys = new Set(sheet.entries.map((entry) => entry.key));
+assert.equal(keys.size, sheet.entries.length);
+assert.equal(keys.size, plan.frames.length);
 for (const key of [plan.feet, ...plan.plates, ...plan.ornaments])
   if (key !== null) assert.ok(keys.has(key), `${key} has no frame`);
 checks += 2;
@@ -71,11 +81,11 @@ checks += 2;
 /* A frame is baked at the largest its placement ever draws, so a live particle
    only ever scales down. The foot plants at `plantedScale`, and a plate rides
    the load to `1 + loadScale`. */
-const footEntry = plan.entries.find((entry) => entry.key === plan.feet);
+const footEntry = sheet.entries.find((entry) => entry.key === plan.feet);
 const foot = legged.legs.skin.foot;
 assert.equal(footEntry.scale, foot.scale * foot.plantedScale);
 const plateScaleOf = (key) =>
-  plan.entries.find((entry) => entry.key === key).scale;
+  sheet.entries.find((entry) => entry.key === key).scale;
 const plates = model.skin.platesTailFirst;
 plates.forEach((plate, index) => {
   if (plan.plates[index] === null) return;
@@ -93,7 +103,7 @@ checks += 2;
 
 /* The origin the particle anchors on has to sit inside the frame, with the
    drawn shape and its outline clear of every edge. */
-for (const entry of plan.entries) {
+for (const entry of sheet.entries) {
   assert.ok(entry.originX >= entry.pad && entry.originY >= entry.pad);
   assert.ok(entry.originX <= entry.width - entry.pad);
   assert.ok(entry.originY <= entry.height - entry.pad);
@@ -102,13 +112,13 @@ for (const entry of plan.entries) {
 checks += 1;
 
 // Shelf packing may not overlap, and everything must land inside the sheet.
-for (const entry of plan.entries) {
+for (const entry of sheet.entries) {
   assert.ok(entry.x >= 0 && entry.y >= 0);
-  assert.ok(entry.x + entry.width <= plan.width);
-  assert.ok(entry.y + entry.height <= plan.height);
+  assert.ok(entry.x + entry.width <= sheet.width);
+  assert.ok(entry.y + entry.height <= sheet.height);
 }
-for (const entry of plan.entries)
-  for (const other of plan.entries) {
+for (const entry of sheet.entries)
+  for (const other of sheet.entries) {
     if (entry === other) continue;
     const apart =
       entry.x + entry.width <= other.x ||
@@ -128,11 +138,12 @@ tinyPlate.chain.skin.plates = [tinyPlate.chain.skin.plates[0]];
 tinyPlate.chain.skin.plates[0].scale = 0.002;
 tinyPlate.chain.sections.head.profile.plateScale = { start: 1, end: 1 };
 const tinyPlan = planAtlas(Model.compile(tinyPlate), 1);
+const tinySheet = packAtlas(tinyPlan);
 const plateShape =
   tinyPlate.definitions.shapes[tinyPlate.chain.skin.plates[0].shape];
 const drawnScales = tinyPlan.plates.map(
   (key) =>
-    drawnWidthOf(tinyPlan.entries.find((entry) => entry.key === key).context) /
+    drawnWidthOf(tinySheet.entries.find((entry) => entry.key === key).context) /
     pathWidthOf(plateShape.path),
 );
 assert.ok(drawnScales.every((scale) => scale > 0));
@@ -145,9 +156,9 @@ checks += 2;
 const outlined = copy(tinyPlate);
 outlined.chain.skin.plates[0].scale = 0.5;
 outlined.definitions.paints.shell.stroke = { colour: "#00ff00", width: 3 };
-const outlinedPlan = planAtlas(Model.compile(outlined), 1);
+const outlinedSheet = packAtlas(planAtlas(Model.compile(outlined), 1));
 const widthsOf = (colour) =>
-  outlinedPlan.entries
+  outlinedSheet.entries
     .flatMap((entry) => strokesOf(entry.context))
     .filter(({ color }) => color === colourNumber(colour))
     .map(({ width }) => width);
@@ -173,7 +184,7 @@ const flattened = copy(tinyPlate);
 flattened.chain.sections.head.profile.plateScale = { start: 0, end: 0 };
 const flatPlan = planAtlas(Model.compile(flattened), 1);
 assert.ok(flatPlan.plates.every((key) => key === null));
-assert.ok(flatPlan.entries.every((entry) => entry.scale > 0));
+assert.ok(flatPlan.frames.every((frame) => frame.scale > 0));
 checks += 2;
 
 /* Colour is baked, not tinted, because one particle tint cannot recolour a
@@ -183,8 +194,8 @@ repainted.definitions.paints.shell.fill = "#123456";
 const repaintedPlan = planAtlas(Model.compile(repainted), 0.5);
 assert.notEqual(repaintedPlan.key, plan.key);
 assert.ok(
-  repaintedPlan.entries
-    .flatMap((entry) => fillsOf(entry.context))
+  packAtlas(repaintedPlan)
+    .entries.flatMap((entry) => fillsOf(entry.context))
     .includes(colourNumber("#123456")),
 );
 checks += 2;
@@ -206,13 +217,13 @@ const bakes = renderer.drawn.length;
 const atlasB = acquireAtlas(second, renderer);
 assert.equal(atlasA, atlasB);
 assert.equal(renderer.drawn.length, bakes, "a shared plan baked twice");
-assert.equal(bakes, first.entries.length);
+assert.equal(bakes, first.frames.length);
 assert.ok(renderer.drawn[0].clear && !renderer.drawn[1].clear);
 checks += 5;
 
-/* The frames a bake hands back have to agree with the plan: one texture per
-   entry, cut where the plan packed it, anchored on the shape's own origin. */
-for (const entry of first.entries) {
+/* The frames a bake hands back have to agree with the packing: one texture per
+   entry, cut where the sheet placed it, anchored on the shape's own origin. */
+for (const entry of packAtlas(first).entries) {
   const frame = atlasA.frames.get(entry.key);
   const texel = 1 / first.resolution;
   assert.ok(frame, `${entry.key} was never baked`);
@@ -245,8 +256,41 @@ bare.legs.pairs = 0;
 const barePlan = planAtlas(Model.compile(bare), 0.5);
 assert.equal(barePlan.plates.length, 0);
 assert.equal(barePlan.ornaments.length, 0);
+assert.equal(barePlan.frames.length, 0);
 assert.equal(acquireAtlas(barePlan, stubRenderer()), null);
 checks += 3;
+
+/* A page mounting two canvases gives each its own renderer, and a texture
+   belongs to the one that made it. Frames named alike must still bake twice,
+   and the release that empties one must leave the other's sheet standing. */
+const left = stubRenderer();
+const right = stubRenderer();
+const sharedPlan = planAtlas(Model.compile(legged), 0.5);
+const onLeft = acquireAtlas(sharedPlan, left);
+const onRight = acquireAtlas(planAtlas(Model.compile(legged), 0.5), right);
+assert.notEqual(onLeft, onRight, "two renderers were handed one atlas");
+assert.notEqual(onLeft.target.source, onRight.target.source);
+assert.equal(left.drawn.length, right.drawn.length);
+const leftSheet = onLeft.target.source;
+const rightSheet = onRight.target.source;
+releaseAtlas(onLeft);
+assert.equal(leftSheet.destroyed, true);
+assert.equal(
+  rightSheet.destroyed,
+  false,
+  "releasing one renderer's atlas took the other's",
+);
+releaseAtlas(onRight);
+checks += 5;
+
+/* Wrapping bounds the sheet's width, and nothing bounds its height, so a
+   resolution high enough runs it off the end. A texture past what the GPU
+   takes comes back blank rather than refused, so this has to say so. */
+assert.throws(
+  () => packAtlas(planAtlas(model, ATLAS_TEXEL_LIMIT)),
+  /past the 2048 limit/,
+);
+checks += 1;
 
 assert.ok(PIXI.ParticleContainer, "the renderer has no particle container");
 checks += 1;
