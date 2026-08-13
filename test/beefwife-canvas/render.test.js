@@ -75,4 +75,29 @@ assert.equal(
 draw("terrain");
 assert.equal(underlay.calls.filter((call) => call[0] === "rect").length, 2);
 
-console.log("BeefwifeCanvas debug rendering: 5 layer checks passed");
+/* The cast changes only on a spawn or a recycle, but the draw hands it over
+   every frame, and re-adding a child is Pixi reordering the world. An
+   unchanged list must cost nothing; a changed one must still land, and a
+   creature dropped from it must still be destroyed. */
+const { BeefwifeCanvasScene } = require("../../beefwife-canvas/src/scene.mjs");
+const added = [];
+/* A scene without its Pixi application, because only the cast bookkeeping is
+   under test and initialising one needs a document. */
+const stage = Object.assign(Object.create(BeefwifeCanvasScene.prototype), {
+  displayed: [],
+  world: { addChildAt: (child, index) => added.push([child, index]) },
+});
+const sync = (displays) => stage.syncDisplays(displays);
+const first = { destroyed: false, destroy() { this.destroyed = true; } };
+const second = { destroyed: false, destroy() { this.destroyed = true; } };
+sync([first, second]);
+assert.equal(added.length, 2);
+sync([first, second]);
+assert.equal(added.length, 2, "an unchanged cast was re-added to the world");
+sync([second, first]);
+assert.equal(added.length, 4, "a reordered cast was not re-added");
+sync([second]);
+assert.ok(first.destroyed, "a creature dropped from the cast was left alive");
+assert.equal(second.destroyed, false);
+
+console.log("BeefwifeCanvas debug rendering: 10 layer and cast checks passed");
