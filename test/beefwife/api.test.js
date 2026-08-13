@@ -320,8 +320,11 @@ breathingExample.chain.breathing = 1;
 const breathAtZero = new Beefwife(breathingExample, { random: () => 0 });
 const breathAtQuarter = new Beefwife(breathingExample, { random: () => 0.25 });
 const matchingBreath = new Beefwife(breathingExample, { random: () => 0.25 });
+/* Long enough to land a substep whatever the library's substep size is; a
+   shorter step can leave every pose at its untouched starting value, which
+   would compare equal for reasons this check is not about. */
 for (const breathingBeefwife of [breathAtZero, breathAtQuarter, matchingBreath])
-  breathingBeefwife.step(1 / 120, { throttle: 0 });
+  breathingBeefwife.step(Beefwife.MAX_STEP_SECONDS, { throttle: 0 });
 assert.ok(!samePose(breathAtZero.getPose(), breathAtQuarter.getPose()));
 assert.ok(samePose(breathAtQuarter.getPose(), matchingBreath.getPose()));
 checks += 2;

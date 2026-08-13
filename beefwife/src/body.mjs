@@ -5,7 +5,7 @@ import { ChainTables } from "./tables.mjs";
 import { carryChunks } from "./carry.mjs";
 
 const TAU = Math.PI * 2;
-const PHYSICS_STEP = 1 / 120;
+const PHYSICS_STEP = 1 / 60;
 /* Link relaxation converges on passes per second, so this and the substep
    rate trade against each other: their product is the budget, and 480 a
    second holds the shipped descriptors inside 6.6% link error. A slower
@@ -13,7 +13,7 @@ const PHYSICS_STEP = 1 / 120;
    Grip and jointCorrection do not trade this way; both take a fixed share
    per substep, so changing the rate alone changes how far a creature
    travels in a second. */
-const RELAX_PASSES = 4;
+const RELAX_PASSES = 8;
 const AXIS_RATE = 1.5;
 /* Bend displaces a chunk and relaxation pulls back only a `linkCorrection`
    share, so a soft material lets each substep add more than it removes and
