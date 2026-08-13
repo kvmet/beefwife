@@ -377,17 +377,16 @@ class BeefwifeCanvasRuntime {
           Math.max(0, time - this.nextPhysicsTime) / this.physicsInterval,
         ) + 1;
       this.nextPhysicsTime += elapsedIntervals * this.physicsInterval;
-      dt = Math.min(
-        (elapsedIntervals * this.physicsInterval) / 1000,
-        BEEFWIFE_CANVAS_CONFIG.MAX_DT,
-      );
+      /* The missed slots advance the schedule and are then dropped: the step
+         is one slot however late the frame is. `timeScale` multiplies this,
+         so a step that grew with lateness would buy the next frame the same
+         lateness again and hold the host in the stall it is leaving. */
+      dt = Math.min(this.physicsInterval / 1000, BEEFWIFE_CANVAS_CONFIG.MAX_DT);
     }
 
     if (this.terrain.ready && dt > 0) {
       this.population.update(dt, this.timeScale);
     }
-    // Missed slots collapse into one bounded update; replaying them would stall
-    // the frame that is already recovering from a stall.
     if (!this.renderInterval) {
       this._draw();
     } else if (!this.nextDrawTime || time >= this.nextDrawTime) {

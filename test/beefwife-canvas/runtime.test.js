@@ -379,6 +379,30 @@ const sceneBoundary = async () => {
   );
   assert.equal(browser.renderTicks, 3);
 
+  /* The rate is a ceiling on ticks, not a promise about wall time. A frame
+     that arrives 12 slots late drops the 11 it missed and steps once, because
+     replaying them costs a host that is already behind more than it owes.
+     `timeScale` multiplies whatever this step is, so a step that grows under
+     load grows the stall that produced it. */
+  vm.runInContext(
+    `globalThis.stalledSteps = [];
+     globalThis.stalled = new BeefwifeCanvasRuntime({
+       cast: { [testDescriptor.name]: testDescriptor },
+       count: 0,
+       physicsFps: 60,
+     });
+     stalled.terrain.build();
+     stalled.population.actors = [{ update: (dt) => stalledSteps.push(dt) }];
+     stalled._draw = () => {};
+     [1000, 1016.7, 1216.7, 1233.4].forEach((time) => stalled._tick(time));`,
+    browser,
+  );
+  assert.equal(browser.stalledSteps.length, 3);
+  assert.ok(
+    browser.stalledSteps.every((seconds) => Math.abs(seconds - 1 / 60) < 1e-12),
+    "a stalled frame replayed the slots it missed",
+  );
+
   [0.125, 0.2, 1].forEach((resolutionScale) => {
     browser.goodValue = resolutionScale;
     assert.doesNotThrow(() =>
@@ -445,7 +469,7 @@ const sceneBoundary = async () => {
   browser.layer.destroy();
   assert.ok(log.some(([operation]) => operation === "remove"));
   assert.ok(log.some(([operation]) => operation === "destroy"));
-  return 46;
+  return 48;
 };
 
 (async () => {
