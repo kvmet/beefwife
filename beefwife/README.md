@@ -181,6 +181,14 @@ Render bounds and collision geometry are not part of schema v1. Constructor
 input and the `descriptor` getter cannot be used to mutate the instance. Random
 variation comes only from the injected random function.
 
+A descriptor is a value. One model is compiled per descriptor object and
+shared by every creature given that object, so a cast of a thousand pays one
+compile. The object is deep-frozen when it is compiled, which is what makes
+that safe: an edit in place would otherwise leave every creature drawing the
+model built before it, silently. Pass a copy to change a descriptor, and pass
+the copy to `setDescriptor`. A host that loads its creatures once and never
+edits them, which is the ordinary case, need do nothing.
+
 `restLength` is the chain's resting arc length in world pixels, summed over
 every link and averaged across section boundaries. It follows `setDescriptor`.
 A host that compares `getPose()` against its own bounds needs it: the centroid

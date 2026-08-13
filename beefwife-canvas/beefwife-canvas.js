@@ -2258,6 +2258,18 @@ pixi_js = __toESM(pixi_js, 1);
 		static prepare() {}
 	};
 	var MAX_KNEE_OFFSET = 2e9;
+	/**
+	* Runs work once the renderer is between frames.
+	*
+	* Pixi calls `onRender` partway through executing a frame's instructions, and
+	* the renderer is one state machine: a nested `render` leaves the outer pass
+	* holding a bind group the inner one replaced, and every display object still
+	* queued draws from a texture with no source. Baking a sheet renders, and
+	* destroying one frees what the pass is reading, so neither may happen there.
+	* A microtask runs after the frame's callback returns and before the next, so
+	* work booked here sees a renderer at rest.
+	*/
+	var afterPass = (work) => queueMicrotask(work);
 	var Graphics = class {
 		static available = true;
 		static prepare(model) {
@@ -2295,13 +2307,16 @@ pixi_js = __toESM(pixi_js, 1);
 			this.ribbonFill = null;
 			this.ribbonStroke = null;
 			this.ribbonCount = -1;
-			this.retired = null;
+			this.baking = false;
 			this.adopt(state);
 		}
 		adopt(state) {
 			this.model = state.model;
 			this.legCount = state.legs.length / state.layout.legStride;
 			this.plan = null;
+			this.footParticles = [];
+			this.ornamentParticles = [];
+			this.plateParticles = [];
 			let changed = this._syncLimbParts(this.legCount);
 			changed = this._syncRibbonParts() || changed;
 			if (changed) this._arrange();
@@ -2309,21 +2324,6 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		_drop(child) {
 			discard(this.parent, child);
-		}
-		_retire(atlas, containers) {
-			this._flushRetired();
-			for (const container of containers) if (container && container.parent === this.parent) this.parent.removeChild(container);
-			this.retired = {
-				atlas,
-				containers
-			};
-		}
-		_flushRetired() {
-			const retired = this.retired;
-			if (!retired) return;
-			this.retired = null;
-			for (const container of retired.containers) if (container) container.destroy();
-			releaseAtlas(retired.atlas);
 		}
 		_syncLimbParts(legCount) {
 			const paint = this.model.legs.skin.limbPaint;
@@ -2430,17 +2430,26 @@ pixi_js = __toESM(pixi_js, 1);
 			this._arrange();
 		}
 		_syncAtlas(renderer) {
+			if (this.plan && this.atlasResolution === (this.options.pixelResolution ?? 1)) return;
+			if (!renderer || this.baking) return;
+			this.baking = true;
+			afterPass(() => {
+				this.baking = false;
+				if (!this.parent.destroyed) this._bake(renderer);
+			});
+		}
+		_bake(renderer) {
 			const resolution = this.options.pixelResolution ?? 1;
-			this._flushRetired();
-			if (this.plan && this.atlasResolution === resolution) return;
-			if (!renderer) return;
 			const plan = planAtlas(this.model, resolution);
 			const atlas = acquireAtlas(plan, renderer);
-			if (this.atlas || this.shapeContainers.length) this._retire(this.atlas, this.shapeContainers);
+			const spent = this.atlas;
+			const replaced = this.shapeContainers;
 			this.atlas = atlas;
 			this.atlasResolution = resolution;
 			this.plan = plan;
 			this._buildParticles(plan);
+			for (const container of replaced) if (container) container.destroy();
+			releaseAtlas(spent);
 		}
 		_place(particle, x, y, directionX, directionY, scale, mirror, pixelResolution, inversePixelResolution) {
 			if (!particle) return;
@@ -2577,7 +2586,6 @@ pixi_js = __toESM(pixi_js, 1);
 			}
 		}
 		destroy() {
-			this._flushRetired();
 			const children = [
 				...this.shapeContainers,
 				this.limbFill,
@@ -2603,12 +2611,26 @@ pixi_js = __toESM(pixi_js, 1);
 	};
 	var Container = available ? PIXI.Container : HeadlessContainer;
 	var compiled = /* @__PURE__ */ new WeakMap();
+	var freezeDeep = (value) => {
+		if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+		Object.values(value).forEach(freezeDeep);
+		return Object.freeze(value);
+	};
+	/**
+	* One model per descriptor object, so a cast of a thousand compiles once.
+	*
+	* The cache is keyed on the object, which makes the object the promise: edit
+	* one in place after handing it over and every creature drawn from it keeps
+	* the model built before the edit. Freezing it turns that into a throw at the
+	* line doing the editing. Pass a copy to change a descriptor.
+	*/
 	var modelFor = (descriptor) => {
 		const held = compiled.get(descriptor);
 		if (held) return held;
 		const model = compile(descriptor);
 		graphics_default.prepare(model);
 		compiled.set(descriptor, model);
+		freezeDeep(descriptor);
 		return model;
 	};
 	var MAX_WORLD_COORDINATE = 1e9;

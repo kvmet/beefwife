@@ -1,17 +1,9 @@
 import { writable } from "svelte/store";
 import { chevronGuy } from "./defaultBeefwife.js";
 
-/* The descriptor under edit. Stage applies every change to the live actor.
-   Editors write fields in place and hand the same object back, so `update`
-   shallow-copies the root: the library compiles one model per descriptor
-   object and would otherwise serve the model built before the edit. */
-const edited = writable(structuredClone(chevronGuy));
-
-export const descriptor = {
-  subscribe: edited.subscribe,
-  set: edited.set,
-  update: (revise) => edited.update((value) => ({ ...revise(value) })),
-};
+/* The descriptor under edit, which the panels write in place. Stage sends a
+   copy to the live actor, because the library freezes what it is handed. */
+export const descriptor = writable(structuredClone(chevronGuy));
 
 /** The values the editor started from; controls reset to these. */
 export const defaults = chevronGuy;

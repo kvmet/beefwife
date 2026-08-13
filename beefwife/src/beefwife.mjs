@@ -28,6 +28,21 @@ const Container = available ? PIXI.Container : HeadlessContainer;
    instead. */
 const compiled = new WeakMap();
 
+const freezeDeep = (value) => {
+  if (!value || typeof value !== "object" || Object.isFrozen(value))
+    return value;
+  Object.values(value).forEach(freezeDeep);
+  return Object.freeze(value);
+};
+
+/**
+ * One model per descriptor object, so a cast of a thousand compiles once.
+ *
+ * The cache is keyed on the object, which makes the object the promise: edit
+ * one in place after handing it over and every creature drawn from it keeps
+ * the model built before the edit. Freezing it turns that into a throw at the
+ * line doing the editing. Pass a copy to change a descriptor.
+ */
 const modelFor = (descriptor) => {
   /* A primitive key reads as a miss rather than throwing, so an invalid
      descriptor reaches the validator and fails there as it always did. */
@@ -36,6 +51,7 @@ const modelFor = (descriptor) => {
   const model = Model.compile(descriptor);
   Graphics.prepare(model);
   compiled.set(descriptor, model);
+  freezeDeep(descriptor);
   return model;
 };
 

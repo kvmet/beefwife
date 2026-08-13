@@ -70,15 +70,33 @@ const broken = copy(example);
 broken.chain.sections.head.spacing = -1;
 assert.throws(() => new Beefwife(broken, {}));
 assert.throws(() => new Beefwife(broken, {}));
-/* A replacement carrying an edit compiles afresh; the same object handed back
-   after an in-place edit is the case the cache cannot see, and is why a
-   descriptor is documented as a value. */
+/* A replacement carrying an edit compiles afresh. Editing the object already
+   handed over is the case the cache cannot see, so it is frozen on the way
+   in: the mutation throws where it is written rather than drawing the model
+   compiled before it. */
 const revised = copy(example);
 revised.definitions.paints.shell.fill = "#0abab5";
 twin.setDescriptor(revised);
 assert.equal(twin.descriptor.definitions.paints.shell.fill, "#0abab5");
+assert.ok(Object.isFrozen(shared.definitions.paints.shell));
+assert.ok(Object.isFrozen(revised.chain.sections.head));
+assert.ok(Object.isFrozen(revised.chain.skin.plates));
+/* Sloppy mode drops a write to a frozen property instead of throwing, so
+   these state the directive their callers would already have: a module. */
+assert.throws(() => {
+  "use strict";
+  shared.definitions.paints.shell.fill = "#c0ffee";
+}, TypeError);
+assert.throws(() => {
+  "use strict";
+  revised.chain.skin.plates.push({});
+}, TypeError);
+assert.equal(
+  shared.definitions.paints.shell.fill,
+  example.definitions.paints.shell.fill,
+);
 for (const creature of [twin, otherTwin, matching]) creature.destroy();
-checks += 6;
+checks += 12;
 
 const borrowedPose = beefwife.getPose();
 assert.equal(beefwife.getPose(), borrowedPose);
