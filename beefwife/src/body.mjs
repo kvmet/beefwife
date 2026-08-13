@@ -78,7 +78,7 @@ class Body {
     this.liftOrder = model.chunks.map((_, index) => index);
     this.liftTargets = new Float64Array(model.chunks.length);
     this.correction = { x: 0, y: 0 };
-    this.tables = new ChainTables(model, model.gait, PHYSICS_STEP);
+    this.tables = new ChainTables(model, model.gait, PHYSICS_STEP, RELAX_PASSES);
   }
 
   reconfigure(model, gait, throttle = 1, breathingPhase = this.breathingPhase) {
@@ -87,7 +87,7 @@ class Body {
     this.model = model;
     this.gait = gait;
     this.breathingPhase = breathingPhase;
-    this.tables.refresh(model, model.gait, PHYSICS_STEP);
+    this.tables.refresh(model, model.gait, PHYSICS_STEP, RELAX_PASSES);
     this.refreshContacts(throttle);
   }
 

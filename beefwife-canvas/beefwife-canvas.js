@@ -849,8 +849,16 @@ pixi_js = __toESM(pixi_js, 1);
 	* one. Nothing here is state; rebuilding it from the same model, gait and
 	* substep gives the same numbers.
 	*/
+	var REFERENCE_SUBSTEP_RATE = 60;
+	var REFERENCE_LINK_SOLVE_RATE = 480;
+	var shareAtRate = (share, rate, referenceRate) => {
+		if (rate === referenceRate) return share;
+		if (!(share > 0)) return 0;
+		if (share >= 1) return 1;
+		return 1 - Math.pow(1 - share, referenceRate / rate);
+	};
 	var ChainTables = class {
-		constructor(model, gait, substep) {
+		constructor(model, gait, substep, relaxPasses) {
 			const count = model.chunks.length;
 			const linkCount = model.links.length;
 			this.retention = new Float64Array(count);
@@ -871,30 +879,33 @@ pixi_js = __toESM(pixi_js, 1);
 			this.gatherPhaseSine = new Float64Array(linkCount);
 			this.gatherPhaseCosine = new Float64Array(linkCount);
 			this.linkBreathes = new Uint8Array(linkCount);
-			this.refresh(model, gait, substep);
+			this.refresh(model, gait, substep, relaxPasses);
 		}
-		refresh(model, gait, substep) {
+		refresh(model, gait, substep, relaxPasses) {
 			const lag = gait.phaseLagRadiansPerPixel;
+			const substepRate = 1 / substep;
+			const linkSolveRate = relaxPasses / substep;
+			const perSubstep = (share) => shareAtRate(share, substepRate, REFERENCE_SUBSTEP_RATE);
 			for (let index = 0; index < model.chunks.length; index++) {
 				const spec = model.chunks[index];
 				const grip = spec.material.grip;
 				this.retention[index] = Math.pow(spec.material.velocityRetention, substep);
-				this.gripForward[index] = grip.forward;
-				this.gripBackward[index] = grip.backward;
-				this.gripLateral[index] = grip.lateral;
+				this.gripForward[index] = perSubstep(grip.forward);
+				this.gripBackward[index] = perSubstep(grip.backward);
+				this.gripLateral[index] = perSubstep(grip.lateral);
 				this.motionThrust[index] = spec.motionScale.thrust;
 				this.motionContact[index] = spec.motionScale.contact;
 				this.motionBend[index] = spec.motionScale.bend;
 				this.bendScale[index] = spec.bendScale;
 				this.bendPhaseSine[index] = spec.bendPhaseSine;
 				this.bendPhaseCosine[index] = spec.bendPhaseCosine;
-				this.jointCorrectionHalf[index] = spec.material.jointCorrection * .5;
+				this.jointCorrectionHalf[index] = perSubstep(spec.material.jointCorrection) * .5;
 				this.phaseLag[index] = spec.restDistance * lag;
 			}
 			for (let index = 0; index < model.links.length; index++) {
 				const link = model.links[index];
 				this.linkRestLength[index] = link.restLength;
-				this.linkCorrectionHalf[index] = link.linkCorrection * .5;
+				this.linkCorrectionHalf[index] = shareAtRate(link.linkCorrection, linkSolveRate, REFERENCE_LINK_SOLVE_RATE) * .5;
 				this.gatherScale[index] = link.gatherScale;
 				this.gatherPhaseSine[index] = link.gatherPhaseSine;
 				this.gatherPhaseCosine[index] = link.gatherPhaseCosine;
@@ -1031,14 +1042,14 @@ pixi_js = __toESM(pixi_js, 1);
 				x: 0,
 				y: 0
 			};
-			this.tables = new ChainTables(model, model.gait, PHYSICS_STEP);
+			this.tables = new ChainTables(model, model.gait, PHYSICS_STEP, RELAX_PASSES);
 		}
 		reconfigure(model, gait, throttle = 1, breathingPhase = this.breathingPhase) {
 			if (model.chunks.length !== this.chunks.length) throw new Error("cannot reconfigure a different chunk count");
 			this.model = model;
 			this.gait = gait;
 			this.breathingPhase = breathingPhase;
-			this.tables.refresh(model, model.gait, PHYSICS_STEP);
+			this.tables.refresh(model, model.gait, PHYSICS_STEP, RELAX_PASSES);
 			this.refreshContacts(throttle);
 		}
 		place(position, direction) {
