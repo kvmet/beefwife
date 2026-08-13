@@ -2658,6 +2658,10 @@ pixi_js = __toESM(pixi_js, 1);
 		getPose() {
 			return this.#pose;
 		}
+		getBendResponse(into) {
+			this.#live("getBendResponse");
+			return this.#body.bend.response(this.#body.chunks, into);
+		}
 		destroy(options) {
 			this.onRender = null;
 			if (this.#graphics) {

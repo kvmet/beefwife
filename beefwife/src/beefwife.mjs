@@ -425,6 +425,17 @@ class Beefwife extends Container {
     return this.#pose;
   }
 
+  /* The turn the gait asked each joint for against the turn it is making, so
+     an author can see what a `gait.bend` amplitude actually buys on this body.
+     Delivery is capped by `grip.lateral`, which resists the sideways motion
+     bending is, and by how far the solver gets in a substep, and neither is
+     visible in the descriptor. Both angles are radians, positive to the left.
+     Pass an array to fill to avoid allocating one a frame. */
+  getBendResponse(into) {
+    this.#live("getBendResponse");
+    return this.#body.bend.response(this.#body.chunks, into);
+  }
+
   destroy(options) {
     this.onRender = null;
     if (this.#graphics) {

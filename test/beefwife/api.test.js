@@ -345,6 +345,7 @@ assert.deepEqual(
     "constructor",
     "descriptor",
     "destroy",
+    "getBendResponse",
     "getPose",
     "reset",
     "restLength",
