@@ -3992,7 +3992,6 @@ pixi_js = __toESM(pixi_js, 1);
 	var BEEFWIFE_CANVAS_ACTOR_LOST_MARGIN = 200;
 	var actorRandomBetween = (random, a, b) => a + random() * (b - a);
 	var BeefwifeCanvasActor = class BeefwifeCanvasActor {
-		static MAX_DT = .05;
 		static MAX_TIME_SCALE = 16;
 		static timeScaleOf(value) {
 			if (!Number.isFinite(value) || value < 0 || value > BeefwifeCanvasActor.MAX_TIME_SCALE) throw new RangeError(`timeScale must be from 0 to ${BeefwifeCanvasActor.MAX_TIME_SCALE}`);
@@ -4144,7 +4143,7 @@ pixi_js = __toESM(pixi_js, 1);
 			return this.renderSnapshot;
 		}
 		update(dt, timeScale) {
-			if (!Number.isFinite(dt) || dt < 0 || dt > BeefwifeCanvasActor.MAX_DT) throw new RangeError(`dt must be from 0 to ${BeefwifeCanvasActor.MAX_DT}`);
+			if (!Number.isFinite(dt) || dt < 0) throw new RangeError("dt must be nonnegative seconds");
 			BeefwifeCanvasActor.timeScaleOf(timeScale);
 			const scaledDt = dt * timeScale;
 			const pose = this.beefwife.getPose();
@@ -4174,7 +4173,6 @@ pixi_js = __toESM(pixi_js, 1);
 		"terrain"
 	]);
 	var config = {
-		MAX_DT: BeefwifeCanvasActor.MAX_DT,
 		MAX_COUNT: 1024,
 		MAX_TIME_SCALE: BeefwifeCanvasActor.MAX_TIME_SCALE,
 		REBUILD_DELAY: 150,
@@ -4209,14 +4207,16 @@ pixi_js = __toESM(pixi_js, 1);
 		if (!["auto", "pixelated"].includes(value)) throw new RangeError("imageRendering must be auto or pixelated");
 		return value;
 	};
-	var rateOf = (value, fallback, name) => {
-		if (value === void 0) return fallback;
-		if (value === 0) return 0;
-		if (!Number.isFinite(value) || value < 1 || value > 240) throw new RangeError(`${name} must be 0 or from 1 to 240`);
+	var rateOf = (value, name) => {
+		if (!Number.isFinite(value) || value < 1 || value > 240) throw new RangeError(`${name} must be from 1 to 240`);
 		return value;
 	};
-	var renderFpsOf = (value) => rateOf(value, config.DEFAULT_RENDER_FPS, "renderFps");
-	var physicsFpsOf = (value) => rateOf(value, config.DEFAULT_PHYSICS_FPS, "physicsFps");
+	var renderFpsOf = (value) => {
+		if (value === void 0) return config.DEFAULT_RENDER_FPS;
+		if (value === 0) return 0;
+		return rateOf(value, "renderFps");
+	};
+	var physicsFpsOf = (value) => value === void 0 ? config.DEFAULT_PHYSICS_FPS : rateOf(value, "physicsFps");
 	var chooseName = (cast, weights, random) => {
 		const names = Object.keys(cast);
 		if (!names.length) throw new Error("cast must contain at least one beefwife");
@@ -4636,9 +4636,9 @@ pixi_js = __toESM(pixi_js, 1);
 			const imageRendering = imageRenderingOf(options.imageRendering ?? "auto");
 			this.renderFps = renderFpsOf(options.renderFps);
 			this.physicsFps = physicsFpsOf(options.physicsFps);
-			if (this.physicsFps && (!this.renderFps || this.renderFps > this.physicsFps)) this.renderFps = this.physicsFps;
-			this.renderInterval = this.renderFps ? 1e3 / this.renderFps : 0;
-			this.physicsInterval = this.physicsFps ? 1e3 / this.physicsFps : 0;
+			if (!this.renderFps || this.renderFps > this.physicsFps) this.renderFps = this.physicsFps;
+			this.renderInterval = 1e3 / this.renderFps;
+			this.physicsInterval = 1e3 / this.physicsFps;
 			const maxPixelRatio = options.maxPixelRatio ?? Infinity;
 			if (maxPixelRatio !== Infinity && (!Number.isFinite(maxPixelRatio) || maxPixelRatio <= 0)) throw new RangeError("maxPixelRatio must be positive");
 			const roam = options.roam ? {
@@ -4707,7 +4707,6 @@ pixi_js = __toESM(pixi_js, 1);
 			this.running = false;
 			this.destroyed = false;
 			this.frameId = null;
-			this.lastTime = 0;
 			this.nextPhysicsTime = 0;
 			this.nextDrawTime = 0;
 			this.rebuildTimer = null;
@@ -4876,7 +4875,6 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		_resume() {
 			if (this.frameId !== null) return;
-			this.lastTime = 0;
 			this.nextPhysicsTime = 0;
 			this.nextDrawTime = 0;
 			this.frameId = requestAnimationFrame(this._tick);
@@ -4891,18 +4889,14 @@ pixi_js = __toESM(pixi_js, 1);
 		_tick = (time) => {
 			this.frameId = requestAnimationFrame(this._tick);
 			let dt = 0;
-			if (!this.physicsInterval) {
-				dt = this.lastTime ? Math.min((time - this.lastTime) / 1e3, config.MAX_DT) : 0;
-				this.lastTime = time;
-			} else if (!this.nextPhysicsTime) this.nextPhysicsTime = time + this.physicsInterval;
+			if (!this.nextPhysicsTime) this.nextPhysicsTime = time + this.physicsInterval;
 			else if (time >= this.nextPhysicsTime - 1e-7) {
 				const elapsedIntervals = Math.floor(Math.max(0, time - this.nextPhysicsTime) / this.physicsInterval) + 1;
 				this.nextPhysicsTime += elapsedIntervals * this.physicsInterval;
-				dt = Math.min(this.physicsInterval / 1e3, config.MAX_DT);
+				dt = this.physicsInterval / 1e3;
 			}
 			if (this.terrain.ready && dt > 0) this.population.update(dt, this.timeScale);
-			if (!this.renderInterval) this._draw();
-			else if (!this.nextDrawTime || time >= this.nextDrawTime) {
+			if (!this.nextDrawTime || time >= this.nextDrawTime) {
 				if (!this.nextDrawTime) this.nextDrawTime = time;
 				const elapsedIntervals = Math.floor((time - this.nextDrawTime) / this.renderInterval) + 1;
 				this.nextDrawTime += elapsedIntervals * this.renderInterval;

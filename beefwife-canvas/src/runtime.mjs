@@ -37,14 +37,11 @@ class BeefwifeCanvasRuntime {
     /* A draw landing between two physics updates repeats the frame before it,
        because nothing interpolates. So the draw rate follows the physics rate
        down: the extra pass costs a whole scene traversal and shows nothing
-       new. A physics rate of 0 steps every frame, which no draw rate outpaces. */
-    if (
-      this.physicsFps &&
-      (!this.renderFps || this.renderFps > this.physicsFps)
-    )
+       new. A draw rate of 0 asks for that ceiling by name. */
+    if (!this.renderFps || this.renderFps > this.physicsFps)
       this.renderFps = this.physicsFps;
-    this.renderInterval = this.renderFps ? 1000 / this.renderFps : 0;
-    this.physicsInterval = this.physicsFps ? 1000 / this.physicsFps : 0;
+    this.renderInterval = 1000 / this.renderFps;
+    this.physicsInterval = 1000 / this.physicsFps;
     const maxPixelRatio = options.maxPixelRatio ?? Infinity;
     if (
       maxPixelRatio !== Infinity &&
@@ -131,7 +128,6 @@ class BeefwifeCanvasRuntime {
     this.running = false;
     this.destroyed = false;
     this.frameId = null;
-    this.lastTime = 0;
     this.nextPhysicsTime = 0;
     this.nextDrawTime = 0;
     this.rebuildTimer = null;
@@ -347,7 +343,6 @@ class BeefwifeCanvasRuntime {
 
   _resume() {
     if (this.frameId !== null) return;
-    this.lastTime = 0;
     this.nextPhysicsTime = 0;
     this.nextDrawTime = 0;
     this.frameId = requestAnimationFrame(this._tick);
@@ -364,12 +359,7 @@ class BeefwifeCanvasRuntime {
   _tick = (time) => {
     this.frameId = requestAnimationFrame(this._tick);
     let dt = 0;
-    if (!this.physicsInterval) {
-      dt = this.lastTime
-        ? Math.min((time - this.lastTime) / 1000, BEEFWIFE_CANVAS_CONFIG.MAX_DT)
-        : 0;
-      this.lastTime = time;
-    } else if (!this.nextPhysicsTime) {
+    if (!this.nextPhysicsTime) {
       this.nextPhysicsTime = time + this.physicsInterval;
     } else if (time >= this.nextPhysicsTime - 1e-7) {
       const elapsedIntervals =
@@ -380,16 +370,17 @@ class BeefwifeCanvasRuntime {
       /* The missed slots advance the schedule and are then dropped: the step
          is one slot however late the frame is. `timeScale` multiplies this,
          so a step that grew with lateness would buy the next frame the same
-         lateness again and hold the host in the stall it is leaving. */
-      dt = Math.min(this.physicsInterval / 1000, BEEFWIFE_CANVAS_CONFIG.MAX_DT);
+         lateness again and hold the host in the stall it is leaving. A host
+         that cannot keep the rate therefore plays slower rather than moving
+         differently, since the routing below steps once per tick whatever
+         the step is. */
+      dt = this.physicsInterval / 1000;
     }
 
     if (this.terrain.ready && dt > 0) {
       this.population.update(dt, this.timeScale);
     }
-    if (!this.renderInterval) {
-      this._draw();
-    } else if (!this.nextDrawTime || time >= this.nextDrawTime) {
+    if (!this.nextDrawTime || time >= this.nextDrawTime) {
       if (!this.nextDrawTime) this.nextDrawTime = time;
       const elapsedIntervals =
         Math.floor((time - this.nextDrawTime) / this.renderInterval) + 1;

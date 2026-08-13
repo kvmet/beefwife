@@ -5,7 +5,6 @@ import { BeefwifeCanvasActor as ActorClass } from "./actor.mjs";
 const DEBUG_KEYS = new Set(["routes", "targets", "terrain"]);
 // Step bounds are owned by BeefwifeCanvasActor; the host only re-exposes them.
 const config = {
-  MAX_DT: ActorClass.MAX_DT,
   /* A guard against a mistyped `count` on a mount, not a structural limit:
      nothing here is sized against it. Set past where a page is unusable
      anyway, so it never binds a real population. The cheapest shipped cast
@@ -55,20 +54,23 @@ const imageRenderingOf = (value) => {
     throw new RangeError("imageRendering must be auto or pixelated");
   return value;
 };
-/* Absent takes the default; an explicit 0 asks for every frame. The two read
-   the same and mean opposite things, so they are kept apart here rather than
-   at each call. */
-const rateOf = (value, fallback, name) => {
-  if (value === undefined) return fallback;
-  if (value === 0) return 0;
+const rateOf = (value, name) => {
   if (!Number.isFinite(value) || value < 1 || value > 240)
-    throw new RangeError(`${name} must be 0 or from 1 to 240`);
+    throw new RangeError(`${name} must be from 1 to 240`);
   return value;
 };
-const renderFpsOf = (value) =>
-  rateOf(value, config.DEFAULT_RENDER_FPS, "renderFps");
+/* A draw rate of 0 asks to match the physics rate, which is also its ceiling.
+   A physics rate has no such reading: the substep size is fixed, so there is
+   nothing above it to match and no rate that simulates more. */
+const renderFpsOf = (value) => {
+  if (value === undefined) return config.DEFAULT_RENDER_FPS;
+  if (value === 0) return 0;
+  return rateOf(value, "renderFps");
+};
 const physicsFpsOf = (value) =>
-  rateOf(value, config.DEFAULT_PHYSICS_FPS, "physicsFps");
+  value === undefined
+    ? config.DEFAULT_PHYSICS_FPS
+    : rateOf(value, "physicsFps");
 const chooseName = (cast, weights, random) => {
   const names = Object.keys(cast);
   if (!names.length) throw new Error("cast must contain at least one beefwife");

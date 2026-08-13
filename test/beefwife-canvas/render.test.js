@@ -88,8 +88,18 @@ const stage = Object.assign(Object.create(BeefwifeCanvasScene.prototype), {
   world: { addChildAt: (child, index) => added.push([child, index]) },
 });
 const sync = (displays) => stage.syncDisplays(displays);
-const first = { destroyed: false, destroy() { this.destroyed = true; } };
-const second = { destroyed: false, destroy() { this.destroyed = true; } };
+const first = {
+  destroyed: false,
+  destroy() {
+    this.destroyed = true;
+  },
+};
+const second = {
+  destroyed: false,
+  destroy() {
+    this.destroyed = true;
+  },
+};
 sync([first, second]);
 assert.equal(added.length, 2);
 sync([first, second]);

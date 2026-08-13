@@ -403,6 +403,29 @@ const sceneBoundary = async () => {
     "a stalled frame replayed the slots it missed",
   );
 
+  /* A slow rate asks for fewer, larger steps, not for slow motion. The
+     substep size is fixed, so a tenth of a second here is six substeps at
+     ordinary speed, and lowering the rate saves the routing between them
+     rather than any of the physics. */
+  vm.runInContext(
+    `globalThis.sparseSteps = [];
+     globalThis.sparse = new BeefwifeCanvasRuntime({
+       cast: { [testDescriptor.name]: testDescriptor },
+       count: 0,
+       physicsFps: 10,
+     });
+     sparse.terrain.build();
+     sparse.population.actors = [{ update: (dt) => sparseSteps.push(dt) }];
+     sparse._draw = () => {};
+     for (let n = 0; n <= 5; n++) sparse._tick(1000 + n * 100);`,
+    browser,
+  );
+  assert.equal(browser.sparseSteps.length, 5);
+  assert.ok(
+    browser.sparseSteps.every((seconds) => Math.abs(seconds - 0.1) < 1e-12),
+    "a slow physics rate ran in slow motion",
+  );
+
   [0.125, 0.2, 1].forEach((resolutionScale) => {
     browser.goodValue = resolutionScale;
     assert.doesNotThrow(() =>
@@ -444,16 +467,28 @@ const sceneBoundary = async () => {
     ),
     "24,60",
   );
+  /* A draw rate of 0 asks to match the physics rate. A physics rate has no
+     such reading: the substep size is fixed, so ticking above the rate
+     simulates nothing more and there is nothing above it to match. */
+  [-1, 0, 0.5, 241, Infinity].forEach((physicsFps) => {
+    browser.badValue = physicsFps;
+    assert.throws(
+      () =>
+        vm.runInContext(
+          "new BeefwifeCanvasRuntime({ physicsFps: badValue })",
+          browser,
+        ),
+      /physicsFps/,
+    );
+  });
   /* Drawing faster than the simulation repeats frames, so the draw rate is
-     held at the physics rate however high it was asked for, including the 0
-     that otherwise means every frame. */
+     held at the physics rate however high it was asked for. */
   [
     [0, 60, 60],
     [120, 60, 60],
     [60, 30, 30],
     [24, 60, 24],
-    [120, 0, 120],
-    [0, 0, 0],
+    [120, 10, 10],
   ].forEach(([renderFps, physicsFps, expected]) => {
     browser.rates = { renderFps, physicsFps, count: 0, timeScale: 0 };
     const capped = vm.runInContext(
@@ -469,7 +504,7 @@ const sceneBoundary = async () => {
   browser.layer.destroy();
   assert.ok(log.some(([operation]) => operation === "remove"));
   assert.ok(log.some(([operation]) => operation === "destroy"));
-  return 48;
+  return 55;
 };
 
 (async () => {

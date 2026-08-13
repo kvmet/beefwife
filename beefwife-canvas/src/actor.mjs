@@ -12,9 +12,6 @@ const BEEFWIFE_CANVAS_ACTOR_LOST_MARGIN = 200;
 const actorRandomBetween = (random, a, b) => a + random() * (b - a);
 
 class BeefwifeCanvasActor {
-  // Longest host frame (s) accepted. `timeScale` multiplies it into simulated
-  // seconds, so the two together bound the substeps one update can cost.
-  static MAX_DT = 0.05;
   static MAX_TIME_SCALE = 16;
 
   static timeScaleOf(value) {
@@ -157,10 +154,8 @@ class BeefwifeCanvasActor {
   }
 
   update(dt, timeScale) {
-    if (!Number.isFinite(dt) || dt < 0 || dt > BeefwifeCanvasActor.MAX_DT)
-      throw new RangeError(
-        `dt must be from 0 to ${BeefwifeCanvasActor.MAX_DT}`,
-      );
+    if (!Number.isFinite(dt) || dt < 0)
+      throw new RangeError("dt must be nonnegative seconds");
     BeefwifeCanvasActor.timeScaleOf(timeScale);
     const scaledDt = dt * timeScale;
     const pose = this.beefwife.getPose();
