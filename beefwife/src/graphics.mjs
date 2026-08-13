@@ -36,6 +36,19 @@ class HeadlessGraphics {
 // The widest a Beefwife world may be, so a knee cannot be pushed outside it.
 const MAX_KNEE_OFFSET = 2e9;
 
+/**
+ * Runs work once the renderer is between frames.
+ *
+ * Pixi calls `onRender` partway through executing a frame's instructions, and
+ * the renderer is one state machine: a nested `render` leaves the outer pass
+ * holding a bind group the inner one replaced, and every display object still
+ * queued draws from a texture with no source. Baking a sheet renders, and
+ * destroying one frees what the pass is reading, so neither may happen there.
+ * A microtask runs after the frame's callback returns and before the next, so
+ * work booked here sees a renderer at rest.
+ */
+const afterPass = (work) => queueMicrotask(work);
+
 class Graphics {
   static available = true;
   static prepare(model) {
@@ -92,8 +105,8 @@ class Graphics {
     this.ribbonFill = null;
     this.ribbonStroke = null;
     this.ribbonCount = -1;
-    /* What the last rebake replaced, held one frame. See `_retire`. */
-    this.retired = null;
+    // True between booking a bake and running it. See `afterPass`.
+    this.baking = false;
     this.adopt(state);
   }
 
@@ -105,7 +118,14 @@ class Graphics {
   adopt(state) {
     this.model = state.model;
     this.legCount = state.legs.length / state.layout.legStride;
+    /* The plan goes, and with it the particles it named: they hold frames
+       baked for the model being replaced, and the state arriving now is
+       written for the new one. They draw where they last stood until the
+       bake lands. */
     this.plan = null;
+    this.footParticles = [];
+    this.ornamentParticles = [];
+    this.plateParticles = [];
     let changed = this._syncLimbParts(this.legCount);
     changed = this._syncRibbonParts() || changed;
     if (changed) this._arrange();
@@ -114,30 +134,6 @@ class Graphics {
 
   _drop(child) {
     discard(this.parent, child);
-  }
-
-  /* A rebake runs inside `onRender`, which Pixi calls partway through
-     executing the frame's instructions. The sheet and the containers being
-     replaced are already in that instruction set, so destroying them here
-     leaves the rest of the pass drawing from a texture whose source is gone.
-     They leave the scene now and are destroyed at the top of the next frame,
-     once the pass that scheduled them has finished. Removing a child is safe
-     mid-pass in a way that destroying one is not. */
-  _retire(atlas, containers) {
-    this._flushRetired();
-    for (const container of containers)
-      if (container && container.parent === this.parent)
-        this.parent.removeChild(container);
-    this.retired = { atlas, containers };
-  }
-
-  _flushRetired() {
-    const retired = this.retired;
-    if (!retired) return;
-    this.retired = null;
-    for (const container of retired.containers)
-      if (container) container.destroy();
-    releaseAtlas(retired.atlas);
   }
 
   _syncLimbParts(legCount) {
@@ -267,21 +263,35 @@ class Graphics {
 
   /* The renderer arrives with Pixi's own render callback, which is the first
      moment a beefwife is certain to have one. Until then the shapes have no
-     frames and the creature draws as its meshes alone, for one frame. */
+     frames and the creature draws as its meshes alone, for one frame. The
+     bake itself waits for the pass to end, so this only books it. */
   _syncAtlas(renderer) {
+    if (
+      this.plan &&
+      this.atlasResolution === (this.options.pixelResolution ?? 1)
+    )
+      return;
+    if (!renderer || this.baking) return;
+    this.baking = true;
+    afterPass(() => {
+      this.baking = false;
+      if (!this.parent.destroyed) this._bake(renderer);
+    });
+  }
+
+  _bake(renderer) {
     const resolution = this.options.pixelResolution ?? 1;
-    this._flushRetired();
-    if (this.plan && this.atlasResolution === resolution) return;
-    if (!renderer) return;
     const plan = planAtlas(this.model, resolution);
     // Acquired before the old one goes, so a shared atlas is never rebuilt.
     const atlas = acquireAtlas(plan, renderer);
-    if (this.atlas || this.shapeContainers.length)
-      this._retire(this.atlas, this.shapeContainers);
+    const spent = this.atlas;
+    const replaced = this.shapeContainers;
     this.atlas = atlas;
     this.atlasResolution = resolution;
     this.plan = plan;
     this._buildParticles(plan);
+    for (const container of replaced) if (container) container.destroy();
+    releaseAtlas(spent);
   }
 
   _place(
@@ -495,11 +505,10 @@ class Graphics {
     });
   }
 
-  /* The atlas is tended before anything a caller can skip. It retires what
-     the last rebake replaced and rebakes when the resolution moves, and a
-     creature's own visibility decides neither: skipping that work strands a
-     sheet nothing will destroy, or leaves frames baked for a resolution the
-     renderer has left. Only the geometry below answers to `drawable`. */
+  /* The atlas is tended before anything a caller can skip. A creature's own
+     visibility does not decide whether it rebakes: skipping that leaves
+     frames baked for a resolution the renderer has left, and strands the
+     sheet they came from. Only the geometry below answers to `drawable`. */
   sync(state, renderer = null, drawable = true) {
     if (state.model !== this.model)
       throw new Error("render state model does not match Beefwife graphics");
@@ -561,7 +570,6 @@ class Graphics {
   }
 
   destroy() {
-    this._flushRetired();
     const children = [
       ...this.shapeContainers,
       this.limbFill,
