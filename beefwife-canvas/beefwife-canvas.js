@@ -1877,7 +1877,7 @@ pixi_js = __toESM(pixi_js, 1);
 		if (spread > 1e-6) {
 			cornerX = (thighNormalX + shinNormalX) / spread;
 			cornerY = (thighNormalY + shinNormalY) / spread;
-			const along = -(cornerX * thighX + cornerY * thighY) / thighLength * half;
+			const along = Math.abs((cornerX * thighX + cornerY * thighY) / thighLength * half);
 			const bone = Math.min(thighLength, shinLength);
 			if (along > bone) {
 				cornerX = cornerX * bone / along;

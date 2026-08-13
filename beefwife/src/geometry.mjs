@@ -163,9 +163,14 @@ const writeLimb = (
   if (spread > 1e-6) {
     cornerX = (thighNormalX + shinNormalX) / spread;
     cornerY = (thighNormalY + shinNormalY) / spread;
-    // The corner leans back along the thigh by as much as it leans on down
-    // the shin, so one measurement answers for both bones.
-    const along = (-(cornerX * thighX + cornerY * thighY) / thighLength) * half;
+    /* The corner leans back along the thigh by as much as it leans on down
+       the shin, so one measurement answers for both bones. Folding the other
+       way puts the same lean on the other side of the knee and so signs the
+       projection the other way, while the length that outruns the bone is the
+       same either way: the magnitude is what the bone has to hold. */
+    const along = Math.abs(
+      ((cornerX * thighX + cornerY * thighY) / thighLength) * half,
+    );
     const bone = Math.min(thighLength, shinLength);
     if (along > bone) {
       cornerX = (cornerX * bone) / along;
