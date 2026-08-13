@@ -6,7 +6,12 @@ const DEBUG_KEYS = new Set(["routes", "targets", "terrain"]);
 // Step bounds are owned by BeefwifeCanvasActor; the host only re-exposes them.
 const config = {
   MAX_DT: ActorClass.MAX_DT,
-  MAX_COUNT: 256, // hard limit against accidental unbounded spawning
+  /* A guard against a mistyped `count` on a mount, not a structural limit:
+     nothing here is sized against it. Set past where a page is unusable
+     anyway, so it never binds a real population. The cheapest shipped cast
+     costs 11.2us a creature a frame, which is 11.5ms of a 16.7ms frame at
+     this many. */
+  MAX_COUNT: 1024,
   MAX_TIME_SCALE: ActorClass.MAX_TIME_SCALE,
   REBUILD_DELAY: 150, // ms debounce for terrain measurements
 };

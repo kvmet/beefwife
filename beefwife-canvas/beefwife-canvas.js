@@ -4189,7 +4189,7 @@ pixi_js = __toESM(pixi_js, 1);
 	]);
 	var config = {
 		MAX_DT: BeefwifeCanvasActor.MAX_DT,
-		MAX_COUNT: 256,
+		MAX_COUNT: 1024,
 		MAX_TIME_SCALE: BeefwifeCanvasActor.MAX_TIME_SCALE,
 		REBUILD_DELAY: 150
 	};
