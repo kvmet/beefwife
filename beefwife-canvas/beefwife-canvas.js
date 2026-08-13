@@ -4725,7 +4725,8 @@ pixi_js = __toESM(pixi_js, 1);
 				if (!this.destroyed) this.scheduleRebuild();
 			};
 			this._onScroll = () => {
-				if (!this.destroyed && this.scene.kneeProjectionCenter === "viewport") this.scheduleRebuild();
+				if (this.destroyed) return;
+				if (this.scene.ownsCanvas || this.scene.kneeProjectionCenter === "viewport") this.scheduleRebuild();
 			};
 			this.observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(this._onResize);
 		}

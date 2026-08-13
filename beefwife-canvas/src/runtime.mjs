@@ -138,8 +138,17 @@ class BeefwifeCanvasRuntime {
     this._onResize = () => {
       if (!this.destroyed) this.scheduleRebuild();
     };
+    /* Terrain is measured in canvas coordinates. An embedded canvas scrolls
+       alongside the obstacles it shares a page with, so its measurement
+       survives; a layer fixed over the viewport does not move, so every
+       obstacle it measured has shifted. A viewport-centred knee field is
+       placed from the scroll position either way. */
     this._onScroll = () => {
-      if (!this.destroyed && this.scene.kneeProjectionCenter === "viewport")
+      if (this.destroyed) return;
+      if (
+        this.scene.ownsCanvas ||
+        this.scene.kneeProjectionCenter === "viewport"
+      )
         this.scheduleRebuild();
     };
     this.observer =
