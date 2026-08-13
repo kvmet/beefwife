@@ -2267,6 +2267,7 @@ pixi_js = __toESM(pixi_js, 1);
 		if (!held || --held.uses > 0) return;
 		sheets.delete(atlas.key);
 		for (const frame of atlas.frames.values()) frame.texture.destroy();
+		atlas.target.source.removeAllListeners("change");
 		atlas.target.destroy(true);
 	};
 

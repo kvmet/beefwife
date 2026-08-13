@@ -215,6 +215,13 @@ const releaseAtlas = (atlas) => {
   if (!held || --held.uses > 0) return;
   sheets.delete(atlas.key);
   for (const frame of atlas.frames.values()) frame.texture.destroy();
+  /* A Pixi bind group destroys itself when a source it holds announces its own
+     destruction, and the group belongs to the one particle shader every
+     particle container in the renderer draws through. Dropping the listeners
+     leaves that group pointing at a spent source instead, which the next
+     particle draw overwrites on its way in. Nothing but a bind group listens
+     for a source's change. */
+  atlas.target.source.removeAllListeners("change");
   atlas.target.destroy(true);
 };
 

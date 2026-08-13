@@ -237,15 +237,22 @@ assert.equal(atlasA.target.source.resolution, first.resolution);
 checks += 2;
 
 const shared = atlasA.target.source;
+/* Every particle container in a renderer draws through one shared shader, and
+   a bind group holding a source destroys itself the moment that source says it
+   was destroyed. A sheet that leaves while it is bound therefore stops the
+   whole page drawing, not just the creature that abandoned it. */
+const bound = new PIXI.BindGroup();
+bound.setResource(shared, 0);
 releaseAtlas(atlasA);
 assert.equal(shared.destroyed, false, "an atlas went while a creature held it");
 releaseAtlas(atlasB);
 assert.equal(shared.destroyed, true, "the last release left the atlas behind");
+assert.notEqual(bound.resources, null, "a spent sheet took a bind group with it");
 // A third comer bakes afresh rather than handing back the destroyed sheet.
 const revived = acquireAtlas(planAtlas(Model.compile(legged), 0.5), renderer);
 assert.notEqual(revived.target.source, shared);
 releaseAtlas(revived);
-checks += 3;
+checks += 4;
 
 /* A creature with nothing to place holds no atlas at all, rather than an
    empty texture nothing can sample. */
