@@ -7,63 +7,53 @@
  */
 
 const nameOf = (spec) => `${spec.section}:${spec.localIndex}`;
+const FIELDS = ["x", "y", "px", "py", "dx", "dy", "idle", "gain"];
 
-/* Writes into `chunks` in place and reports nothing: the caller owns the
-   chain and carries the whole-body values that are not per chunk. */
-const carryChunks = (chunks, model, previousChunks, previousModel) => {
+/* Writes into `chain` in place and reports nothing: the caller owns the chain
+   and carries the whole-body values that are not per chunk. */
+const carryChunks = (chain, model, previousChain, previousModel) => {
   const source = new Map();
   previousModel.chunks.forEach((spec, index) =>
-    source.set(nameOf(spec), previousChunks[index]),
+    source.set(nameOf(spec), index),
   );
   const carried = model.chunks.map((spec, index) => {
     const from = source.get(nameOf(spec));
-    if (!from) return false;
-    const chunk = chunks[index];
-    chunk.x = from.x;
-    chunk.y = from.y;
-    chunk.px = from.px;
-    chunk.py = from.py;
-    chunk.dx = from.dx;
-    chunk.dy = from.dy;
-    chunk.idle = from.idle;
-    chunk.gain = from.gain;
+    if (from === undefined) return false;
+    for (const field of FIELDS)
+      chain[field][index] = previousChain[field][from];
     return true;
   });
-  for (let index = 0; index < chunks.length; index++) {
+  const { x, y, px, py, dx, dy, idle, gain, count } = chain;
+  for (let index = 0; index < count; index++) {
     if (carried[index]) continue;
     let before = index - 1;
     while (before >= 0 && !carried[before]) before--;
     let after = index + 1;
-    while (after < chunks.length && !carried[after]) after++;
-    const chunk = chunks[index];
-    if (before >= 0 && after < chunks.length) {
-      const start = chunks[before];
-      const end = chunks[after];
+    while (after < count && !carried[after]) after++;
+    if (before >= 0 && after < count) {
       const along = (index - before) / (after - before);
-      chunk.x = start.x + (end.x - start.x) * along;
-      chunk.y = start.y + (end.y - start.y) * along;
-      chunk.px = start.px + (end.px - start.px) * along;
-      chunk.py = start.py + (end.py - start.py) * along;
-      chunk.dx = start.dx;
-      chunk.dy = start.dy;
+      x[index] = x[before] + (x[after] - x[before]) * along;
+      y[index] = y[before] + (y[after] - y[before]) * along;
+      px[index] = px[before] + (px[after] - px[before]) * along;
+      py[index] = py[before] + (py[after] - py[before]) * along;
+      dx[index] = dx[before];
+      dy[index] = dy[before];
     } else {
       /* dx points headward, so a chunk added past the tail extends the other
          way. A chunk that did not exist carries no velocity. */
-      const anchorIndex = before >= 0 ? before : after;
-      const anchor = chunks[anchorIndex];
+      const anchor = before >= 0 ? before : after;
       const heading = before >= 0 ? -1 : 1;
       const link = model.links[before >= 0 ? index - 1 : index];
-      const reach =
-        (link ? link.restLength : 0) * Math.abs(index - anchorIndex);
-      chunk.x = anchor.x + anchor.dx * heading * reach;
-      chunk.y = anchor.y + anchor.dy * heading * reach;
-      chunk.px = chunk.x;
-      chunk.py = chunk.y;
-      chunk.dx = anchor.dx;
-      chunk.dy = anchor.dy;
+      const reach = (link ? link.restLength : 0) * Math.abs(index - anchor);
+      x[index] = x[anchor] + dx[anchor] * heading * reach;
+      y[index] = y[anchor] + dy[anchor] * heading * reach;
+      px[index] = x[index];
+      py[index] = y[index];
+      dx[index] = dx[anchor];
+      dy[index] = dy[anchor];
     }
-    chunk.idle = 0;
-    chunk.gain = 0;
+    idle[index] = 0;
+    gain[index] = 0;
   }
 };
 

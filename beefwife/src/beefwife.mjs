@@ -233,7 +233,7 @@ const newPose = () => ({
 });
 
 const bodyFitsWorld = (body) =>
-  body.fitsTranslation({ x: 0, y: 0 }, MAX_WORLD_COORDINATE);
+  body.chain.fitsTranslation({ x: 0, y: 0 }, MAX_WORLD_COORDINATE);
 
 const sameTopology = (before, after) =>
   ["head", "trunk", "tail"].every(
@@ -352,9 +352,9 @@ class Beefwife extends Container {
       this.#updateDependents,
     );
     if (stepped) {
-      const correction = this.#body.worldCorrection(MAX_WORLD_COORDINATE);
+      const correction = this.#body.chain.worldCorrection(MAX_WORLD_COORDINATE);
       if (correction.x || correction.y) {
-        this.#body.translate(correction);
+        this.#body.chain.translate(correction);
         this.#legs.translate(correction);
         this.#skin.translate(correction);
       }
@@ -452,9 +452,9 @@ class Beefwife extends Container {
   translate(rawOffset) {
     this.#live("translate");
     const offset = worldPoint(rawOffset, null, "offset");
-    if (!this.#body.fitsTranslation(offset, MAX_WORLD_COORDINATE))
+    if (!this.#body.chain.fitsTranslation(offset, MAX_WORLD_COORDINATE))
       throw new RangeError("offset places the body outside the world");
-    this.#body.translate(offset);
+    this.#body.chain.translate(offset);
     this.#legs.translate(offset);
     this.#skin.translate(offset);
     this.#refreshPose();
@@ -472,7 +472,7 @@ class Beefwife extends Container {
      Pass an array to fill to avoid allocating one a frame. */
   getBendResponse(into) {
     this.#live("getBendResponse");
-    return this.#body.bend.response(this.#body.chunks, into);
+    return this.#body.bend.response(this.#body.chain, into);
   }
 
   destroy(options) {

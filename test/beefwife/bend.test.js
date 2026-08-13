@@ -27,14 +27,11 @@ const fixture = (name) =>
       ),
     ),
   );
-const turnAt = (chunks, index) => {
-  const before = chunks[index - 1];
-  const chunk = chunks[index];
-  const after = chunks[index + 1];
-  const ax = chunk.x - before.x;
-  const ay = chunk.y - before.y;
-  const bx = after.x - chunk.x;
-  const by = after.y - chunk.y;
+const turnAt = ({ x, y }, index) => {
+  const ax = x[index] - x[index - 1];
+  const ay = y[index] - y[index - 1];
+  const bx = x[index + 1] - x[index];
+  const by = y[index + 1] - y[index];
   return Math.atan2(ax * by - ay * bx, ax * bx + ay * by);
 };
 
@@ -58,7 +55,7 @@ const respond = (model, seconds) => {
     const phaseSine = Math.sin(phase);
     const phaseCosine = Math.cos(phase);
     for (let index = 1; index < count - 1; index++) {
-      const turn = turnAt(body.chunks, index);
+      const turn = turnAt(body.chain, index);
       const scale =
         channel.amplitude * tables.motionBend[index] * tables.bendScale[index];
       const command =
@@ -177,14 +174,14 @@ for (let index = 0; index < count - 1; index++) {
     body.bend.wantedY[index] + Math.sin(heading) * body.linkTargets[index];
 }
 for (let pass = 0; pass < 64; pass++) {
-  body.bend.relax(body.chunks, body.tables.jointCorrectionHalf);
+  body.bend.relax(body.chain, body.tables.jointCorrectionHalf);
   body._relaxLinks();
 }
 let reached = 0;
 let driven = 0;
 for (let index = 1; index < count - 1; index++) {
   if (Math.abs(wanted[index]) < 1e-9) continue;
-  reached += turnAt(body.chunks, index) / wanted[index];
+  reached += turnAt(body.chain, index) / wanted[index];
   driven++;
 }
 reached /= driven;

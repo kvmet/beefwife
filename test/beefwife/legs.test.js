@@ -64,9 +64,9 @@ assert.ok(
   Math.abs(paired.model.chunks[left.anchor].restDistance - midpoint) <=
     exact.chain.sections.trunk.spacing / 2,
 );
-const hip = paired.body.chunks[left.anchor];
+const hipY = paired.body.chain.y[left.anchor];
 assert.ok(Math.abs(left.foot.x - right.foot.x) < 1e-12);
-assert.ok(Math.abs(left.foot.y + right.foot.y - hip.y * 2) < 1e-12);
+assert.ok(Math.abs(left.foot.y + right.foot.y - hipY * 2) < 1e-12);
 checks += 4;
 
 const crowded = copy(exact);

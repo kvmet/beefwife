@@ -2,6 +2,7 @@
 
 import { positiveModulo } from "./drive.mjs";
 import { ChainTables } from "./tables.mjs";
+import { ChainState } from "./chain.mjs";
 import { carryChunks } from "./carry.mjs";
 import { Bend } from "./bend.mjs";
 
@@ -23,10 +24,10 @@ const AXIS_RATE = 1.5;
    descriptor reaches is 1.63, so it engages only on a chain running away. */
 const MAX_LINK_STRETCH = 3;
 const magnitude = (x, y) => Math.sqrt(x * x + y * y);
-const compareGain = (chunks, before, after) =>
-  chunks[before].gain - chunks[after].gain || before - after;
+const compareGain = (gain, before, after) =>
+  gain[before] - gain[after] || before - after;
 
-const selectLowest = (order, chunks, count) => {
+const selectLowest = (order, gain, count) => {
   if (count <= 0 || count >= order.length) return;
   const target = count - 1;
   let left = 0;
@@ -36,9 +37,9 @@ const selectLowest = (order, chunks, count) => {
     let lower = left;
     let upper = right;
     while (lower <= upper) {
-      while (lower <= right && compareGain(chunks, order[lower], pivot) < 0)
+      while (lower <= right && compareGain(gain, order[lower], pivot) < 0)
         lower++;
-      while (upper >= left && compareGain(chunks, pivot, order[upper]) < 0)
+      while (upper >= left && compareGain(gain, pivot, order[upper]) < 0)
         upper--;
       if (lower <= upper) {
         const swap = order[lower];
@@ -61,30 +62,23 @@ class Body {
     this.accumulator = 0;
     this.axis = { x: 1, y: 0 };
     this.steeringBias = 0;
-    this.chunks = model.chunks.map(() => ({
-      x: 0,
-      y: 0,
-      px: 0,
-      py: 0,
-      dx: 1,
-      dy: 0,
-      idle: 0,
-      gain: 0,
-      gaitContact: 1,
-      contact: 1,
-    }));
+    this.chain = new ChainState(model.chunks.length);
     this.linkTargets = new Float64Array(model.links.length);
     this.bend = new Bend(model.chunks.length);
     this.breathingShiftX = new Float64Array(model.chunks.length);
     this.breathingShiftY = new Float64Array(model.chunks.length);
     this.liftOrder = model.chunks.map((_, index) => index);
     this.liftTargets = new Float64Array(model.chunks.length);
-    this.correction = { x: 0, y: 0 };
-    this.tables = new ChainTables(model, model.gait, PHYSICS_STEP, RELAX_PASSES);
+    this.tables = new ChainTables(
+      model,
+      model.gait,
+      PHYSICS_STEP,
+      RELAX_PASSES,
+    );
   }
 
   reconfigure(model, gait, throttle = 1, breathingPhase = this.breathingPhase) {
-    if (model.chunks.length !== this.chunks.length)
+    if (model.chunks.length !== this.chain.count)
       throw new Error("cannot reconfigure a different chunk count");
     this.model = model;
     this.gait = gait;
@@ -94,17 +88,18 @@ class Body {
   }
 
   place(position, direction) {
-    this.chunks.forEach((chunk, index) => {
+    const { x, y, px, py, dx, dy, idle, gain, count } = this.chain;
+    for (let index = 0; index < count; index++) {
       const distance = this.model.chunks[index].restDistance;
-      chunk.x = position.x - direction.x * distance;
-      chunk.y = position.y - direction.y * distance;
-      chunk.px = chunk.x;
-      chunk.py = chunk.y;
-      chunk.dx = direction.x;
-      chunk.dy = direction.y;
-      chunk.idle = 0;
-      chunk.gain = 0;
-    });
+      x[index] = position.x - direction.x * distance;
+      y[index] = position.y - direction.y * distance;
+      px[index] = x[index];
+      py[index] = y[index];
+      dx[index] = direction.x;
+      dy[index] = direction.y;
+      idle[index] = 0;
+      gain[index] = 0;
+    }
     this.axis = { ...direction };
     this.steeringBias = 0;
     this.accumulator = 0;
@@ -115,7 +110,7 @@ class Body {
   /* Takes on the state of the body it replaces. The chain itself is carried
      chunk by chunk; these are the values that belong to the whole creature. */
   adopt(previous) {
-    carryChunks(this.chunks, this.model, previous.chunks, previous.model);
+    carryChunks(this.chain, this.model, previous.chain, previous.model);
     this.axis = { ...previous.axis };
     this.steeringBias = previous.steeringBias;
     this.accumulator = previous.accumulator;
@@ -124,63 +119,22 @@ class Body {
 
   refreshContacts(throttle) {
     const autoLift = this.model.physics.autoLift;
-    for (let index = 0; index < this.chunks.length; index++) {
-      const chunk = this.chunks[index];
+    const { idle, gaitContact, contact, count } = this.chain;
+    for (let index = 0; index < count; index++) {
       const spec = this.model.chunks[index];
-      chunk.gaitContact = this.gait.contactAt(
+      gaitContact[index] = this.gait.contactAt(
         spec.restDistance,
         throttle,
         spec.motionScale.contact,
       );
-      chunk.contact = Math.max(
+      contact[index] = Math.max(
         0,
         Math.min(
           1,
-          chunk.gaitContact * (1 - autoLift.amount * chunk.idle * throttle),
+          gaitContact[index] * (1 - autoLift.amount * idle[index] * throttle),
         ),
       );
     }
-  }
-
-  translate(offset) {
-    this.chunks.forEach((chunk) => {
-      chunk.x += offset.x;
-      chunk.y += offset.y;
-      chunk.px += offset.x;
-      chunk.py += offset.y;
-    });
-  }
-
-  fitsTranslation(offset, limit) {
-    return this.chunks.every((chunk) =>
-      ["x", "y", "px", "py"].every((key) => {
-        const axisOffset = key.endsWith("x") ? offset.x : offset.y;
-        const next = chunk[key] + axisOffset;
-        return Number.isFinite(next) && Math.abs(next) <= limit;
-      }),
-    );
-  }
-
-  worldCorrection(limit) {
-    let minimumX = Infinity;
-    let maximumX = -Infinity;
-    let minimumY = Infinity;
-    let maximumY = -Infinity;
-    for (let index = 0; index < this.chunks.length; index++) {
-      const chunk = this.chunks[index];
-      minimumX = Math.min(minimumX, chunk.x, chunk.px);
-      maximumX = Math.max(maximumX, chunk.x, chunk.px);
-      minimumY = Math.min(minimumY, chunk.y, chunk.py);
-      maximumY = Math.max(maximumY, chunk.y, chunk.py);
-    }
-    const correction = (minimum, maximum) => {
-      if (maximum > limit) return limit - maximum;
-      if (minimum < -limit) return -limit - minimum;
-      return 0;
-    };
-    this.correction.x = correction(minimumX, maximumX);
-    this.correction.y = correction(minimumY, maximumY);
-    return this.correction;
   }
 
   step(dt, throttle, direction, afterSubstep) {
@@ -212,7 +166,7 @@ class Body {
       throttle,
       this._steer(direction, dt),
     );
-    this.bend.relax(this.chunks, this.tables.jointCorrectionHalf);
+    this.bend.relax(this.chain, this.tables.jointCorrectionHalf);
     for (let pass = 0; pass < RELAX_PASSES; pass++) this._relaxLinks();
     this._clampLinks();
     this._applyAutoLift(dt, throttle);
@@ -226,57 +180,52 @@ class Body {
     if (Math.abs(scaleChange) < 1e-15) return;
     const { start, end, count, spacing } = this.model.sections.trunk;
     const middle = (count - 1) / 2;
-    const front = this.chunks[start];
-    const rear = this.chunks[end - 1];
+    const { x, y, px, py, dx, dy, count: chunkCount } = this.chain;
     let meanX = 0;
     let meanY = 0;
-    for (let index = 0; index < this.chunks.length; index++) {
-      const chunk = this.chunks[index];
+    for (let index = 0; index < chunkCount; index++) {
       const position =
         index < start
           ? middle
           : index >= end
             ? -middle
             : middle - (index - start);
-      const tangent = index < start ? front : index >= end ? rear : chunk;
+      const tangent = index < start ? start : index >= end ? end - 1 : index;
       const distance = position * spacing * scaleChange;
-      const x = tangent.dx * distance;
-      const y = tangent.dy * distance;
-      this.breathingShiftX[index] = x;
-      this.breathingShiftY[index] = y;
-      meanX += x / this.chunks.length;
-      meanY += y / this.chunks.length;
+      const shiftX = dx[tangent] * distance;
+      const shiftY = dy[tangent] * distance;
+      this.breathingShiftX[index] = shiftX;
+      this.breathingShiftY[index] = shiftY;
+      meanX += shiftX / chunkCount;
+      meanY += shiftY / chunkCount;
     }
-    for (let index = 0; index < this.chunks.length; index++) {
-      const chunk = this.chunks[index];
-      const x = this.breathingShiftX[index] - meanX;
-      const y = this.breathingShiftY[index] - meanY;
-      chunk.x += x;
-      chunk.y += y;
-      chunk.px += x;
-      chunk.py += y;
+    for (let index = 0; index < chunkCount; index++) {
+      const shiftX = this.breathingShiftX[index] - meanX;
+      const shiftY = this.breathingShiftY[index] - meanY;
+      x[index] += shiftX;
+      y[index] += shiftY;
+      px[index] += shiftX;
+      py[index] += shiftY;
     }
   }
 
   _updateTangentsAndAxis(dt) {
-    const chunks = this.chunks;
-    const count = chunks.length;
+    const { x, y, px, py, dx, dy, count } = this.chain;
     const last = count - 1;
     let axisX = 0;
     let axisY = 0;
     for (let index = 0; index < count; index++) {
-      const chunk = chunks[index];
-      const ahead = chunks[index === 0 ? 0 : index - 1];
-      const behind = chunks[index === last ? last : index + 1];
-      const x = ahead.x - behind.x;
-      const y = ahead.y - behind.y;
-      const tangentLength = Math.sqrt(x * x + y * y);
+      const ahead = index === 0 ? 0 : index - 1;
+      const behind = index === last ? last : index + 1;
+      const spanX = x[ahead] - x[behind];
+      const spanY = y[ahead] - y[behind];
+      const tangentLength = Math.sqrt(spanX * spanX + spanY * spanY);
       if (tangentLength >= 1e-9) {
-        chunk.dx = x / tangentLength;
-        chunk.dy = y / tangentLength;
+        dx[index] = spanX / tangentLength;
+        dy[index] = spanY / tangentLength;
       }
-      axisX += chunk.x - chunk.px;
-      axisY += chunk.y - chunk.py;
+      axisX += x[index] - px[index];
+      axisY += y[index] - py[index];
     }
     const axisLength = Math.sqrt(axisX * axisX + axisY * axisY);
     if (axisLength < 1e-9) return;
@@ -290,19 +239,17 @@ class Body {
 
   _integrate(dt, throttle) {
     const dtSquared = dt * dt;
-    const chunks = this.chunks;
-    const count = chunks.length;
     const gait = this.gait.gait;
     const phase = this.gait.phase;
-    const contact = gait.contact;
+    const contactChannel = gait.contact;
     const thrust = gait.thrust;
-    const contactHarmonic = contact.harmonic;
+    const contactHarmonic = contactChannel.harmonic;
     const thrustHarmonic = thrust.harmonic;
-    const contactPhaseOffset = contact.phaseOffset;
+    const contactPhaseOffset = contactChannel.phaseOffset;
     const thrustPhaseOffset = thrust.phaseOffset;
-    const contactDuty = contact.dutyCycle;
+    const contactDuty = contactChannel.dutyCycle;
     const thrustDuty = thrust.dutyCycle;
-    const contactAmplitude = contact.amplitude;
+    const contactAmplitude = contactChannel.amplitude;
     const thrustAcceleration = thrust.acceleration;
     const autoLift = this.model.physics.autoLift.amount;
     const axisX = this.axis.x;
@@ -316,31 +263,34 @@ class Body {
       motionThrust,
       phaseLag,
     } = this.tables;
+    const { x, y, px, py, dx, dy, idle, gain, gaitContact, contact, count } =
+      this.chain;
 
     for (let index = 0; index < count; index++) {
-      const chunk = chunks[index];
       const hold = retention[index];
-      const velocityX = (chunk.x - chunk.px) * hold;
-      const velocityY = (chunk.y - chunk.py) * hold;
-      chunk.px = chunk.x;
-      chunk.py = chunk.y;
-      chunk.x += velocityX;
-      chunk.y += velocityY;
+      const startX = x[index];
+      const startY = y[index];
+      const velocityX = (startX - px[index]) * hold;
+      const velocityY = (startY - py[index]) * hold;
+      px[index] = startX;
+      py[index] = startY;
+      const movedX = startX + velocityX;
+      const movedY = startY + velocityY;
 
-      const dx = chunk.dx;
-      const dy = chunk.dy;
-      const x = chunk.x - chunk.px;
-      const y = chunk.y - chunk.py;
-      const along = x * dx + y * dy;
-      const lateral = x * -dy + y * dx;
+      const tangentX = dx[index];
+      const tangentY = dy[index];
+      /* Read back as a difference rather than reused from `velocity`: the sum
+         above rounds, and the solver is held to the same bits it produced. */
+      const spanX = movedX - startX;
+      const spanY = movedY - startY;
+      const along = spanX * tangentX + spanY * tangentY;
+      const lateral = spanX * -tangentY + spanY * tangentX;
 
       const lagged = phase - phaseLag[index];
       const contactCycle =
-        positiveModulo(
-          contactHarmonic * lagged + contactPhaseOffset,
-          TAU,
-        ) / TAU;
-      const gaitContact =
+        positiveModulo(contactHarmonic * lagged + contactPhaseOffset, TAU) /
+        TAU;
+      const cycleContact =
         contactCycle >= contactDuty
           ? 1
           : 1 -
@@ -348,23 +298,24 @@ class Body {
               motionContact[index] *
               throttle *
               Math.sin((Math.PI * contactCycle) / contactDuty);
-      chunk.gaitContact = gaitContact;
+      gaitContact[index] = cycleContact;
       const grounded = Math.max(
         0,
-        Math.min(1, gaitContact * (1 - autoLift * chunk.idle * throttle)),
+        Math.min(1, cycleContact * (1 - autoLift * idle[index] * throttle)),
       );
-      chunk.contact = grounded;
+      contact[index] = grounded;
 
       const retainedAlong =
         along *
-        (1 -
-          grounded * (along < 0 ? gripBackward[index] : gripForward[index]));
+        (1 - grounded * (along < 0 ? gripBackward[index] : gripForward[index]));
       const retainedLateral = lateral * (1 - grounded * gripLateral[index]);
-      chunk.x = chunk.px + dx * retainedAlong - dy * retainedLateral;
-      chunk.y = chunk.py + dy * retainedAlong + dx * retainedLateral;
-      chunk.gain = -(
-        (along - retainedAlong) * (dx * axisX + dy * axisY) +
-        (lateral - retainedLateral) * (-dy * axisX + dx * axisY)
+      const heldX =
+        startX + tangentX * retainedAlong - tangentY * retainedLateral;
+      const heldY =
+        startY + tangentY * retainedAlong + tangentX * retainedLateral;
+      gain[index] = -(
+        (along - retainedAlong) * (tangentX * axisX + tangentY * axisY) +
+        (lateral - retainedLateral) * (-tangentY * axisX + tangentX * axisY)
       );
 
       const thrustCycle =
@@ -376,17 +327,17 @@ class Body {
             motionThrust[index] *
             throttle *
             Math.sin((Math.PI * thrustCycle) / thrustDuty);
-      chunk.x += dx * acceleration * dtSquared;
-      chunk.y += dy * acceleration * dtSquared;
+      x[index] = heldX + tangentX * acceleration * dtSquared;
+      y[index] = heldY + tangentY * acceleration * dtSquared;
     }
   }
 
   _steer(direction, dt) {
     const steering = this.model.physics.steering;
-    const head = this.chunks[0];
+    const { dx, dy } = this.chain;
     const error = Math.atan2(
-      head.dx * direction.y - head.dy * direction.x,
-      head.dx * direction.x + head.dy * direction.y,
+      dx[0] * direction.y - dy[0] * direction.x,
+      dx[0] * direction.x + dy[0] * direction.y,
     );
     const wanted = -Math.max(
       -steering.limit,
@@ -418,100 +369,107 @@ class Body {
         phaseSine * gatherPhaseSine[index];
       const gather = 1 + amplitude * gatherScale[index] * throttle * wave;
       targets[index] =
-        linkRestLength[index] * gather * (linkBreathes[index] ? 1 + breathing : 1);
+        linkRestLength[index] *
+        gather *
+        (linkBreathes[index] ? 1 + breathing : 1);
     }
   }
 
   /* Link k joins chunks k and k+1, so the chunk this link ends on is the one
      the next link starts from and the walk carries it forward. */
   _relaxLinks() {
-    const chunks = this.chunks;
+    const { x, y } = this.chain;
     const targets = this.linkTargets;
     const correctionHalf = this.tables.linkCorrectionHalf;
     const count = targets.length;
-    let before = chunks[0];
+    let beforeX = x[0];
+    let beforeY = y[0];
     for (let index = 0; index < count; index++) {
-      const after = chunks[index + 1];
-      const x = after.x - before.x;
-      const y = after.y - before.y;
-      const distance = Math.sqrt(x * x + y * y) || 0.001;
+      const afterX = x[index + 1];
+      const afterY = y[index + 1];
+      const spanX = afterX - beforeX;
+      const spanY = afterY - beforeY;
+      const distance = Math.sqrt(spanX * spanX + spanY * spanY) || 0.001;
       const shift =
         ((distance - targets[index]) / distance) * correctionHalf[index];
-      before.x += x * shift;
-      before.y += y * shift;
-      after.x -= x * shift;
-      after.y -= y * shift;
-      before = after;
+      x[index] = beforeX + spanX * shift;
+      y[index] = beforeY + spanY * shift;
+      beforeX = afterX - spanX * shift;
+      beforeY = afterY - spanY * shift;
     }
+    x[count] = beforeX;
+    y[count] = beforeY;
   }
 
   /* Holding the head still keeps a clamped chain's reported pose where the
      host last saw it, and the sweep moves only the trailing chunk, so the
      link just fixed cannot be disturbed by the next one. */
   _clampLinks() {
-    const chunks = this.chunks;
+    const { x, y } = this.chain;
     const targets = this.linkTargets;
     const count = targets.length;
-    let before = chunks[0];
+    let beforeX = x[0];
+    let beforeY = y[0];
     for (let index = 0; index < count; index++) {
-      const after = chunks[index + 1];
       const limit = targets[index] * MAX_LINK_STRETCH;
-      const x = after.x - before.x;
-      const y = after.y - before.y;
-      const distance = Math.sqrt(x * x + y * y);
+      const spanX = x[index + 1] - beforeX;
+      const spanY = y[index + 1] - beforeY;
+      const distance = Math.sqrt(spanX * spanX + spanY * spanY);
       if (distance > limit) {
         const scale = limit / distance;
-        after.x = before.x + x * scale;
-        after.y = before.y + y * scale;
+        beforeX = beforeX + spanX * scale;
+        beforeY = beforeY + spanY * scale;
+        x[index + 1] = beforeX;
+        y[index + 1] = beforeY;
+      } else {
+        beforeX = x[index + 1];
+        beforeY = y[index + 1];
       }
-      before = after;
     }
   }
 
   _applyAutoLift(dt, throttle) {
     const autoLift = this.model.physics.autoLift;
     if (!autoLift.amount) return;
-    const lifted = Math.round(autoLift.share * this.chunks.length);
-    selectLowest(this.liftOrder, this.chunks, lifted);
+    const { idle, gain, gaitContact, contact, count } = this.chain;
+    const lifted = Math.round(autoLift.share * count);
+    selectLowest(this.liftOrder, gain, lifted);
     this.liftTargets.fill(0);
     for (let index = 0; index < lifted; index++)
       this.liftTargets[this.liftOrder[index]] = throttle;
     const amount = Math.min(1, dt * autoLift.rate);
-    for (let index = 0; index < this.chunks.length; index++) {
-      const chunk = this.chunks[index];
-      chunk.idle += (this.liftTargets[index] - chunk.idle) * amount;
-      chunk.contact = Math.max(
+    for (let index = 0; index < count; index++) {
+      idle[index] += (this.liftTargets[index] - idle[index]) * amount;
+      contact[index] = Math.max(
         0,
         Math.min(
           1,
-          chunk.gaitContact * (1 - autoLift.amount * chunk.idle * throttle),
+          gaitContact[index] * (1 - autoLift.amount * idle[index] * throttle),
         ),
       );
     }
   }
 
   getPose(pose) {
-    const head = this.chunks[0];
-    const behind = this.chunks[1];
-    const dx = head.x - behind.x;
-    const dy = head.y - behind.y;
-    const distance = magnitude(dx, dy);
+    const { x, y, dx, dy, count } = this.chain;
+    const headX = x[0] - x[1];
+    const headY = y[0] - y[1];
+    const distance = magnitude(headX, headY);
     if (distance < 1e-9) {
-      pose.direction.x = head.dx;
-      pose.direction.y = head.dy;
+      pose.direction.x = dx[0];
+      pose.direction.y = dy[0];
     } else {
-      pose.direction.x = dx / distance;
-      pose.direction.y = dy / distance;
+      pose.direction.x = headX / distance;
+      pose.direction.y = headY / distance;
     }
     let centerX = 0;
     let centerY = 0;
-    for (let index = 0; index < this.chunks.length; index++) {
-      const chunk = this.chunks[index];
-      centerX += chunk.x / this.chunks.length;
-      centerY += chunk.y / this.chunks.length;
+    for (let index = 0; index < count; index++) {
+      centerX += x[index] / count;
+      centerY += y[index] / count;
     }
-    pose.head.x = head.x;
-    pose.head.y = head.y;
+    pose.head.x = x[0];
+    pose.head.y = y[0];
     pose.center.x = centerX;
     pose.center.y = centerY;
     return pose;

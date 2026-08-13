@@ -914,6 +914,80 @@ pixi_js = __toESM(pixi_js, 1);
 	};
 
 //#endregion
+//#region src/chain.mjs
+/**
+	* The chain's mutable state, one typed array per field. The counterpart to
+	* ChainTables: that holds what the model says and never changes, this holds
+	* what the solver moves. A substep sweeps every chunk several times over, and
+	* a run of positions the CPU can prefetch is worth more than a record that
+	* keeps each chunk's ten fields together.
+	*
+	* Also the operations that move or measure the whole chain in the world, which
+	* are not solver steps and read nothing but the chain itself.
+	*/
+	var ChainState = class {
+		constructor(count) {
+			this.count = count;
+			this.x = new Float64Array(count);
+			this.y = new Float64Array(count);
+			this.px = new Float64Array(count);
+			this.py = new Float64Array(count);
+			this.dx = new Float64Array(count);
+			this.dy = new Float64Array(count);
+			this.idle = new Float64Array(count);
+			this.gain = new Float64Array(count);
+			this.gaitContact = new Float64Array(count);
+			this.contact = new Float64Array(count);
+			this.correction = {
+				x: 0,
+				y: 0
+			};
+			this.dx.fill(1);
+			this.gaitContact.fill(1);
+			this.contact.fill(1);
+		}
+		translate(offset) {
+			const { x, y, px, py, count } = this;
+			for (let index = 0; index < count; index++) {
+				x[index] += offset.x;
+				y[index] += offset.y;
+				px[index] += offset.x;
+				py[index] += offset.y;
+			}
+		}
+		fitsTranslation(offset, limit) {
+			const { x, y, px, py, count } = this;
+			const within = (value, shift) => {
+				const next = value + shift;
+				return Number.isFinite(next) && Math.abs(next) <= limit;
+			};
+			for (let index = 0; index < count; index++) if (!within(x[index], offset.x) || !within(y[index], offset.y) || !within(px[index], offset.x) || !within(py[index], offset.y)) return false;
+			return true;
+		}
+		worldCorrection(limit) {
+			const { x, y, px, py, count } = this;
+			let minimumX = Infinity;
+			let maximumX = -Infinity;
+			let minimumY = Infinity;
+			let maximumY = -Infinity;
+			for (let index = 0; index < count; index++) {
+				minimumX = Math.min(minimumX, x[index], px[index]);
+				maximumX = Math.max(maximumX, x[index], px[index]);
+				minimumY = Math.min(minimumY, y[index], py[index]);
+				maximumY = Math.max(maximumY, y[index], py[index]);
+			}
+			const correction = (minimum, maximum) => {
+				if (maximum > limit) return limit - maximum;
+				if (minimum < -limit) return -limit - minimum;
+				return 0;
+			};
+			this.correction.x = correction(minimumX, maximumX);
+			this.correction.y = correction(minimumY, maximumY);
+			return this.correction;
+		}
+	};
+
+//#endregion
 //#region src/carry.mjs
 /**
 	* Moving chunk state onto a chain whose section counts changed. A chunk the
@@ -923,55 +997,54 @@ pixi_js = __toESM(pixi_js, 1);
 	* always has something to carry from.
 	*/
 	var nameOf = (spec) => `${spec.section}:${spec.localIndex}`;
-	var carryChunks = (chunks, model, previousChunks, previousModel) => {
+	var FIELDS = [
+		"x",
+		"y",
+		"px",
+		"py",
+		"dx",
+		"dy",
+		"idle",
+		"gain"
+	];
+	var carryChunks = (chain, model, previousChain, previousModel) => {
 		const source = /* @__PURE__ */ new Map();
-		previousModel.chunks.forEach((spec, index) => source.set(nameOf(spec), previousChunks[index]));
+		previousModel.chunks.forEach((spec, index) => source.set(nameOf(spec), index));
 		const carried = model.chunks.map((spec, index) => {
 			const from = source.get(nameOf(spec));
-			if (!from) return false;
-			const chunk = chunks[index];
-			chunk.x = from.x;
-			chunk.y = from.y;
-			chunk.px = from.px;
-			chunk.py = from.py;
-			chunk.dx = from.dx;
-			chunk.dy = from.dy;
-			chunk.idle = from.idle;
-			chunk.gain = from.gain;
+			if (from === void 0) return false;
+			for (const field of FIELDS) chain[field][index] = previousChain[field][from];
 			return true;
 		});
-		for (let index = 0; index < chunks.length; index++) {
+		const { x, y, px, py, dx, dy, idle, gain, count } = chain;
+		for (let index = 0; index < count; index++) {
 			if (carried[index]) continue;
 			let before = index - 1;
 			while (before >= 0 && !carried[before]) before--;
 			let after = index + 1;
-			while (after < chunks.length && !carried[after]) after++;
-			const chunk = chunks[index];
-			if (before >= 0 && after < chunks.length) {
-				const start = chunks[before];
-				const end = chunks[after];
+			while (after < count && !carried[after]) after++;
+			if (before >= 0 && after < count) {
 				const along = (index - before) / (after - before);
-				chunk.x = start.x + (end.x - start.x) * along;
-				chunk.y = start.y + (end.y - start.y) * along;
-				chunk.px = start.px + (end.px - start.px) * along;
-				chunk.py = start.py + (end.py - start.py) * along;
-				chunk.dx = start.dx;
-				chunk.dy = start.dy;
+				x[index] = x[before] + (x[after] - x[before]) * along;
+				y[index] = y[before] + (y[after] - y[before]) * along;
+				px[index] = px[before] + (px[after] - px[before]) * along;
+				py[index] = py[before] + (py[after] - py[before]) * along;
+				dx[index] = dx[before];
+				dy[index] = dy[before];
 			} else {
-				const anchorIndex = before >= 0 ? before : after;
-				const anchor = chunks[anchorIndex];
+				const anchor = before >= 0 ? before : after;
 				const heading = before >= 0 ? -1 : 1;
 				const link = model.links[before >= 0 ? index - 1 : index];
-				const reach = (link ? link.restLength : 0) * Math.abs(index - anchorIndex);
-				chunk.x = anchor.x + anchor.dx * heading * reach;
-				chunk.y = anchor.y + anchor.dy * heading * reach;
-				chunk.px = chunk.x;
-				chunk.py = chunk.y;
-				chunk.dx = anchor.dx;
-				chunk.dy = anchor.dy;
+				const reach = (link ? link.restLength : 0) * Math.abs(index - anchor);
+				x[index] = x[anchor] + dx[anchor] * heading * reach;
+				y[index] = y[anchor] + dy[anchor] * heading * reach;
+				px[index] = x[index];
+				py[index] = y[index];
+				dx[index] = dx[anchor];
+				dy[index] = dy[anchor];
 			}
-			chunk.idle = 0;
-			chunk.gain = 0;
+			idle[index] = 0;
+			gain[index] = 0;
 		}
 	};
 
@@ -1022,11 +1095,13 @@ pixi_js = __toESM(pixi_js, 1);
 				wantedY[index + 1] = wantedY[index] + Math.sin(heading) * restLengths[index];
 			}
 		}
-		relax(chunks, jointCorrectionHalf) {
-			for (let span = Math.min(2, chunks.length >> 2); span >= 1; span >>= 1) this.relaxSpan(chunks, jointCorrectionHalf, span);
+		relax(chain, jointCorrectionHalf) {
+			for (let span = Math.min(2, chain.count >> 2); span >= 1; span >>= 1) this.relaxSpan(chain, jointCorrectionHalf, span);
 		}
-		relaxSpan(chunks, jointCorrectionHalf, span) {
-			const count = chunks.length;
+		relaxSpan(chain, jointCorrectionHalf, span) {
+			const count = chain.count;
+			const chunkX = chain.x;
+			const chunkY = chain.y;
 			const wantedX = this.wantedX;
 			const wantedY = this.wantedY;
 			const nextX = this.spanX;
@@ -1034,13 +1109,12 @@ pixi_js = __toESM(pixi_js, 1);
 			for (let pivot = span; pivot + span < count; pivot += span) {
 				const from = pivot - span;
 				const to = pivot + span;
-				const chunk = chunks[pivot];
-				const before = chunks[from];
-				const after = chunks[to];
-				const ax = chunk.x - before.x;
-				const ay = chunk.y - before.y;
-				const bx = after.x - chunk.x;
-				const by = after.y - chunk.y;
+				const pivotX = chunkX[pivot];
+				const pivotY = chunkY[pivot];
+				const ax = pivotX - chunkX[from];
+				const ay = pivotY - chunkY[from];
+				const bx = chunkX[to] - pivotX;
+				const by = chunkY[to] - pivotY;
 				const turn = Math.atan2(ax * by - ay * bx, ax * bx + ay * by);
 				const wx = wantedX[pivot] - wantedX[from];
 				const wy = wantedY[pivot] - wantedY[from];
@@ -1050,11 +1124,11 @@ pixi_js = __toESM(pixi_js, 1);
 				const cosine = Math.cos(correction);
 				const sine = Math.sin(correction);
 				for (let index = from; index <= to; index++) {
-					const x = chunks[index].x - chunk.x;
-					const y = chunks[index].y - chunk.y;
+					const x = chunkX[index] - pivotX;
+					const y = chunkY[index] - pivotY;
 					const away = index < pivot ? -sine : sine;
-					nextX[index] = chunk.x + x * cosine - y * away;
-					nextY[index] = chunk.y + x * away + y * cosine;
+					nextX[index] = pivotX + x * cosine - y * away;
+					nextY[index] = pivotY + x * away + y * cosine;
 				}
 				const width = to - from + 1;
 				let driftX = 0;
@@ -1062,10 +1136,10 @@ pixi_js = __toESM(pixi_js, 1);
 				let centerX = 0;
 				let centerY = 0;
 				for (let index = from; index <= to; index++) {
-					driftX += nextX[index] - chunks[index].x;
-					driftY += nextY[index] - chunks[index].y;
-					centerX += chunks[index].x;
-					centerY += chunks[index].y;
+					driftX += nextX[index] - chunkX[index];
+					driftY += nextY[index] - chunkY[index];
+					centerX += chunkX[index];
+					centerY += chunkY[index];
 				}
 				driftX /= width;
 				driftY /= width;
@@ -1074,31 +1148,29 @@ pixi_js = __toESM(pixi_js, 1);
 				let moment = 0;
 				let inertia = 0;
 				for (let index = from; index <= to; index++) {
-					const rx = chunks[index].x - centerX;
-					const ry = chunks[index].y - centerY;
-					moment += rx * (nextY[index] - chunks[index].y - driftY) - ry * (nextX[index] - chunks[index].x - driftX);
+					const rx = chunkX[index] - centerX;
+					const ry = chunkY[index] - centerY;
+					moment += rx * (nextY[index] - chunkY[index] - driftY) - ry * (nextX[index] - chunkX[index] - driftX);
 					inertia += rx * rx + ry * ry;
 				}
 				const spin = inertia > 1e-12 ? moment / inertia : 0;
 				for (let index = from; index <= to; index++) {
-					const rx = chunks[index].x - centerX;
-					const ry = chunks[index].y - centerY;
-					chunks[index].x = nextX[index] - driftX + spin * ry;
-					chunks[index].y = nextY[index] - driftY - spin * rx;
+					const rx = chunkX[index] - centerX;
+					const ry = chunkY[index] - centerY;
+					chunkX[index] = nextX[index] - driftX + spin * ry;
+					chunkY[index] = nextY[index] - driftY - spin * rx;
 				}
 			}
 		}
-		response(chunks, into = []) {
+		response(chain, into = []) {
 			const targets = this.targets;
+			const { x, y, count } = chain;
 			into.length = 0;
-			for (let index = 1; index < chunks.length - 1; index++) {
-				const before = chunks[index - 1];
-				const chunk = chunks[index];
-				const after = chunks[index + 1];
-				const ax = chunk.x - before.x;
-				const ay = chunk.y - before.y;
-				const bx = after.x - chunk.x;
-				const by = after.y - chunk.y;
+			for (let index = 1; index < count - 1; index++) {
+				const ax = x[index] - x[index - 1];
+				const ay = y[index] - y[index - 1];
+				const bx = x[index + 1] - x[index];
+				const by = y[index + 1] - y[index];
 				into.push({
 					joint: index,
 					commanded: targets[index],
@@ -1118,8 +1190,8 @@ pixi_js = __toESM(pixi_js, 1);
 	var AXIS_RATE = 1.5;
 	var MAX_LINK_STRETCH = 3;
 	var magnitude$2 = /* @__PURE__ */ __name((x, y) => Math.sqrt(x * x + y * y), "magnitude");
-	var compareGain = (chunks, before, after) => chunks[before].gain - chunks[after].gain || before - after;
-	var selectLowest = (order, chunks, count) => {
+	var compareGain = (gain, before, after) => gain[before] - gain[after] || before - after;
+	var selectLowest = (order, gain, count) => {
 		if (count <= 0 || count >= order.length) return;
 		const target = count - 1;
 		let left = 0;
@@ -1129,8 +1201,8 @@ pixi_js = __toESM(pixi_js, 1);
 			let lower = left;
 			let upper = right;
 			while (lower <= upper) {
-				while (lower <= right && compareGain(chunks, order[lower], pivot) < 0) lower++;
-				while (upper >= left && compareGain(chunks, pivot, order[upper]) < 0) upper--;
+				while (lower <= right && compareGain(gain, order[lower], pivot) < 0) lower++;
+				while (upper >= left && compareGain(gain, pivot, order[upper]) < 0) upper--;
 				if (lower <= upper) {
 					const swap = order[lower];
 					order[lower++] = order[upper];
@@ -1154,32 +1226,17 @@ pixi_js = __toESM(pixi_js, 1);
 				y: 0
 			};
 			this.steeringBias = 0;
-			this.chunks = model.chunks.map(() => ({
-				x: 0,
-				y: 0,
-				px: 0,
-				py: 0,
-				dx: 1,
-				dy: 0,
-				idle: 0,
-				gain: 0,
-				gaitContact: 1,
-				contact: 1
-			}));
+			this.chain = new ChainState(model.chunks.length);
 			this.linkTargets = new Float64Array(model.links.length);
 			this.bend = new Bend(model.chunks.length);
 			this.breathingShiftX = new Float64Array(model.chunks.length);
 			this.breathingShiftY = new Float64Array(model.chunks.length);
 			this.liftOrder = model.chunks.map((_, index) => index);
 			this.liftTargets = new Float64Array(model.chunks.length);
-			this.correction = {
-				x: 0,
-				y: 0
-			};
 			this.tables = new ChainTables(model, model.gait, PHYSICS_STEP, RELAX_PASSES);
 		}
 		reconfigure(model, gait, throttle = 1, breathingPhase = this.breathingPhase) {
-			if (model.chunks.length !== this.chunks.length) throw new Error("cannot reconfigure a different chunk count");
+			if (model.chunks.length !== this.chain.count) throw new Error("cannot reconfigure a different chunk count");
 			this.model = model;
 			this.gait = gait;
 			this.breathingPhase = breathingPhase;
@@ -1187,17 +1244,18 @@ pixi_js = __toESM(pixi_js, 1);
 			this.refreshContacts(throttle);
 		}
 		place(position, direction) {
-			this.chunks.forEach((chunk, index) => {
+			const { x, y, px, py, dx, dy, idle, gain, count } = this.chain;
+			for (let index = 0; index < count; index++) {
 				const distance = this.model.chunks[index].restDistance;
-				chunk.x = position.x - direction.x * distance;
-				chunk.y = position.y - direction.y * distance;
-				chunk.px = chunk.x;
-				chunk.py = chunk.y;
-				chunk.dx = direction.x;
-				chunk.dy = direction.y;
-				chunk.idle = 0;
-				chunk.gain = 0;
-			});
+				x[index] = position.x - direction.x * distance;
+				y[index] = position.y - direction.y * distance;
+				px[index] = x[index];
+				py[index] = y[index];
+				dx[index] = direction.x;
+				dy[index] = direction.y;
+				idle[index] = 0;
+				gain[index] = 0;
+			}
 			this.axis = { ...direction };
 			this.steeringBias = 0;
 			this.accumulator = 0;
@@ -1205,7 +1263,7 @@ pixi_js = __toESM(pixi_js, 1);
 			this.refreshContacts(1);
 		}
 		adopt(previous) {
-			carryChunks(this.chunks, this.model, previous.chunks, previous.model);
+			carryChunks(this.chain, this.model, previous.chain, previous.model);
 			this.axis = { ...previous.axis };
 			this.steeringBias = previous.steeringBias;
 			this.accumulator = previous.accumulator;
@@ -1213,53 +1271,12 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		refreshContacts(throttle) {
 			const autoLift = this.model.physics.autoLift;
-			for (let index = 0; index < this.chunks.length; index++) {
-				const chunk = this.chunks[index];
+			const { idle, gaitContact, contact, count } = this.chain;
+			for (let index = 0; index < count; index++) {
 				const spec = this.model.chunks[index];
-				chunk.gaitContact = this.gait.contactAt(spec.restDistance, throttle, spec.motionScale.contact);
-				chunk.contact = Math.max(0, Math.min(1, chunk.gaitContact * (1 - autoLift.amount * chunk.idle * throttle)));
+				gaitContact[index] = this.gait.contactAt(spec.restDistance, throttle, spec.motionScale.contact);
+				contact[index] = Math.max(0, Math.min(1, gaitContact[index] * (1 - autoLift.amount * idle[index] * throttle)));
 			}
-		}
-		translate(offset) {
-			this.chunks.forEach((chunk) => {
-				chunk.x += offset.x;
-				chunk.y += offset.y;
-				chunk.px += offset.x;
-				chunk.py += offset.y;
-			});
-		}
-		fitsTranslation(offset, limit) {
-			return this.chunks.every((chunk) => [
-				"x",
-				"y",
-				"px",
-				"py"
-			].every((key) => {
-				const axisOffset = key.endsWith("x") ? offset.x : offset.y;
-				const next = chunk[key] + axisOffset;
-				return Number.isFinite(next) && Math.abs(next) <= limit;
-			}));
-		}
-		worldCorrection(limit) {
-			let minimumX = Infinity;
-			let maximumX = -Infinity;
-			let minimumY = Infinity;
-			let maximumY = -Infinity;
-			for (let index = 0; index < this.chunks.length; index++) {
-				const chunk = this.chunks[index];
-				minimumX = Math.min(minimumX, chunk.x, chunk.px);
-				maximumX = Math.max(maximumX, chunk.x, chunk.px);
-				minimumY = Math.min(minimumY, chunk.y, chunk.py);
-				maximumY = Math.max(maximumY, chunk.y, chunk.py);
-			}
-			const correction = (minimum, maximum) => {
-				if (maximum > limit) return limit - maximum;
-				if (minimum < -limit) return -limit - minimum;
-				return 0;
-			};
-			this.correction.x = correction(minimumX, maximumX);
-			this.correction.y = correction(minimumY, maximumY);
-			return this.correction;
 		}
 		step(dt, throttle, direction, afterSubstep) {
 			this.accumulator += dt;
@@ -1280,7 +1297,7 @@ pixi_js = __toESM(pixi_js, 1);
 			this._integrate(dt, throttle);
 			this._updateLinkTargets(throttle);
 			this.bend.update(this.model, this.gait, this.tables, this.linkTargets, throttle, this._steer(direction, dt));
-			this.bend.relax(this.chunks, this.tables.jointCorrectionHalf);
+			this.bend.relax(this.chain, this.tables.jointCorrectionHalf);
 			for (let pass = 0; pass < RELAX_PASSES; pass++) this._relaxLinks();
 			this._clampLinks();
 			this._applyAutoLift(dt, throttle);
@@ -1292,51 +1309,46 @@ pixi_js = __toESM(pixi_js, 1);
 			if (Math.abs(scaleChange) < 1e-15) return;
 			const { start, end, count, spacing } = this.model.sections.trunk;
 			const middle = (count - 1) / 2;
-			const front = this.chunks[start];
-			const rear = this.chunks[end - 1];
+			const { x, y, px, py, dx, dy, count: chunkCount } = this.chain;
 			let meanX = 0;
 			let meanY = 0;
-			for (let index = 0; index < this.chunks.length; index++) {
-				const chunk = this.chunks[index];
+			for (let index = 0; index < chunkCount; index++) {
 				const position = index < start ? middle : index >= end ? -middle : middle - (index - start);
-				const tangent = index < start ? front : index >= end ? rear : chunk;
+				const tangent = index < start ? start : index >= end ? end - 1 : index;
 				const distance = position * spacing * scaleChange;
-				const x = tangent.dx * distance;
-				const y = tangent.dy * distance;
-				this.breathingShiftX[index] = x;
-				this.breathingShiftY[index] = y;
-				meanX += x / this.chunks.length;
-				meanY += y / this.chunks.length;
+				const shiftX = dx[tangent] * distance;
+				const shiftY = dy[tangent] * distance;
+				this.breathingShiftX[index] = shiftX;
+				this.breathingShiftY[index] = shiftY;
+				meanX += shiftX / chunkCount;
+				meanY += shiftY / chunkCount;
 			}
-			for (let index = 0; index < this.chunks.length; index++) {
-				const chunk = this.chunks[index];
-				const x = this.breathingShiftX[index] - meanX;
-				const y = this.breathingShiftY[index] - meanY;
-				chunk.x += x;
-				chunk.y += y;
-				chunk.px += x;
-				chunk.py += y;
+			for (let index = 0; index < chunkCount; index++) {
+				const shiftX = this.breathingShiftX[index] - meanX;
+				const shiftY = this.breathingShiftY[index] - meanY;
+				x[index] += shiftX;
+				y[index] += shiftY;
+				px[index] += shiftX;
+				py[index] += shiftY;
 			}
 		}
 		_updateTangentsAndAxis(dt) {
-			const chunks = this.chunks;
-			const count = chunks.length;
+			const { x, y, px, py, dx, dy, count } = this.chain;
 			const last = count - 1;
 			let axisX = 0;
 			let axisY = 0;
 			for (let index = 0; index < count; index++) {
-				const chunk = chunks[index];
-				const ahead = chunks[index === 0 ? 0 : index - 1];
-				const behind = chunks[index === last ? last : index + 1];
-				const x = ahead.x - behind.x;
-				const y = ahead.y - behind.y;
-				const tangentLength = Math.sqrt(x * x + y * y);
+				const ahead = index === 0 ? 0 : index - 1;
+				const behind = index === last ? last : index + 1;
+				const spanX = x[ahead] - x[behind];
+				const spanY = y[ahead] - y[behind];
+				const tangentLength = Math.sqrt(spanX * spanX + spanY * spanY);
 				if (tangentLength >= 1e-9) {
-					chunk.dx = x / tangentLength;
-					chunk.dy = y / tangentLength;
+					dx[index] = spanX / tangentLength;
+					dy[index] = spanY / tangentLength;
 				}
-				axisX += chunk.x - chunk.px;
-				axisY += chunk.y - chunk.py;
+				axisX += x[index] - px[index];
+				axisY += y[index] - py[index];
 			}
 			const axisLength = Math.sqrt(axisX * axisX + axisY * axisY);
 			if (axisLength < 1e-9) return;
@@ -1349,60 +1361,60 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		_integrate(dt, throttle) {
 			const dtSquared = dt * dt;
-			const chunks = this.chunks;
-			const count = chunks.length;
 			const gait = this.gait.gait;
 			const phase = this.gait.phase;
-			const contact = gait.contact;
+			const contactChannel = gait.contact;
 			const thrust = gait.thrust;
-			const contactHarmonic = contact.harmonic;
+			const contactHarmonic = contactChannel.harmonic;
 			const thrustHarmonic = thrust.harmonic;
-			const contactPhaseOffset = contact.phaseOffset;
+			const contactPhaseOffset = contactChannel.phaseOffset;
 			const thrustPhaseOffset = thrust.phaseOffset;
-			const contactDuty = contact.dutyCycle;
+			const contactDuty = contactChannel.dutyCycle;
 			const thrustDuty = thrust.dutyCycle;
-			const contactAmplitude = contact.amplitude;
+			const contactAmplitude = contactChannel.amplitude;
 			const thrustAcceleration = thrust.acceleration;
 			const autoLift = this.model.physics.autoLift.amount;
 			const axisX = this.axis.x;
 			const axisY = this.axis.y;
 			const { retention, gripForward, gripBackward, gripLateral, motionContact, motionThrust, phaseLag } = this.tables;
+			const { x, y, px, py, dx, dy, idle, gain, gaitContact, contact, count } = this.chain;
 			for (let index = 0; index < count; index++) {
-				const chunk = chunks[index];
 				const hold = retention[index];
-				const velocityX = (chunk.x - chunk.px) * hold;
-				const velocityY = (chunk.y - chunk.py) * hold;
-				chunk.px = chunk.x;
-				chunk.py = chunk.y;
-				chunk.x += velocityX;
-				chunk.y += velocityY;
-				const dx = chunk.dx;
-				const dy = chunk.dy;
-				const x = chunk.x - chunk.px;
-				const y = chunk.y - chunk.py;
-				const along = x * dx + y * dy;
-				const lateral = x * -dy + y * dx;
+				const startX = x[index];
+				const startY = y[index];
+				const velocityX = (startX - px[index]) * hold;
+				const velocityY = (startY - py[index]) * hold;
+				px[index] = startX;
+				py[index] = startY;
+				const movedX = startX + velocityX;
+				const movedY = startY + velocityY;
+				const tangentX = dx[index];
+				const tangentY = dy[index];
+				const spanX = movedX - startX;
+				const spanY = movedY - startY;
+				const along = spanX * tangentX + spanY * tangentY;
+				const lateral = spanX * -tangentY + spanY * tangentX;
 				const lagged = phase - phaseLag[index];
 				const contactCycle = positiveModulo(contactHarmonic * lagged + contactPhaseOffset, TAU$1) / TAU$1;
-				const gaitContact = contactCycle >= contactDuty ? 1 : 1 - contactAmplitude * motionContact[index] * throttle * Math.sin(Math.PI * contactCycle / contactDuty);
-				chunk.gaitContact = gaitContact;
-				const grounded = Math.max(0, Math.min(1, gaitContact * (1 - autoLift * chunk.idle * throttle)));
-				chunk.contact = grounded;
+				const cycleContact = contactCycle >= contactDuty ? 1 : 1 - contactAmplitude * motionContact[index] * throttle * Math.sin(Math.PI * contactCycle / contactDuty);
+				gaitContact[index] = cycleContact;
+				const grounded = Math.max(0, Math.min(1, cycleContact * (1 - autoLift * idle[index] * throttle)));
+				contact[index] = grounded;
 				const retainedAlong = along * (1 - grounded * (along < 0 ? gripBackward[index] : gripForward[index]));
 				const retainedLateral = lateral * (1 - grounded * gripLateral[index]);
-				chunk.x = chunk.px + dx * retainedAlong - dy * retainedLateral;
-				chunk.y = chunk.py + dy * retainedAlong + dx * retainedLateral;
-				chunk.gain = -((along - retainedAlong) * (dx * axisX + dy * axisY) + (lateral - retainedLateral) * (-dy * axisX + dx * axisY));
+				const heldX = startX + tangentX * retainedAlong - tangentY * retainedLateral;
+				const heldY = startY + tangentY * retainedAlong + tangentX * retainedLateral;
+				gain[index] = -((along - retainedAlong) * (tangentX * axisX + tangentY * axisY) + (lateral - retainedLateral) * (-tangentY * axisX + tangentX * axisY));
 				const thrustCycle = positiveModulo(thrustHarmonic * lagged + thrustPhaseOffset, TAU$1) / TAU$1;
 				const acceleration = thrustCycle >= thrustDuty ? 0 : thrustAcceleration * motionThrust[index] * throttle * Math.sin(Math.PI * thrustCycle / thrustDuty);
-				chunk.x += dx * acceleration * dtSquared;
-				chunk.y += dy * acceleration * dtSquared;
+				x[index] = heldX + tangentX * acceleration * dtSquared;
+				y[index] = heldY + tangentY * acceleration * dtSquared;
 			}
 		}
 		_steer(direction, dt) {
 			const steering = this.model.physics.steering;
-			const head = this.chunks[0];
-			const error = Math.atan2(head.dx * direction.y - head.dy * direction.x, head.dx * direction.x + head.dy * direction.y);
+			const { dx, dy } = this.chain;
+			const error = Math.atan2(dx[0] * direction.y - dy[0] * direction.x, dx[0] * direction.x + dy[0] * direction.y);
 			const wanted = -Math.max(-steering.limit, Math.min(steering.limit, error * steering.gain));
 			this.steeringBias += (wanted - this.steeringBias) * Math.min(1, dt * steering.rate);
 			return this.steeringBias;
@@ -1423,79 +1435,84 @@ pixi_js = __toESM(pixi_js, 1);
 			}
 		}
 		_relaxLinks() {
-			const chunks = this.chunks;
+			const { x, y } = this.chain;
 			const targets = this.linkTargets;
 			const correctionHalf = this.tables.linkCorrectionHalf;
 			const count = targets.length;
-			let before = chunks[0];
+			let beforeX = x[0];
+			let beforeY = y[0];
 			for (let index = 0; index < count; index++) {
-				const after = chunks[index + 1];
-				const x = after.x - before.x;
-				const y = after.y - before.y;
-				const distance = Math.sqrt(x * x + y * y) || .001;
+				const afterX = x[index + 1];
+				const afterY = y[index + 1];
+				const spanX = afterX - beforeX;
+				const spanY = afterY - beforeY;
+				const distance = Math.sqrt(spanX * spanX + spanY * spanY) || .001;
 				const shift = (distance - targets[index]) / distance * correctionHalf[index];
-				before.x += x * shift;
-				before.y += y * shift;
-				after.x -= x * shift;
-				after.y -= y * shift;
-				before = after;
+				x[index] = beforeX + spanX * shift;
+				y[index] = beforeY + spanY * shift;
+				beforeX = afterX - spanX * shift;
+				beforeY = afterY - spanY * shift;
 			}
+			x[count] = beforeX;
+			y[count] = beforeY;
 		}
 		_clampLinks() {
-			const chunks = this.chunks;
+			const { x, y } = this.chain;
 			const targets = this.linkTargets;
 			const count = targets.length;
-			let before = chunks[0];
+			let beforeX = x[0];
+			let beforeY = y[0];
 			for (let index = 0; index < count; index++) {
-				const after = chunks[index + 1];
 				const limit = targets[index] * 3;
-				const x = after.x - before.x;
-				const y = after.y - before.y;
-				const distance = Math.sqrt(x * x + y * y);
+				const spanX = x[index + 1] - beforeX;
+				const spanY = y[index + 1] - beforeY;
+				const distance = Math.sqrt(spanX * spanX + spanY * spanY);
 				if (distance > limit) {
 					const scale = limit / distance;
-					after.x = before.x + x * scale;
-					after.y = before.y + y * scale;
+					beforeX = beforeX + spanX * scale;
+					beforeY = beforeY + spanY * scale;
+					x[index + 1] = beforeX;
+					y[index + 1] = beforeY;
+				} else {
+					beforeX = x[index + 1];
+					beforeY = y[index + 1];
 				}
-				before = after;
 			}
 		}
 		_applyAutoLift(dt, throttle) {
 			const autoLift = this.model.physics.autoLift;
 			if (!autoLift.amount) return;
-			const lifted = Math.round(autoLift.share * this.chunks.length);
-			selectLowest(this.liftOrder, this.chunks, lifted);
+			const { idle, gain, gaitContact, contact, count } = this.chain;
+			const lifted = Math.round(autoLift.share * count);
+			selectLowest(this.liftOrder, gain, lifted);
 			this.liftTargets.fill(0);
 			for (let index = 0; index < lifted; index++) this.liftTargets[this.liftOrder[index]] = throttle;
 			const amount = Math.min(1, dt * autoLift.rate);
-			for (let index = 0; index < this.chunks.length; index++) {
-				const chunk = this.chunks[index];
-				chunk.idle += (this.liftTargets[index] - chunk.idle) * amount;
-				chunk.contact = Math.max(0, Math.min(1, chunk.gaitContact * (1 - autoLift.amount * chunk.idle * throttle)));
+			for (let index = 0; index < count; index++) {
+				idle[index] += (this.liftTargets[index] - idle[index]) * amount;
+				contact[index] = Math.max(0, Math.min(1, gaitContact[index] * (1 - autoLift.amount * idle[index] * throttle)));
 			}
 		}
 		getPose(pose) {
-			const head = this.chunks[0];
-			const behind = this.chunks[1];
-			const dx = head.x - behind.x;
-			const dy = head.y - behind.y;
-			const distance = magnitude$2(dx, dy);
+			const { x, y, dx, dy, count } = this.chain;
+			const headX = x[0] - x[1];
+			const headY = y[0] - y[1];
+			const distance = magnitude$2(headX, headY);
 			if (distance < 1e-9) {
-				pose.direction.x = head.dx;
-				pose.direction.y = head.dy;
+				pose.direction.x = dx[0];
+				pose.direction.y = dy[0];
 			} else {
-				pose.direction.x = dx / distance;
-				pose.direction.y = dy / distance;
+				pose.direction.x = headX / distance;
+				pose.direction.y = headY / distance;
 			}
 			let centerX = 0;
 			let centerY = 0;
-			for (let index = 0; index < this.chunks.length; index++) {
-				const chunk = this.chunks[index];
-				centerX += chunk.x / this.chunks.length;
-				centerY += chunk.y / this.chunks.length;
+			for (let index = 0; index < count; index++) {
+				centerX += x[index] / count;
+				centerY += y[index] / count;
 			}
-			pose.head.x = head.x;
-			pose.head.y = head.y;
+			pose.head.x = x[0];
+			pose.head.y = y[0];
 			pose.center.x = centerX;
 			pose.center.y = centerY;
 			return pose;
@@ -1588,7 +1605,7 @@ pixi_js = __toESM(pixi_js, 1);
 					Object.assign(leg.foot, planted);
 					Object.assign(leg.hold, planted);
 					Object.assign(leg.from, planted);
-					leg.plantSpan = magnitude$1(planted.x - this.body.chunks[anchor].x, planted.y - this.body.chunks[anchor].y);
+					leg.plantSpan = magnitude$1(planted.x - this.body.chain.x[anchor], planted.y - this.body.chain.y[anchor]);
 					this.legs.push(leg);
 				});
 			});
@@ -1606,24 +1623,29 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		_plantAt(leg) {
 			const options = this.model.legs;
-			const hip = this.body.chunks[leg.anchor];
+			const { x, y, dx, dy } = this.body.chain;
+			const anchor = leg.anchor;
 			const ahead = options.reach * leg.reachScale * (.5 + options.lead * .5) * leg.leadScale;
 			const outward = options.spread * leg.spreadScale * leg.sideSign;
 			return {
-				x: hip.x + hip.dx * ahead - hip.dy * outward,
-				y: hip.y + hip.dy * ahead + hip.dx * outward
+				x: x[anchor] + dx[anchor] * ahead - dy[anchor] * outward,
+				y: y[anchor] + dy[anchor] * ahead + dx[anchor] * outward
 			};
 		}
 		contactFor(leg, throttle) {
 			const chunk = this.model.chunks[leg.anchor];
 			const phaseOffset = leg.side === "right" ? Math.PI * this.model.legs.sidePhase : 0;
-			return clamp(this.gait.contactAt(chunk.restDistance, throttle, chunk.motionScale.contact, phaseOffset) * (1 - this.model.physics.autoLift.amount * this.body.chunks[leg.anchor].idle * throttle), 0, 1);
+			return clamp(this.gait.contactAt(chunk.restDistance, throttle, chunk.motionScale.contact, phaseOffset) * (1 - this.model.physics.autoLift.amount * this.body.chain.idle[leg.anchor] * throttle), 0, 1);
 		}
 		update(dt, throttle) {
 			const options = this.model.legs;
+			const chain = this.body.chain;
 			for (let index = 0; index < this.legs.length; index++) {
 				const leg = this.legs[index];
-				const hip = this.body.chunks[leg.anchor];
+				const hipX = chain.x[leg.anchor];
+				const hipY = chain.y[leg.anchor];
+				const hipDx = chain.dx[leg.anchor];
+				const hipDy = chain.dy[leg.anchor];
 				const low = this.contactFor(leg, throttle) < leg.liftAt;
 				const released = low && !leg.contactLow;
 				leg.contactLow = low;
@@ -1631,14 +1653,14 @@ pixi_js = __toESM(pixi_js, 1);
 					const seconds = options.swingSeconds * leg.swingScale;
 					leg.progress = Math.min(1, leg.progress + dt / seconds);
 					const arc = Math.sin(Math.PI * leg.progress) * options.swingArc;
-					leg.foot.x = lerp(leg.from.x, leg.hold.x, leg.progress) - hip.dy * arc * leg.sideSign;
-					leg.foot.y = lerp(leg.from.y, leg.hold.y, leg.progress) + hip.dx * arc * leg.sideSign;
+					leg.foot.x = lerp(leg.from.x, leg.hold.x, leg.progress) - hipDy * arc * leg.sideSign;
+					leg.foot.y = lerp(leg.from.y, leg.hold.y, leg.progress) + hipDx * arc * leg.sideSign;
 					continue;
 				}
 				Object.assign(leg.foot, leg.hold);
-				const footX = leg.foot.x - hip.x;
-				const footY = leg.foot.y - hip.y;
-				const forward = footX * hip.dx + footY * hip.dy;
+				const footX = leg.foot.x - hipX;
+				const footY = leg.foot.y - hipY;
+				const forward = footX * hipDx + footY * hipDy;
 				const reach = options.reach * leg.reachScale;
 				const trailed = forward < -(reach * (.5 - options.lead * .5)) * leg.dragScale;
 				const nominalSpan = magnitude$1(reach, options.spread * leg.spreadScale);
@@ -1648,7 +1670,7 @@ pixi_js = __toESM(pixi_js, 1);
 					const planted = this._plantAt(leg);
 					leg.hold.x = planted.x + leg.scatter.x;
 					leg.hold.y = planted.y + leg.scatter.y;
-					leg.plantSpan = magnitude$1(leg.hold.x - hip.x, leg.hold.y - hip.y);
+					leg.plantSpan = magnitude$1(leg.hold.x - hipX, leg.hold.y - hipY);
 					leg.progress = 0;
 					this._rollStep(leg);
 					leg.contactLow = this.contactFor(leg, throttle) < leg.liftAt;
@@ -1710,12 +1732,14 @@ pixi_js = __toESM(pixi_js, 1);
 		ornament.velocityPosition = -decay * rate * rate * sine / ringRate;
 		ornament.velocityVelocity = decay * (cosine - lean * sine);
 	};
-	var rootFor = (ornament, body, root) => {
-		const chunk = body.chunks[ornament.chunk];
-		root.x = chunk.x + chunk.dx * ornament.offset.forward - chunk.dy * ornament.offset.outward * ornament.sideSign;
-		root.y = chunk.y + chunk.dy * ornament.offset.forward + chunk.dx * ornament.offset.outward * ornament.sideSign;
-		root.dx = chunk.dx * ornament.angleCosine - chunk.dy * ornament.angleSine;
-		root.dy = chunk.dy * ornament.angleCosine + chunk.dx * ornament.angleSine;
+	var rootFor = (ornament, chain, root) => {
+		const at = ornament.chunk;
+		const dx = chain.dx[at];
+		const dy = chain.dy[at];
+		root.x = chain.x[at] + dx * ornament.offset.forward - dy * ornament.offset.outward * ornament.sideSign;
+		root.y = chain.y[at] + dy * ornament.offset.forward + dx * ornament.offset.outward * ornament.sideSign;
+		root.dx = dx * ornament.angleCosine - dy * ornament.angleSine;
+		root.dy = dy * ornament.angleCosine + dx * ornament.angleSine;
 		return root;
 	};
 	var jointFor = (hip, foot, arm, bow, joint) => {
@@ -1740,6 +1764,12 @@ pixi_js = __toESM(pixi_js, 1);
 				x: 0,
 				y: 0
 			};
+			this.hip = {
+				x: 0,
+				y: 0,
+				dx: 0,
+				dy: 0
+			};
 			this.ornaments = [];
 			this._buildOrnaments();
 		}
@@ -1754,7 +1784,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		_buildOrnaments() {
 			this.ornaments = this.model.skin.ornaments.map((spec) => {
-				const root = rootFor(spec, this.body, {});
+				const root = rootFor(spec, this.body.chain, {});
 				return {
 					spec,
 					root,
@@ -1775,7 +1805,7 @@ pixi_js = __toESM(pixi_js, 1);
 			if (!state) state = { layout: RENDER_LAYOUT };
 			state.model = this.model;
 			const lengths = {
-				chunks: this.body.chunks.length * RENDER_LAYOUT.chunkStride,
+				chunks: this.body.chain.count * RENDER_LAYOUT.chunkStride,
 				legs: this.legs.legs.length * RENDER_LAYOUT.legStride,
 				ornaments: this.ornaments.length * RENDER_LAYOUT.ornamentStride,
 				plates: this.model.skin.platesTailFirst.length * RENDER_LAYOUT.plateStride
@@ -1785,14 +1815,14 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		writeRenderState(state) {
 			state = this._fitRenderState(state);
+			const chain = this.body.chain;
 			const chunkStride = RENDER_LAYOUT.chunkStride;
-			for (let index = 0; index < this.body.chunks.length; index++) {
-				const chunk = this.body.chunks[index];
+			for (let index = 0; index < chain.count; index++) {
 				const offset = index * chunkStride;
-				state.chunks[offset] = chunk.x;
-				state.chunks[offset + 1] = chunk.y;
-				state.chunks[offset + 2] = chunk.dx;
-				state.chunks[offset + 3] = chunk.dy;
+				state.chunks[offset] = chain.x[index];
+				state.chunks[offset + 1] = chain.y[index];
+				state.chunks[offset + 2] = chain.dx[index];
+				state.chunks[offset + 3] = chain.dy[index];
 			}
 			const foot = this.model.legs.skin.foot;
 			const legStride = RENDER_LAYOUT.legStride;
@@ -1801,7 +1831,11 @@ pixi_js = __toESM(pixi_js, 1);
 			const { jointBend, jointLeanCenter } = this.model.legs;
 			for (let index = 0; index < this.legs.legs.length; index++) {
 				const leg = this.legs.legs[index];
-				const hip = this.body.chunks[leg.anchor];
+				const hip = this.hip;
+				hip.x = chain.x[leg.anchor];
+				hip.y = chain.y[leg.anchor];
+				hip.dx = chain.dx[leg.anchor];
+				hip.dy = chain.dy[leg.anchor];
 				const arm = this.legs.armLength(leg);
 				const joint = jointFor(hip, leg.foot, arm, leg.sideSign * jointBend, this.joint);
 				const chainPosition = sectionSpan ? 2 * (this.model.chunks[leg.anchor].restDistance - sectionStart) / sectionSpan - 1 : 0;
@@ -1833,13 +1867,13 @@ pixi_js = __toESM(pixi_js, 1);
 			const plateStride = RENDER_LAYOUT.plateStride;
 			for (let index = 0; index < plates.length; index++) {
 				const plate = plates[index];
-				const chunk = this.body.chunks[plate.chunk];
+				const at = plate.chunk;
 				const offset = index * plateStride;
-				state.plates[offset] = chunk.x;
-				state.plates[offset + 1] = chunk.y;
-				state.plates[offset + 2] = chunk.dx;
-				state.plates[offset + 3] = chunk.dy;
-				state.plates[offset + 4] = plate.scale * this.model.chunks[plate.chunk].plateScale * (1 + this.model.skin.loadScale * this.body.chunks[plate.chunk].contact);
+				state.plates[offset] = chain.x[at];
+				state.plates[offset + 1] = chain.y[at];
+				state.plates[offset + 2] = chain.dx[at];
+				state.plates[offset + 3] = chain.dy[at];
+				state.plates[offset + 4] = plate.scale * this.model.chunks[at].plateScale * (1 + this.model.skin.loadScale * chain.contact[at]);
 			}
 			return state;
 		}
@@ -1848,7 +1882,7 @@ pixi_js = __toESM(pixi_js, 1);
 				const ornament = this.ornaments[index];
 				const { spec } = ornament;
 				const previousRoot = ornament.root;
-				const root = rootFor(spec, this.body, ornament.nextRoot);
+				const root = rootFor(spec, this.body.chain, ornament.nextRoot);
 				if (ornament.coefficientDt !== dt) {
 					ornament.coefficientDt = dt;
 					springCoefficients(ornament, spec.recover, 1 - spec.wobble * .98, dt);
@@ -2257,6 +2291,18 @@ pixi_js = __toESM(pixi_js, 1);
 		static prepare() {}
 	};
 	var MAX_KNEE_OFFSET = 2e9;
+	/**
+	* Runs work once the renderer is between frames.
+	*
+	* Pixi calls `onRender` partway through executing a frame's instructions, and
+	* the renderer is one state machine: a nested `render` leaves the outer pass
+	* holding a bind group the inner one replaced, and every display object still
+	* queued draws from a texture with no source. Baking a sheet renders, and
+	* destroying one frees what the pass is reading, so neither may happen there.
+	* A microtask runs after the frame's callback returns and before the next, so
+	* work booked here sees a renderer at rest.
+	*/
+	var afterPass = (work) => queueMicrotask(work);
 	var Graphics = class {
 		static available = true;
 		static prepare(model) {
@@ -2294,13 +2340,16 @@ pixi_js = __toESM(pixi_js, 1);
 			this.ribbonFill = null;
 			this.ribbonStroke = null;
 			this.ribbonCount = -1;
-			this.retired = null;
+			this.baking = false;
 			this.adopt(state);
 		}
 		adopt(state) {
 			this.model = state.model;
 			this.legCount = state.legs.length / state.layout.legStride;
 			this.plan = null;
+			this.footParticles = [];
+			this.ornamentParticles = [];
+			this.plateParticles = [];
 			let changed = this._syncLimbParts(this.legCount);
 			changed = this._syncRibbonParts() || changed;
 			if (changed) this._arrange();
@@ -2308,21 +2357,6 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		_drop(child) {
 			discard(this.parent, child);
-		}
-		_retire(atlas, containers) {
-			this._flushRetired();
-			for (const container of containers) if (container && container.parent === this.parent) this.parent.removeChild(container);
-			this.retired = {
-				atlas,
-				containers
-			};
-		}
-		_flushRetired() {
-			const retired = this.retired;
-			if (!retired) return;
-			this.retired = null;
-			for (const container of retired.containers) if (container) container.destroy();
-			releaseAtlas(retired.atlas);
 		}
 		_syncLimbParts(legCount) {
 			const paint = this.model.legs.skin.limbPaint;
@@ -2429,17 +2463,26 @@ pixi_js = __toESM(pixi_js, 1);
 			this._arrange();
 		}
 		_syncAtlas(renderer) {
+			if (this.plan && this.atlasResolution === (this.options.pixelResolution ?? 1)) return;
+			if (!renderer || this.baking) return;
+			this.baking = true;
+			afterPass(() => {
+				this.baking = false;
+				if (!this.parent.destroyed) this._bake(renderer);
+			});
+		}
+		_bake(renderer) {
 			const resolution = this.options.pixelResolution ?? 1;
-			this._flushRetired();
-			if (this.plan && this.atlasResolution === resolution) return;
-			if (!renderer) return;
 			const plan = planAtlas(this.model, resolution);
 			const atlas = acquireAtlas(plan, renderer);
-			if (this.atlas || this.shapeContainers.length) this._retire(this.atlas, this.shapeContainers);
+			const spent = this.atlas;
+			const replaced = this.shapeContainers;
 			this.atlas = atlas;
 			this.atlasResolution = resolution;
 			this.plan = plan;
 			this._buildParticles(plan);
+			for (const container of replaced) if (container) container.destroy();
+			releaseAtlas(spent);
 		}
 		_place(particle, x, y, directionX, directionY, scale, mirror, pixelResolution, inversePixelResolution) {
 			if (!particle) return;
@@ -2576,7 +2619,6 @@ pixi_js = __toESM(pixi_js, 1);
 			}
 		}
 		destroy() {
-			this._flushRetired();
 			const children = [
 				...this.shapeContainers,
 				this.limbFill,
@@ -2602,15 +2644,28 @@ pixi_js = __toESM(pixi_js, 1);
 	};
 	var Container = available ? PIXI.Container : HeadlessContainer;
 	var compiled = /* @__PURE__ */ new WeakMap();
+	var freezeDeep = (value) => {
+		if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+		Object.values(value).forEach(freezeDeep);
+		return Object.freeze(value);
+	};
+	/**
+	* One model per descriptor object, so a cast of a thousand compiles once.
+	*
+	* The cache is keyed on the object, which makes the object the promise: edit
+	* one in place after handing it over and every creature drawn from it keeps
+	* the model built before the edit. Freezing it turns that into a throw at the
+	* line doing the editing. Pass a copy to change a descriptor.
+	*/
 	var modelFor = (descriptor) => {
 		const held = compiled.get(descriptor);
 		if (held) return held;
 		const model = compile(descriptor);
 		graphics_default.prepare(model);
 		compiled.set(descriptor, model);
+		freezeDeep(descriptor);
 		return model;
 	};
-	var MAX_STEP_SECONDS = .05;
 	var MAX_WORLD_COORDINATE = 1e9;
 	var MIN_PIXEL_RESOLUTION = 1e-6;
 	var MAX_PIXEL_RESOLUTION = 1e6;
@@ -2732,7 +2787,7 @@ pixi_js = __toESM(pixi_js, 1);
 			y: 0
 		}
 	});
-	var bodyFitsWorld = (body) => body.fitsTranslation({
+	var bodyFitsWorld = (body) => body.chain.fitsTranslation({
 		x: 0,
 		y: 0
 	}, MAX_WORLD_COORDINATE);
@@ -2809,10 +2864,10 @@ pixi_js = __toESM(pixi_js, 1);
 			if (throttle < 0 || throttle > 1) throw new RangeError("controls.throttle must be from 0 to 1");
 			const wanted = directionInto(controls.direction, this.#requestedDirection, "controls.direction", this.#requestedDirection);
 			this.#stepThrottle = throttle;
-			if (this.#body.step(Math.min(dt, MAX_STEP_SECONDS), throttle, wanted, this.#updateDependents)) {
-				const correction = this.#body.worldCorrection(MAX_WORLD_COORDINATE);
+			if (this.#body.step(dt, throttle, wanted, this.#updateDependents)) {
+				const correction = this.#body.chain.worldCorrection(MAX_WORLD_COORDINATE);
 				if (correction.x || correction.y) {
-					this.#body.translate(correction);
+					this.#body.chain.translate(correction);
 					this.#legs.translate(correction);
 					this.#skin.translate(correction);
 				}
@@ -2872,8 +2927,8 @@ pixi_js = __toESM(pixi_js, 1);
 		translate(rawOffset) {
 			this.#live("translate");
 			const offset = worldPoint(rawOffset, null, "offset");
-			if (!this.#body.fitsTranslation(offset, MAX_WORLD_COORDINATE)) throw new RangeError("offset places the body outside the world");
-			this.#body.translate(offset);
+			if (!this.#body.chain.fitsTranslation(offset, MAX_WORLD_COORDINATE)) throw new RangeError("offset places the body outside the world");
+			this.#body.chain.translate(offset);
 			this.#legs.translate(offset);
 			this.#skin.translate(offset);
 			this.#refreshPose();
@@ -2883,7 +2938,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		getBendResponse(into) {
 			this.#live("getBendResponse");
-			return this.#body.bend.response(this.#body.chunks, into);
+			return this.#body.bend.response(this.#body.chain, into);
 		}
 		destroy(options) {
 			this.onRender = null;
@@ -2917,10 +2972,6 @@ pixi_js = __toESM(pixi_js, 1);
 			this.#graphics.sync(this.#renderState, renderer, drawable);
 		}
 	};
-	Object.defineProperty(Beefwife, "MAX_STEP_SECONDS", {
-		value: MAX_STEP_SECONDS,
-		enumerable: true
-	});
 	Object.defineProperty(Beefwife, "MAX_WORLD_COORDINATE", {
 		value: MAX_WORLD_COORDINATE,
 		enumerable: true

@@ -1,7 +1,10 @@
 /**
- * Runs `engines.js` once per case per engine and lays the results side by
- * side. Every case gets its own process, so nothing a case measures was
- * warmed by a case before it.
+ * Runs the engine scripts once per case per engine and lays the results side
+ * by side. Every case gets its own process, so nothing a case measures was
+ * warmed by a case before it. Each table names the script its cases live in:
+ * `engines.js` for the bend solver's trigonometry, `engines-layout.js` for the
+ * chunk-state layout of the single-sweep loops, and `engines-bend.js` for the
+ * span sweep.
  *
  * JavaScriptCore is the engine behind every browser on iOS, and it is only
  * reachable here on macOS. Where it is missing the column is left out and the
@@ -15,7 +18,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const script = path.join(here, "engines.js");
+const scriptFor = (name) => path.join(here, name);
 const JSC =
   "/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc";
 
@@ -26,6 +29,7 @@ if (fs.existsSync(JSC))
 const TABLES = [
   {
     title: "bend solver, nanoseconds per joint",
+    script: "engines.js",
     baseline: "builtin",
     rows: [
       ["builtin", "Math.atan2 + Math.cos/sin"],
@@ -37,18 +41,49 @@ const TABLES = [
   },
   {
     title: "link relaxation, nanoseconds per pass over 49 chunks",
-    baseline: "objects",
+    script: "engines-layout.js",
+    baseline: "relax-objects",
     rows: [
-      ["objects", "one object per chunk"],
-      ["typed", "parallel typed arrays"],
+      ["relax-objects", "one object per chunk"],
+      ["relax-typed", "parallel typed arrays"],
+    ],
+  },
+  {
+    title: "tangent update, nanoseconds per pass over 49 chunks",
+    script: "engines-layout.js",
+    baseline: "tangents-objects",
+    rows: [
+      ["tangents-objects", "one object per chunk"],
+      ["tangents-typed", "parallel typed arrays"],
+    ],
+  },
+  {
+    title: "bend span sweep, nanoseconds per pass over 49 chunks",
+    script: "engines-bend.js",
+    baseline: "bend-objects",
+    rows: [
+      ["bend-objects", "one object per chunk"],
+      ["bend-typed", "parallel typed arrays"],
+    ],
+  },
+  /* The loop that reads and writes every field, so it is where a layout of ten
+     separate arrays has the most streams to keep open at once and the least to
+     gain. Reported whatever it says. */
+  {
+    title: "integrate, nanoseconds per pass over 49 chunks",
+    script: "engines-layout.js",
+    baseline: "integrate-objects",
+    rows: [
+      ["integrate-objects", "one object per chunk"],
+      ["integrate-typed", "parallel typed arrays"],
     ],
   },
 ];
 
-const run = (engine, name) => {
+const run = (engine, script, name) => {
   const result = spawnSync(
     engine.command,
-    [script, ...engine.separator, name],
+    [scriptFor(script), ...engine.separator, name],
     { encoding: "utf8" },
   );
   if (result.status !== 0)
@@ -70,7 +105,10 @@ for (const table of TABLES) {
         .join(""),
   );
   const baseline = new Map(
-    engines.map((engine) => [engine.label, run(engine, table.baseline)]),
+    engines.map((engine) => [
+      engine.label,
+      run(engine, table.script, table.baseline),
+    ]),
   );
   for (const [name, label] of table.rows) {
     let line = `  ${label}`.padEnd(30);
@@ -78,7 +116,7 @@ for (const table of TABLES) {
       const nanoseconds =
         name === table.baseline
           ? baseline.get(engine.label)
-          : run(engine, name);
+          : run(engine, table.script, name);
       const ratio = baseline.get(engine.label) / nanoseconds;
       line +=
         nanoseconds.toFixed(2).padStart(9) + `${ratio.toFixed(2)}x`.padStart(8);
