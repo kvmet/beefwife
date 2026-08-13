@@ -4209,6 +4209,19 @@ pixi_js = __toESM(pixi_js, 1);
 			this.renderSnapshot.target = this.planner?.goal || null;
 			return this.renderSnapshot;
 		}
+		getRoute() {
+			return this.route.path.map((point) => ({
+				x: point.x,
+				y: point.y
+			}));
+		}
+		getTarget() {
+			const goal = this.planner?.goal;
+			return goal ? {
+				x: goal.x,
+				y: goal.y
+			} : null;
+		}
 		update(dt, timeScale) {
 			if (!Number.isFinite(dt) || dt < 0) throw new RangeError("dt must be nonnegative seconds");
 			BeefwifeCanvasActor.timeScaleOf(timeScale);
@@ -4307,21 +4320,21 @@ pixi_js = __toESM(pixi_js, 1);
 //#endregion
 //#region src/render.mjs
 /** Pixi scene synchronization and optional route debugging for BeefwifeCanvasRuntime. */
-	var drawTerrain = (graphics, terrainView) => {
+	var drawTerrain = (graphics, terrainView, pixel) => {
 		for (const rectangle of terrainView.rectangles) graphics.rect(rectangle.left, rectangle.top, rectangle.right - rectangle.left, rectangle.bottom - rectangle.top);
 		graphics.stroke({
 			color: 5299360,
 			alpha: .55,
-			width: 1
+			width: pixel
 		});
 		const bounds = terrainView.bounds;
 		graphics.rect(bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top).stroke({
 			color: 5299360,
 			alpha: .3,
-			width: 1
+			width: pixel
 		});
 	};
-	var drawRoute = (graphics, actor) => {
+	var drawRoute = (graphics, actor, pixel) => {
 		const { head, route: path } = actor;
 		if (!path.length) return;
 		graphics.moveTo(head.x, head.y);
@@ -4329,37 +4342,38 @@ pixi_js = __toESM(pixi_js, 1);
 		graphics.stroke({
 			color: 13153400,
 			alpha: .5,
-			width: 1
+			width: pixel
 		});
 		path.forEach((point) => {
-			graphics.circle(point.x, point.y, 2.5).stroke({
+			graphics.circle(point.x, point.y, 2.5 * pixel).stroke({
 				color: 13153400,
 				alpha: .5,
-				width: 1
+				width: pixel
 			});
 		});
 	};
-	var drawTarget = (graphics, actor) => {
+	var drawTarget = (graphics, actor, pixel) => {
 		const target = actor.target;
 		if (!target) return;
-		graphics.circle(target.x, target.y, 5).stroke({
+		graphics.circle(target.x, target.y, 5 * pixel).stroke({
 			color: 15756443,
 			alpha: .9,
-			width: 2
+			width: 2 * pixel
 		});
-		graphics.moveTo(target.x - 8, target.y).lineTo(target.x + 8, target.y).moveTo(target.x, target.y - 8).lineTo(target.x, target.y + 8).stroke({
+		graphics.moveTo(target.x - 8 * pixel, target.y).lineTo(target.x + 8 * pixel, target.y).moveTo(target.x, target.y - 8 * pixel).lineTo(target.x, target.y + 8 * pixel).stroke({
 			color: 15756443,
 			alpha: .75,
-			width: 1
+			width: pixel
 		});
 	};
 	var draw = ({ actors, debug, scene, terrainView }) => {
 		scene.syncDisplays(actors.map((actor) => actor.display));
 		scene.debugUnderlay.clear();
 		scene.debugOverlay.clear();
-		if (debug.terrain) drawTerrain(scene.debugUnderlay, terrainView);
-		if (debug.routes) for (const actor of actors) drawRoute(scene.debugOverlay, actor);
-		if (debug.targets) for (const actor of actors) drawTarget(scene.debugOverlay, actor);
+		const pixel = Math.max(1, 1 / scene.renderOptions.pixelResolution);
+		if (debug.terrain) drawTerrain(scene.debugUnderlay, terrainView, pixel);
+		if (debug.routes) for (const actor of actors) drawRoute(scene.debugOverlay, actor, pixel);
+		if (debug.targets) for (const actor of actors) drawTarget(scene.debugOverlay, actor, pixel);
 		scene.render();
 	};
 
@@ -4771,6 +4785,19 @@ pixi_js = __toESM(pixi_js, 1);
 			});
 			this.observed = /* @__PURE__ */ new Set();
 			this.observerConnected = false;
+			this.meter = {
+				since: 0,
+				steps: 0,
+				draws: 0,
+				stepMs: 0,
+				drawMs: 0
+			};
+			this.stats = {
+				steps: 0,
+				draws: 0,
+				stepMs: 0,
+				drawMs: 0
+			};
 			this.running = false;
 			this.destroyed = false;
 			this.frameId = null;
@@ -4869,11 +4896,23 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		setDebug(flags) {
 			this._assertActive();
-			const terrainWasVisible = this.debug.terrain;
 			this.debug = debugOf(flags, this.debug);
-			if (!terrainWasVisible && this.debug.terrain && this.terrain.ready) this._snapshotTerrain([...new Set(this.terrain.avoidElements())]);
 			if (this.scene.application) this._draw();
 			return this;
+		}
+		getTerrainView() {
+			this._assertActive();
+			return {
+				bounds: { ...this.terrainView.bounds },
+				rectangles: this.terrainView.rectangles.map((rectangle) => ({ ...rectangle }))
+			};
+		}
+		getStats() {
+			this._assertActive();
+			return {
+				...this.stats,
+				actors: this.population.actors.length
+			};
 		}
 		refreshTerrain() {
 			this._assertActive();
@@ -4901,7 +4940,7 @@ pixi_js = __toESM(pixi_js, 1);
 			this._assertActive();
 			this.terrain.build();
 			const elements = [...new Set(this.terrain.avoidElements())];
-			if (this.debug.terrain) this._snapshotTerrain(elements);
+			this._snapshotTerrain(elements);
 			if (this.observer && (!this.observerConnected || this._elementsChanged(elements))) {
 				this.observer.disconnect();
 				if (!this.scene.ownsCanvas) this.observer.observe(this.scene.canvas);
@@ -4952,6 +4991,37 @@ pixi_js = __toESM(pixi_js, 1);
 			this.frameId = null;
 			this.nextPhysicsTime = 0;
 			this.nextDrawTime = 0;
+			this._resetMeter(0);
+		}
+		_resetMeter(time) {
+			this.meter.since = time;
+			this.meter.steps = 0;
+			this.meter.draws = 0;
+			this.meter.stepMs = 0;
+			this.meter.drawMs = 0;
+		}
+		/**
+		* Rates over the last whole second, so two readers asking at different
+		* moments read the same numbers. The milliseconds are this thread's work
+		* only: `render` returns once the frame is submitted and the GPU draws it
+		* afterwards, so nothing the resolution costs is counted here.
+		*/
+		_meter(time) {
+			const meter = this.meter;
+			if (!meter.since) {
+				meter.since = time;
+				return;
+			}
+			const elapsed = time - meter.since;
+			if (elapsed < 1e3) return;
+			const perSecond = 1e3 / elapsed;
+			this.stats = {
+				steps: meter.steps * perSecond,
+				draws: meter.draws * perSecond,
+				stepMs: meter.steps ? meter.stepMs / meter.steps : 0,
+				drawMs: meter.draws ? meter.drawMs / meter.draws : 0
+			};
+			this._resetMeter(time);
 		}
 		_tick = (time) => {
 			this.frameId = requestAnimationFrame(this._tick);
@@ -4962,13 +5032,22 @@ pixi_js = __toESM(pixi_js, 1);
 				this.nextPhysicsTime += elapsedIntervals * this.physicsInterval;
 				dt = this.physicsInterval / 1e3;
 			}
-			if (this.terrain.ready && dt > 0) this.population.update(dt, this.timeScale);
+			if (this.terrain.ready && dt > 0) {
+				const started = performance.now();
+				this.population.update(dt, this.timeScale);
+				this.meter.stepMs += performance.now() - started;
+				this.meter.steps += 1;
+			}
 			if (!this.nextDrawTime || time >= this.nextDrawTime) {
 				if (!this.nextDrawTime) this.nextDrawTime = time;
 				const elapsedIntervals = Math.floor((time - this.nextDrawTime) / this.renderInterval) + 1;
 				this.nextDrawTime += elapsedIntervals * this.renderInterval;
+				const started = performance.now();
 				this._draw();
+				this.meter.drawMs += performance.now() - started;
+				this.meter.draws += 1;
 			}
+			this._meter(time);
 		};
 		_draw = () => draw({
 			actors: this.population.renderState(),
@@ -5124,6 +5203,12 @@ pixi_js = __toESM(pixi_js, 1);
 			this._host().refreshTerrain();
 			return this;
 		}
+		getTerrainView() {
+			return this._host().getTerrainView();
+		}
+		getStats() {
+			return this._host().getStats();
+		}
 		respawn() {
 			this._host().respawn();
 			return this;
@@ -5146,6 +5231,14 @@ pixi_js = __toESM(pixi_js, 1);
 						getPose: () => {
 							this._host();
 							return actor.beefwife.getPose();
+						},
+						getRoute: () => {
+							this._host();
+							return actor.getRoute();
+						},
+						getTarget: () => {
+							this._host();
+							return actor.getTarget();
 						},
 						respawn: () => {
 							this._host().respawn(actor);
@@ -5312,6 +5405,12 @@ pixi_js = __toESM(pixi_js, 1);
 			refreshTerrain() {
 				controller.refreshTerrain();
 				return facade;
+			},
+			getTerrainView() {
+				return controller.getTerrainView();
+			},
+			getStats() {
+				return controller.getStats();
 			},
 			respawn() {
 				controller.respawn();

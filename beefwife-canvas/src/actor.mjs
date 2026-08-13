@@ -153,6 +153,18 @@ class BeefwifeCanvasActor {
     return this.renderSnapshot;
   }
 
+  /* The plan as a reader may hold it. `renderState` hands out the working
+     route and the planner's own goal, which the next step rewrites in place;
+     these copy so a caller can keep one past the frame it read. */
+  getRoute() {
+    return this.route.path.map((point) => ({ x: point.x, y: point.y }));
+  }
+
+  getTarget() {
+    const goal = this.planner?.goal;
+    return goal ? { x: goal.x, y: goal.y } : null;
+  }
+
   update(dt, timeScale) {
     if (!Number.isFinite(dt) || dt < 0)
       throw new RangeError("dt must be nonnegative seconds");

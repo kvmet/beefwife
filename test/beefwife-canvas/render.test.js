@@ -37,6 +37,7 @@ const host = {
   scene: {
     debugOverlay: overlay,
     debugUnderlay: underlay,
+    renderOptions: { pixelResolution: 1 },
     render() {},
     syncDisplays() {},
   },
@@ -75,6 +76,33 @@ assert.equal(
 draw("terrain");
 assert.equal(underlay.calls.filter((call) => call[0] === "rect").length, 2);
 
+/* A mark is sized in renderer pixels, so a quarter-resolution renderer takes
+   four canvas pixels for each one and the mark survives the upscale at the
+   size it was authored. */
+host.scene.renderOptions.pixelResolution = 0.25;
+draw("targets");
+assert.ok(overlay.calls.some((call) => call[0] === "circle" && call[3] === 20));
+assert.ok(
+  overlay.calls.some((call) => call[0] === "stroke" && call[1].width === 8),
+);
+draw("routes");
+assert.equal(
+  overlay.calls.filter((call) => call[0] === "circle" && call[3] === 10).length,
+  2,
+);
+draw("terrain");
+assert.ok(
+  underlay.calls.every((call) => call[0] !== "stroke" || call[1].width === 4),
+);
+
+/* A renderer finer than the canvas, which is a retina display at full scale,
+   draws the mark at the size it is written rather than shrinking it to one of
+   its own pixels. */
+host.scene.renderOptions.pixelResolution = 2;
+draw("targets");
+assert.ok(overlay.calls.some((call) => call[0] === "circle" && call[3] === 5));
+host.scene.renderOptions.pixelResolution = 1;
+
 /* The cast changes only on a spawn or a recycle, but the draw hands it over
    every frame, and re-adding a child is Pixi reordering the world. An
    unchanged list must cost nothing; a changed one must still land, and a
@@ -110,4 +138,4 @@ sync([second]);
 assert.ok(first.destroyed, "a creature dropped from the cast was left alive");
 assert.equal(second.destroyed, false);
 
-console.log("BeefwifeCanvas debug rendering: 10 layer and cast checks passed");
+console.log("BeefwifeCanvas debug rendering: 16 layer and cast checks passed");

@@ -96,10 +96,11 @@ so `get(canvas)` then returns `null` and a new mount can begin.
 The lifecycle methods are `start()`, `stop()`, `destroy()`, `setCount(count)`,
 `setTimeScale(scale)`, `setTarget(point)`, `clearTarget()`,
 `setTargetMode(mode)`, `setPointerInput(input)`, `setDebug(flags)`,
-`refreshTerrain()`, `respawn()`, and `getActors()`.
+`refreshTerrain()`, `respawn()`, `getActors()`, `getTerrainView()`, and
+`getStats()`.
 `getActors()` returns frozen Canvas control handles with stable `id` and `name`
-fields plus `getPose()`, target, mode, and respawn methods; it does not expose
-the host's mutable actor or route objects.
+fields plus `getPose()`, `getRoute()`, `getTarget()`, target, mode, and respawn
+methods; it does not expose the host's mutable actor or route objects.
 Targets and poses use canvas-local CSS pixels. Target policy and DOM input are
 independent. `targetMode` is `wander` or `manual`; `pointerInput` is `none`,
 `click`, or `move`. A click or pointer movement merely supplies a target and
@@ -168,7 +169,27 @@ runtime.setDebug({ routes: false, terrain: true });
 ```
 
 Terrain draws below the beefwives; routes and targets draw above them. These
-layers are diagnostic and do not affect routing or simulation.
+layers are diagnostic and do not affect routing or simulation. Their marks are
+sized in renderer pixels, so a mark keeps its shape at every `resolutionScale`
+and grows on screen as the renderer coarsens.
+
+To draw a debug layer of your own instead, read the same state and draw it at
+whatever resolution you like. `getTerrainView()` returns the field as the last
+build measured it, `{ bounds, rectangles }` in canvas-local CSS pixels, and each
+control handle answers `getRoute()` with the remaining waypoints and
+`getTarget()` with the current goal or `null`. All three return copies.
+
+`getStats()` reports the last whole second: `actors`, `steps` and `draws` a
+second, and `stepMs` and `drawMs` for the mean cost of one simulation step and
+one draw. Those milliseconds are this thread's work alone. A draw returns once
+the frame is submitted and the GPU renders it afterwards, so what a resolution
+costs to rasterise is not in `drawMs`.
+
+```js
+const { steps, drawMs } = runtime.getStats();
+for (const actor of runtime.getActors())
+  overlay.plot(actor.getRoute(), actor.getTarget());
+```
 
 Simulation and routing options are `timeScale`, `wanderDelay`, `edgeMargin`,
 `obstaclePadding`, `waypointRadius`, `arrivalRadius`, `throttleEase`,

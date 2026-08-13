@@ -125,6 +125,8 @@ class BeefwifeCanvasRuntime {
     );
     this.observed = new Set();
     this.observerConnected = false;
+    this.meter = { since: 0, steps: 0, draws: 0, stepMs: 0, drawMs: 0 };
+    this.stats = { steps: 0, draws: 0, stepMs: 0, drawMs: 0 };
     this.running = false;
     this.destroyed = false;
     this.frameId = null;
@@ -251,12 +253,26 @@ class BeefwifeCanvasRuntime {
 
   setDebug(flags) {
     this._assertActive();
-    const terrainWasVisible = this.debug.terrain;
     this.debug = debugOf(flags, this.debug);
-    if (!terrainWasVisible && this.debug.terrain && this.terrain.ready)
-      this._snapshotTerrain([...new Set(this.terrain.avoidElements())]);
     if (this.scene.application) this._draw();
     return this;
+  }
+
+  /* The measured field, for a caller drawing its own debug layer. Copies,
+     because the next build rewrites this one. */
+  getTerrainView() {
+    this._assertActive();
+    return {
+      bounds: { ...this.terrainView.bounds },
+      rectangles: this.terrainView.rectangles.map((rectangle) => ({
+        ...rectangle,
+      })),
+    };
+  }
+
+  getStats() {
+    this._assertActive();
+    return { ...this.stats, actors: this.population.actors.length };
   }
 
   refreshTerrain() {
@@ -289,7 +305,7 @@ class BeefwifeCanvasRuntime {
     // Terrain exposes the measured source for observers. De-duplicate it just
     // as Terrain does so repeated elements do not cause endless reconnects.
     const elements = [...new Set(this.terrain.avoidElements())];
-    if (this.debug.terrain) this._snapshotTerrain(elements);
+    this._snapshotTerrain(elements);
 
     // Re-observing feeds ResizeObserver's initial callback straight back into
     // scheduleRebuild, so a steady DOM only settles to zero rebuilds if the
@@ -354,6 +370,39 @@ class BeefwifeCanvasRuntime {
     this.frameId = null;
     this.nextPhysicsTime = 0;
     this.nextDrawTime = 0;
+    this._resetMeter(0);
+  }
+
+  _resetMeter(time) {
+    this.meter.since = time;
+    this.meter.steps = 0;
+    this.meter.draws = 0;
+    this.meter.stepMs = 0;
+    this.meter.drawMs = 0;
+  }
+
+  /**
+   * Rates over the last whole second, so two readers asking at different
+   * moments read the same numbers. The milliseconds are this thread's work
+   * only: `render` returns once the frame is submitted and the GPU draws it
+   * afterwards, so nothing the resolution costs is counted here.
+   */
+  _meter(time) {
+    const meter = this.meter;
+    if (!meter.since) {
+      meter.since = time;
+      return;
+    }
+    const elapsed = time - meter.since;
+    if (elapsed < 1000) return;
+    const perSecond = 1000 / elapsed;
+    this.stats = {
+      steps: meter.steps * perSecond,
+      draws: meter.draws * perSecond,
+      stepMs: meter.steps ? meter.stepMs / meter.steps : 0,
+      drawMs: meter.draws ? meter.drawMs / meter.draws : 0,
+    };
+    this._resetMeter(time);
   }
 
   _tick = (time) => {
@@ -378,15 +427,22 @@ class BeefwifeCanvasRuntime {
     }
 
     if (this.terrain.ready && dt > 0) {
+      const started = performance.now();
       this.population.update(dt, this.timeScale);
+      this.meter.stepMs += performance.now() - started;
+      this.meter.steps += 1;
     }
     if (!this.nextDrawTime || time >= this.nextDrawTime) {
       if (!this.nextDrawTime) this.nextDrawTime = time;
       const elapsedIntervals =
         Math.floor((time - this.nextDrawTime) / this.renderInterval) + 1;
       this.nextDrawTime += elapsedIntervals * this.renderInterval;
+      const started = performance.now();
       this._draw();
+      this.meter.drawMs += performance.now() - started;
+      this.meter.draws += 1;
     }
+    this._meter(time);
   };
 
   _draw = () =>

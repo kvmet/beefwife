@@ -66,6 +66,8 @@ const newHost = (options) => {
   const actor = {
     name: Object.keys(options.cast)[0],
     beefwife: { getPose: () => ({ head: { x: 4, y: 5 } }) },
+    getRoute: () => [{ x: 7, y: 8 }],
+    getTarget: () => ({ x: 12, y: 14 }),
     setDescriptor: (descriptor) => calls.push(["setDescriptor", descriptor]),
   };
   const host = {
@@ -77,6 +79,8 @@ const newHost = (options) => {
       this.destroyed = true;
       calls.push(["destroy"]);
     },
+    getStats: () => ({ actors: 1, steps: 60, draws: 24, stepMs: 2, drawMs: 3 }),
+    getTerrainView: () => ({ bounds: { left: 1 }, rectangles: [{ left: 2 }] }),
     rebuild: () => calls.push(["rebuild"]),
     refreshTerrain: () => calls.push(["refreshTerrain"]),
     respawn: (one) => calls.push(["respawn", one]),
@@ -281,7 +285,16 @@ const namedDescriptor = (name) => parseInContext(descriptorJson(name));
   assert.equal(handle.setDescriptor({ name: "edited" }), handle);
   assert.deepEqual(calls.at(-1), ["setDescriptor", { name: "edited" }]);
   assert.equal(handle.host, undefined);
-  checks += 10;
+  /* What a caller needs to draw its own debug layer: the plan, the goal, the
+     measured field, and the frame rates the host is keeping. */
+  assert.deepEqual(handle.getRoute(), [{ x: 7, y: 8 }]);
+  assert.deepEqual(handle.getTarget(), { x: 12, y: 14 });
+  assert.deepEqual(runtime.getTerrainView(), {
+    bounds: { left: 1 },
+    rectangles: [{ left: 2 }],
+  });
+  assert.equal(runtime.getStats().steps, 60);
+  checks += 14;
 
   runtime.destroy();
   assert.equal(created.host.destroyed, true);
@@ -289,7 +302,9 @@ const namedDescriptor = (name) => parseInContext(descriptorJson(name));
   assert.equal(canvas.style.imageRendering, "crisp-edges");
   assert.equal(context.BeefwifeCanvas.get(canvas), null);
   assert.throws(() => handle.setTarget({ x: 1, y: 2 }), /destroyed/);
-  checks += 5;
+  assert.throws(() => handle.getRoute(), /destroyed/);
+  assert.throws(() => runtime.getStats(), /destroyed/);
+  checks += 7;
 
   const remounted = await context.BeefwifeCanvas.mount(canvas, {
     autoStart: false,

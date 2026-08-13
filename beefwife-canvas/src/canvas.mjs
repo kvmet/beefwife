@@ -175,6 +175,14 @@ class Controller {
     return this;
   }
 
+  getTerrainView() {
+    return this._host().getTerrainView();
+  }
+
+  getStats() {
+    return this._host().getStats();
+  }
+
   respawn() {
     this._host().respawn();
     return this;
@@ -202,6 +210,14 @@ class Controller {
           getPose: () => {
             this._host();
             return actor.beefwife.getPose();
+          },
+          getRoute: () => {
+            this._host();
+            return actor.getRoute();
+          },
+          getTarget: () => {
+            this._host();
+            return actor.getTarget();
           },
           respawn: () => {
             this._host().respawn(actor);
@@ -388,6 +404,12 @@ const facadeOf = (controller) => {
     refreshTerrain() {
       controller.refreshTerrain();
       return facade;
+    },
+    getTerrainView() {
+      return controller.getTerrainView();
+    },
+    getStats() {
+      return controller.getStats();
     },
     respawn() {
       controller.respawn();

@@ -156,6 +156,7 @@ const pixiStub = (log) => {
 
 const sceneBoundary = async () => {
   const log = [];
+  let workMs = 0;
   const scheduledTimers = new Set();
   const canvas = {
     className: "",
@@ -198,6 +199,9 @@ const sceneBoundary = async () => {
     },
     requestAnimationFrame: () => 1,
     cancelAnimationFrame() {},
+    /* One millisecond a reading, so every span the meter times is 1ms and the
+       published averages are exact. */
+    performance: { now: () => (workMs += 1) },
     setTimeout: (callback) => {
       scheduledTimers.add(callback);
       return callback;
@@ -379,6 +383,36 @@ const sceneBoundary = async () => {
   );
   assert.equal(browser.renderTicks, 3);
 
+  /* The meter reports the last whole second, so it stays silent until one has
+     passed and then reads the rates the clock above was asked for. */
+  vm.runInContext(
+    `globalThis.metered = new BeefwifeCanvasRuntime({
+       cast: { [testDescriptor.name]: testDescriptor },
+       count: 0,
+       physicsFps: 60,
+       renderFps: 24,
+     });
+     metered.terrain.build();
+     metered._draw = () => {};
+     globalThis.earlyStats = (() => {
+       for (let time = 1000; time < 1500; time += 1000 / 240) metered._tick(time);
+       return metered.getStats();
+     })();
+     for (let time = 1500; time <= 2100; time += 1000 / 240) metered._tick(time);
+     globalThis.meteredStats = metered.getStats();`,
+    browser,
+  );
+  assert.equal(browser.earlyStats.steps, 0, "a part second was published");
+  const stats = browser.meteredStats;
+  assert.ok(
+    Math.abs(stats.steps - 60) <= 2,
+    `physics rate read ${stats.steps}`,
+  );
+  assert.ok(Math.abs(stats.draws - 24) <= 2, `draw rate read ${stats.draws}`);
+  assert.equal(stats.stepMs, 1);
+  assert.equal(stats.drawMs, 1);
+  assert.equal(stats.actors, 0);
+
   /* The rate is a ceiling on ticks, not a promise about wall time. A frame
      that arrives 12 slots late drops the 11 it missed and steps once, because
      replaying them costs a host that is already behind more than it owes.
@@ -504,7 +538,7 @@ const sceneBoundary = async () => {
   browser.layer.destroy();
   assert.ok(log.some(([operation]) => operation === "remove"));
   assert.ok(log.some(([operation]) => operation === "destroy"));
-  return 55;
+  return 61;
 };
 
 (async () => {
