@@ -2294,6 +2294,7 @@ pixi_js = __toESM(pixi_js, 1);
 			this.ribbonFill = null;
 			this.ribbonStroke = null;
 			this.ribbonCount = -1;
+			this.retired = null;
 			this.adopt(state);
 		}
 		adopt(state) {
@@ -2307,6 +2308,21 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		_drop(child) {
 			discard(this.parent, child);
+		}
+		_retire(atlas, containers) {
+			this._flushRetired();
+			for (const container of containers) if (container && container.parent === this.parent) this.parent.removeChild(container);
+			this.retired = {
+				atlas,
+				containers
+			};
+		}
+		_flushRetired() {
+			const retired = this.retired;
+			if (!retired) return;
+			this.retired = null;
+			for (const container of retired.containers) if (container) container.destroy();
+			releaseAtlas(retired.atlas);
 		}
 		_syncLimbParts(legCount) {
 			const paint = this.model.legs.skin.limbPaint;
@@ -2381,7 +2397,6 @@ pixi_js = __toESM(pixi_js, 1);
 			]) if (child) this.parent.addChild(child);
 		}
 		_buildParticles(plan) {
-			for (const container of this.shapeContainers) if (container) discard(this.parent, container);
 			const bands = [
 				null,
 				null,
@@ -2415,11 +2430,12 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		_syncAtlas(renderer) {
 			const resolution = this.options.pixelResolution ?? 1;
+			this._flushRetired();
 			if (this.plan && this.atlasResolution === resolution) return;
 			if (!renderer) return;
 			const plan = planAtlas(this.model, resolution);
 			const atlas = acquireAtlas(plan, renderer);
-			releaseAtlas(this.atlas);
+			if (this.atlas || this.shapeContainers.length) this._retire(this.atlas, this.shapeContainers);
 			this.atlas = atlas;
 			this.atlasResolution = resolution;
 			this.plan = plan;
@@ -2559,6 +2575,7 @@ pixi_js = __toESM(pixi_js, 1);
 			}
 		}
 		destroy() {
+			this._flushRetired();
 			const children = [
 				...this.shapeContainers,
 				this.limbFill,

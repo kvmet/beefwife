@@ -92,6 +92,8 @@ class Graphics {
     this.ribbonFill = null;
     this.ribbonStroke = null;
     this.ribbonCount = -1;
+    /* What the last rebake replaced, held one frame. See `_retire`. */
+    this.retired = null;
     this.adopt(state);
   }
 
@@ -112,6 +114,30 @@ class Graphics {
 
   _drop(child) {
     discard(this.parent, child);
+  }
+
+  /* A rebake runs inside `onRender`, which Pixi calls partway through
+     executing the frame's instructions. The sheet and the containers being
+     replaced are already in that instruction set, so destroying them here
+     leaves the rest of the pass drawing from a texture whose source is gone.
+     They leave the scene now and are destroyed at the top of the next frame,
+     once the pass that scheduled them has finished. Removing a child is safe
+     mid-pass in a way that destroying one is not. */
+  _retire(atlas, containers) {
+    this._flushRetired();
+    for (const container of containers)
+      if (container && container.parent === this.parent)
+        this.parent.removeChild(container);
+    this.retired = { atlas, containers };
+  }
+
+  _flushRetired() {
+    const retired = this.retired;
+    if (!retired) return;
+    this.retired = null;
+    for (const container of retired.containers)
+      if (container) container.destroy();
+    releaseAtlas(retired.atlas);
   }
 
   _syncLimbParts(legCount) {
@@ -207,8 +233,6 @@ class Graphics {
      placement ever draws. A placement with no frame, which is a plate a
      profile scaled to nothing, keeps its slot and draws nothing. */
   _buildParticles(plan) {
-    for (const container of this.shapeContainers)
-      if (container) discard(this.parent, container);
     const bands = [null, null, null, null];
     const bandFor = (index) => {
       if (!bands[index])
@@ -246,12 +270,14 @@ class Graphics {
      frames and the creature draws as its meshes alone, for one frame. */
   _syncAtlas(renderer) {
     const resolution = this.options.pixelResolution ?? 1;
+    this._flushRetired();
     if (this.plan && this.atlasResolution === resolution) return;
     if (!renderer) return;
     const plan = planAtlas(this.model, resolution);
     // Acquired before the old one goes, so a shared atlas is never rebuilt.
     const atlas = acquireAtlas(plan, renderer);
-    releaseAtlas(this.atlas);
+    if (this.atlas || this.shapeContainers.length)
+      this._retire(this.atlas, this.shapeContainers);
     this.atlas = atlas;
     this.atlasResolution = resolution;
     this.plan = plan;
@@ -529,6 +555,7 @@ class Graphics {
   }
 
   destroy() {
+    this._flushRetired();
     const children = [
       ...this.shapeContainers,
       this.limbFill,

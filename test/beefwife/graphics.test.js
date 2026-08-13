@@ -230,7 +230,11 @@ assert.equal(particlesOf(stack, "ornaments-over").length, 2);
 checks += 2;
 
 /* A dropped band must be destroyed, not merely unparented: the scene is
-   retained, so anything left alive is a leak nothing will ever collect. */
+   retained, so anything left alive is a leak nothing will ever collect. It
+   leaves the scene on the draw that replaces it and is destroyed on the next
+   one, because the draw that replaces it is running inside a pass already
+   holding it. Destroying it there strands the rest of the pass on a texture
+   with no source. */
 const fewer = copy(flipped);
 fewer.chain.skin.ornaments = [];
 const before = [...partsOf(stack)];
@@ -238,9 +242,17 @@ stack.setDescriptor(fewer);
 draw(stack);
 const dropped = before.filter((child) => !partsOf(stack).includes(child));
 assert.ok(dropped.length > 0);
-assert.ok(dropped.every((child) => child.destroyed));
+assert.ok(
+  dropped.every((child) => !child.destroyed),
+  "a replaced band was destroyed inside the pass still drawing it",
+);
 assert.equal(bandsOf(stack).has("ornaments-over"), false);
-checks += 3;
+draw(stack);
+assert.ok(
+  dropped.every((child) => child.destroyed),
+  "a replaced band outlived the pass that held it",
+);
+checks += 4;
 
 /* A host may add its own children to a Beefwife, and settling the parts' draw
    order re-adds every one of them, which would move each past a marker that
