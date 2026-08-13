@@ -1,10 +1,18 @@
 <script>
   import { onDestroy, onMount, tick } from "svelte";
   import { get } from "svelte/store";
+  import DebugLayer from "./DebugLayer.svelte";
   import Graticule from "./Graticule.svelte";
   import StageTools, { DEFAULT_OPTIONS } from "./StageTools.svelte";
   import TargetMarker from "./TargetMarker.svelte";
+  import TerrainBoxes from "./TerrainBoxes.svelte";
   import { applyError, descriptor } from "./descriptor.js";
+
+  /* The selector the runtime measures its terrain with. Its own default,
+     `.beefwife-avoid`, belongs to a hosting page; the lab draws its own. */
+  const TERRAIN_SELECTOR = "[data-lab-terrain]";
+  // Percent of the stage, below which a drag reads as a stray click.
+  const SMALLEST_BOX = 1.5;
 
   let canvas;
   let runtime;
@@ -19,12 +27,28 @@
   let showTarget = true;
   let background = "#101318";
 
+  let debug = { routes: false, targets: false, bounds: false };
+  /* The padding the live runtime measured with, not the one the panel is
+     showing: an edit only reaches the terrain on the remount it schedules. */
+  let mountedPadding = DEFAULT_OPTIONS.obstaclePadding;
+  let showStats = false;
+  let stats = null;
+  let statsTimer = 0;
+
+  let terrainBoxes = [];
+  let pendingBox = null;
+  let drawOrigin = null;
+  let nextBoxId = 1;
+  let drawTerrain = false;
+
   let playing = true;
 
   /* Read once when the runtime mounts, so any edit here has to remount. */
   let options = { ...DEFAULT_OPTIONS };
 
   $: markerVisible = showTarget && hasTarget && targetMode === "manual";
+  $: applyCount(options.count);
+  $: pollStats(showStats);
 
   /* The runtime validates on apply; a rejected document leaves the actor on
      its last good state, so the error is reported instead of thrown. The
@@ -43,6 +67,26 @@
 
   $: applyDescriptor($descriptor);
 
+  /* A creature added after an edit is built from the cast the mount was given,
+     so the edited document has to be handed to it once it exists. */
+  function applyCount(count) {
+    if (!runtime) return;
+    runtime.setCount(Math.max(0, Math.round(count)));
+    applyDescriptor(get(descriptor));
+  }
+
+  function pollStats(wanted) {
+    clearInterval(statsTimer);
+    statsTimer = 0;
+    if (!wanted) {
+      stats = null;
+      return;
+    }
+    /* Four times a second: the runtime publishes one figure a second, so a
+       faster poll would reread the same numbers. */
+    statsTimer = setInterval(() => (stats = runtime?.getStats() ?? null), 250);
+  }
+
   function targetPoint() {
     const bounds = canvas?.getBoundingClientRect();
     if (!bounds?.width || !bounds?.height) return null;
@@ -57,19 +101,84 @@
     if (point && runtime) runtime.setTarget(point);
   }
 
-  /* The runtime draws its own target crosshair; ours only marks manual
-     placements, so the debug layer covers the modes ours cannot. */
-  function applyDebug() {
-    runtime?.setDebug({ targets: showTarget && targetMode !== "manual" });
-  }
-
   function selectMode(mode) {
     targetMode = targetMode === mode ? "manual" : mode;
     if (!runtime) return;
     runtime.setTargetMode(targetMode === "wander" ? "wander" : "manual");
     runtime.setPointerInput(targetMode === "follow" ? "move" : "none");
     if (targetMode === "manual" && hasTarget) sendTarget();
-    applyDebug();
+  }
+
+  function stagePercent(event, bounds) {
+    return {
+      x: Math.min(
+        Math.max(((event.clientX - bounds.left) / bounds.width) * 100, 0),
+        100,
+      ),
+      y: Math.min(
+        Math.max(((event.clientY - bounds.top) / bounds.height) * 100, 0),
+        100,
+      ),
+    };
+  }
+
+  function startBox(event) {
+    if (!drawTerrain || event.button !== 0) return;
+    if (event.target.closest("button, .stage-tools")) return;
+    drawOrigin = stagePercent(
+      event,
+      event.currentTarget.getBoundingClientRect(),
+    );
+    pendingBox = {
+      ...drawOrigin,
+      left: drawOrigin.x,
+      top: drawOrigin.y,
+      width: 0,
+      height: 0,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function stretchBox(event) {
+    if (!drawOrigin) return;
+    const corner = stagePercent(
+      event,
+      event.currentTarget.getBoundingClientRect(),
+    );
+    pendingBox = {
+      left: Math.min(drawOrigin.x, corner.x),
+      top: Math.min(drawOrigin.y, corner.y),
+      width: Math.abs(corner.x - drawOrigin.x),
+      height: Math.abs(corner.y - drawOrigin.y),
+    };
+  }
+
+  async function commitBox(event) {
+    if (!drawOrigin) return;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    const box = pendingBox;
+    drawOrigin = null;
+    pendingBox = null;
+    if (!box || box.width < SMALLEST_BOX || box.height < SMALLEST_BOX) return;
+    terrainBoxes = [...terrainBoxes, { ...box, id: nextBoxId++ }];
+    await measureTerrain();
+  }
+
+  async function removeBox(id) {
+    terrainBoxes = terrainBoxes.filter((box) => box.id !== id);
+    await measureTerrain();
+  }
+
+  async function clearTerrain() {
+    terrainBoxes = [];
+    await measureTerrain();
+  }
+
+  /* Terrain is measured from the page, so the boxes have to be in it before
+     the runtime is asked to look again. */
+  async function measureTerrain() {
+    await tick();
+    runtime?.refreshTerrain();
   }
 
   function clearTarget() {
@@ -84,6 +193,7 @@
   }
 
   function placeTarget(event) {
+    if (drawTerrain) return;
     if (event.target.closest("button, .stage-tools")) return;
     const bounds = event.currentTarget.getBoundingClientRect();
     target = {
@@ -134,10 +244,12 @@
   }
 
   async function mountCanvas(token = mountToken) {
+    const padding = Math.max(0, +options.obstaclePadding || 0);
     try {
       const mounted = await window.BeefwifeCanvas.mount(canvas, {
         descriptors: [structuredClone(get(descriptor))],
-        count: 1,
+        count: Math.max(0, Math.round(options.count)),
+        avoid: TERRAIN_SELECTOR,
         resolutionScale: Math.min(
           1,
           Math.max(0.125, +options.resolutionScale || 0.5),
@@ -151,6 +263,7 @@
         targetMode: targetMode === "wander" ? "wander" : "manual",
         pointerInput: targetMode === "follow" ? "move" : "none",
         edgeMargin: Math.max(0, +options.edgeMargin || 0),
+        obstaclePadding: padding,
         kneePerspective: Math.max(0, +options.kneePerspective || 0),
         maxKneeOffset: Math.max(0, +options.maxKneeOffset || 0),
         kneeProjectionCenter: options.kneeProjectionCenter,
@@ -161,10 +274,10 @@
         return;
       }
       runtime = mounted;
+      mountedPadding = padding;
       if (!playing) runtime.stop();
       // Edits made while the mount was in flight were skipped; catch up.
       applyDescriptor(get(descriptor));
-      applyDebug();
       if (targetMode === "manual" && hasTarget)
         requestAnimationFrame(sendTarget);
     } catch (error) {
@@ -191,6 +304,7 @@
   onDestroy(() => {
     disposed = true;
     mountToken += 1;
+    clearInterval(statsTimer);
     runtime?.destroy();
   });
 </script>
@@ -203,18 +317,45 @@
   role="application"
   aria-label="Beefwife preview"
   tabindex="0"
+  class:drawing={drawTerrain}
   onclick={placeTarget}
   onkeydown={moveTargetFromKeyboard}
+  onpointerdown={startBox}
+  onpointermove={stretchBox}
+  onpointerup={commitBox}
 >
   {#key options.antialias}
     <canvas bind:this={canvas} aria-label="Live Beefwife simulation"></canvas>
   {/key}
+
+  <TerrainBoxes
+    boxes={terrainBoxes}
+    pending={pendingBox}
+    editable={drawTerrain}
+    onremove={removeBox}
+  />
+
+  <DebugLayer {runtime} {...debug} padding={mountedPadding} />
 
   <Graticule visible={showGrid} />
 
   <div class="stage-heading">
     <span>Live specimen monitor</span>
     <strong>{$descriptor.name}</strong>
+    {#if stats}
+      <dl class="stats">
+        <dt>Bodies</dt>
+        <dd>{stats.actors}</dd>
+        <dt>Steps/s</dt>
+        <dd>{stats.steps.toFixed(1)}</dd>
+        <dt>Draws/s</dt>
+        <dd>{stats.draws.toFixed(1)}</dd>
+        <dt>Step</dt>
+        <dd>{stats.stepMs.toFixed(2)} ms</dd>
+        <dt>Draw</dt>
+        <dd>{stats.drawMs.toFixed(2)} ms</dd>
+      </dl>
+    {/if}
   </div>
 
   <StageTools
@@ -222,14 +363,18 @@
     bind:showGrid
     bind:showTarget
     bind:background
+    bind:debug
+    bind:showStats
+    bind:drawTerrain
     mode={targetMode}
+    terrainCount={terrainBoxes.length}
     {playing}
     onremount={remount}
-    ondebug={applyDebug}
     onplay={togglePlaying}
     onmode={selectMode}
     onclear={clearTarget}
     oncenter={centerTarget}
+    onclearterrain={clearTerrain}
   />
 
   {#if markerVisible}
@@ -255,6 +400,10 @@
       inset 0 0 0 1px #000,
       inset 0 0 18px #0008,
       0 0 0 1px var(--chassis-line-high);
+  }
+
+  .stage.drawing {
+    cursor: crosshair;
   }
 
   .stage.show-grid {
@@ -327,5 +476,27 @@
     font-weight: 400;
     letter-spacing: -0.04em;
     text-transform: uppercase;
+  }
+
+  .stats {
+    display: grid;
+    margin: 8px 0 0;
+    gap: 0 8px;
+    grid-template-columns: auto auto;
+    justify-content: start;
+    color: var(--screen-muted);
+    font: var(--label-font);
+  }
+
+  .stats dt {
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .stats dd {
+    margin: 0;
+    color: var(--screen-text);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
   }
 </style>

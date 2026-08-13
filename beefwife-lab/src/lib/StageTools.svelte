@@ -2,6 +2,7 @@
   /* Everything the runtime is mounted with. The stage seeds its options from
      these and every row resets to the same value. */
   export const DEFAULT_OPTIONS = {
+    count: 1,
     antialias: false,
     pixelUpscale: true,
     roundVertices: true,
@@ -10,6 +11,7 @@
     drawFps: 20,
     wanderDelay: 0,
     edgeMargin: 52,
+    obstaclePadding: 0,
     filterPreset: "None",
     kneePerspective: 0.002,
     maxKneeOffset: 256,
@@ -27,14 +29,18 @@
   export let showGrid;
   export let showTarget;
   export let background;
+  export let debug;
+  export let showStats;
+  export let drawTerrain;
+  export let terrainCount;
   export let mode;
   export let playing;
   export let onremount;
-  export let ondebug;
   export let onplay;
   export let onmode;
   export let onclear;
   export let oncenter;
+  export let onclearterrain;
 
   const toolTabs = ["Target", "Stage", "Sim", "Render"];
   const filterPresets = [
@@ -62,6 +68,7 @@
   $: scheduleRebuild(
     options.wanderDelay,
     options.edgeMargin,
+    options.obstaclePadding,
     options.simulationFps,
     options.resolutionScale,
     options.drawFps,
@@ -164,15 +171,71 @@
           <Tooltip label="Show the target marker">
             <button
               aria-pressed={showTarget}
-              onclick={() => {
-                showTarget = !showTarget;
-                ondebug();
-              }}>Target</button
+              onclick={() => (showTarget = !showTarget)}>Target</button
+            >
+          </Tooltip>
+          <Tooltip
+            label="Drag on the stage to add an obstacle, click one to remove it"
+          >
+            <button
+              aria-pressed={drawTerrain}
+              onclick={() => (drawTerrain = !drawTerrain)}>Terrain</button
+            >
+          </Tooltip>
+          <Tooltip label="Remove every obstacle">
+            <button disabled={!terrainCount} onclick={onclearterrain}
+              >Clear {terrainCount || ""}</button
+            >
+          </Tooltip>
+        </div>
+        <!-- Drawn over the canvas at full resolution from the runtime's own
+             accessors, not by its debug layers, which rasterise at Res
+             scale. -->
+        <div class="tool-row">
+          <Tooltip label="Draw the planned path and its waypoints">
+            <button
+              aria-pressed={debug.routes}
+              onclick={() => (debug = { ...debug, routes: !debug.routes })}
+              >Routes</button
+            >
+          </Tooltip>
+          <Tooltip label="Draw the destination each specimen is heading for">
+            <button
+              aria-pressed={debug.targets}
+              onclick={() => (debug = { ...debug, targets: !debug.targets })}
+              >Targets</button
+            >
+          </Tooltip>
+          <Tooltip
+            label="Draw the wander margin, and the padded obstacle footprints the router plans around"
+          >
+            <button
+              aria-pressed={debug.bounds}
+              onclick={() => (debug = { ...debug, bounds: !debug.bounds })}
+              >Bounds</button
+            >
+          </Tooltip>
+          <Tooltip
+            label="Frame rates and the time this thread spends in a step and a draw. GPU work is not counted."
+          >
+            <button
+              aria-pressed={showStats}
+              onclick={() => (showStats = !showStats)}>Stats</button
             >
           </Tooltip>
         </div>
         <div class="controls">
           <div class="rows">
+            <ControlRow
+              label="Obstacle pad"
+              tip="Grows every obstacle by this much before the router plans around it. Keeps a specimen from grazing an edge."
+              unit="px"
+              digits={0}
+              bind:value={options.obstaclePadding}
+              reset={DEFAULT_OPTIONS.obstaclePadding}
+              field={[0, 200, 1]}
+              slider={[0, 100, 1]}
+            />
             <label>
               <Tooltip label="Colour of the stage behind the specimen."
                 ><span>Background</span></Tooltip
@@ -194,6 +257,15 @@
         </div>
         <div class="controls">
           <div class="rows">
+            <ControlRow
+              label="Specimens"
+              tip="Copies of this beefwife on the stage. Each one routes and wanders on its own."
+              digits={0}
+              bind:value={options.count}
+              reset={DEFAULT_OPTIONS.count}
+              field={[0, 64, 1]}
+              slider={[0, 24, 1]}
+            />
             <ControlRow
               label="Physics FPS"
               tip="Times a second the simulation wakes, and the ceiling on Draw FPS. Substep size is fixed, so a lower rate takes fewer, larger steps rather than doing less."
