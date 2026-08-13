@@ -127,15 +127,21 @@ for the `simulationFps` ceiling by name.
 
 The substep size is fixed, so a simulated second always costs the same number
 of substeps however `simulationFps` batches them. Lowering it buys fewer,
-larger steps and the routing saved between them, not cheaper physics, and the
-motion advances in bigger jumps. To spend less on physics, lower `timeScale`,
-which reduces simulated seconds per real second and says so by moving the
-creature slower. `drawFps` is the knob that pays without touching behaviour.
+larger steps and the routing saved between them, not cheaper physics: 10
+against 60 saves 8% of the simulation cost at 400 creatures. It also steers
+more coarsely, because a route advances once a tick, so creatures take
+visibly different paths. To spend less on physics, lower `timeScale`, which
+reduces simulated seconds per real second and says so by moving the creature
+slower. `drawFps` is the knob that pays without touching behaviour.
 
-A host that cannot deliver `simulationFps` plays slower rather than moving
-differently: each tick steps once, whatever the frame took. Route following
-and throttle easing advance one step per tick, so replaying missed slots would
-change how a creature steers rather than only how fast it gets there.
+A host that cannot deliver `simulationFps` is not the same as a lower
+`simulationFps`. It plays slower and follows the same path, because each tick
+steps once whatever the frame took, so the route still advances one 60th of a
+second at a time.
+
+Rates need not divide each other. A step that is not a whole number of
+substeps carries its remainder, so `simulationFps` of 24 or a `timeScale` of
+0.7 stays within one substep of exact for any run length rather than drifting.
 
 Knee perspective affects
 leg-knee rendering only; planted feet and
