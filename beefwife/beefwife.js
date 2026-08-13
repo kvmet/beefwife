@@ -2600,6 +2600,15 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 	var Container = available ? PIXI.Container : HeadlessContainer;
+	var compiled = /* @__PURE__ */ new WeakMap();
+	var modelFor = (descriptor) => {
+		const held = compiled.get(descriptor);
+		if (held) return held;
+		const model = compile(descriptor);
+		graphics_default.prepare(model);
+		compiled.set(descriptor, model);
+		return model;
+	};
 	var MAX_STEP_SECONDS = .05;
 	var MAX_WORLD_COORDINATE = 1e9;
 	var MIN_PIXEL_RESOLUTION = 1e-6;
@@ -2769,8 +2778,7 @@ pixi_js = __toESM(pixi_js, 1);
 			this.#random = options.random ?? Math.random;
 			this.#renderOptions = renderOptionsOf(options.render);
 			this.#requestedDirection = { ...facing };
-			this.#model = compile(descriptor);
-			graphics_default.prepare(this.#model);
+			this.#model = modelFor(descriptor);
 			this.#gait = new Gait(this.#model.gait, phase);
 			const breathingPhase = this.#model.breathing.strain ? TAU * this.#sampleRandom() : this.#gait.phase;
 			this.#body = new Body(this.#model, this.#gait, breathingPhase);
@@ -2812,8 +2820,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		setDescriptor(descriptor) {
 			this.#live("setDescriptor");
-			const nextModel = compile(descriptor);
-			graphics_default.prepare(nextModel);
+			const nextModel = modelFor(descriptor);
 			const nextGait = new Gait(nextModel.gait, this.#gait.phase);
 			const breathingPhase = !this.#model.breathing.strain && nextModel.breathing.strain ? TAU * this.#sampleRandom() : this.#body.breathingPhase;
 			const compatible = sameTopology(this.#model, nextModel);

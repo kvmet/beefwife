@@ -17,6 +17,28 @@ class HeadlessContainer {
 }
 const Container = available ? PIXI.Container : HeadlessContainer;
 
+/* One compiled model per descriptor, shared by every creature built from it.
+   `Model.compile` deep-freezes what it returns, so topology is the same object
+   for the whole cast and only body state differs between instances. Held
+   weakly against the descriptor the caller passed, so a model lives exactly as
+   long as something still refers to what made it.
+
+   A descriptor is a value. Mutating one in place and handing the same object
+   back returns the model compiled for its old contents; pass a replacement
+   instead. */
+const compiled = new WeakMap();
+
+const modelFor = (descriptor) => {
+  /* A primitive key reads as a miss rather than throwing, so an invalid
+     descriptor reaches the validator and fails there as it always did. */
+  const held = compiled.get(descriptor);
+  if (held) return held;
+  const model = Model.compile(descriptor);
+  Graphics.prepare(model);
+  compiled.set(descriptor, model);
+  return model;
+};
+
 const MAX_STEP_SECONDS = 0.05;
 const MAX_WORLD_COORDINATE = 1e9;
 const MIN_PIXEL_RESOLUTION = 1e-6;
@@ -255,8 +277,7 @@ class Beefwife extends Container {
     this.#random = options.random ?? Math.random;
     this.#renderOptions = renderOptionsOf(options.render);
     this.#requestedDirection = { ...facing };
-    this.#model = Model.compile(descriptor);
-    Graphics.prepare(this.#model);
+    this.#model = modelFor(descriptor);
     this.#gait = new Gait(this.#model.gait, phase);
     const breathingPhase = this.#model.breathing.strain
       ? TAU * this.#sampleRandom()
@@ -328,8 +349,7 @@ class Beefwife extends Container {
 
   setDescriptor(descriptor) {
     this.#live("setDescriptor");
-    const nextModel = Model.compile(descriptor);
-    Graphics.prepare(nextModel);
+    const nextModel = modelFor(descriptor);
     const nextGait = new Gait(nextModel.gait, this.#gait.phase);
     const breathingPhase =
       !this.#model.breathing.strain && nextModel.breathing.strain

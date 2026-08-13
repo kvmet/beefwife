@@ -49,6 +49,37 @@ assert.ok(Object.isFrozen(beefwife.descriptor.chain.sections.head));
 assert.ok(Object.isFrozen(beefwife.descriptor.chain.skin.plates[0].at));
 checks += 7;
 
+/* Topology is frozen, so a cast shares one compiled model rather than holding
+   a copy per creature: a population pays one compile, not one each. The
+   compiled descriptor is the observable end of it. */
+const shared = copy(example);
+const twin = new Beefwife(shared, { random: () => 0.5 });
+const otherTwin = new Beefwife(shared, { random: () => 0.5 });
+assert.equal(
+  twin.descriptor,
+  otherTwin.descriptor,
+  "two creatures from one descriptor compiled it twice",
+);
+/* Keyed on the object handed in, so a replacement is a different creature
+   even where its contents match. */
+const matching = new Beefwife(copy(example), { random: () => 0.5 });
+assert.notEqual(twin.descriptor, matching.descriptor);
+/* An invalid descriptor is never cached, so it fails the same way twice
+   rather than being remembered as good. */
+const broken = copy(example);
+broken.chain.sections.head.spacing = -1;
+assert.throws(() => new Beefwife(broken, {}));
+assert.throws(() => new Beefwife(broken, {}));
+/* A replacement carrying an edit compiles afresh; the same object handed back
+   after an in-place edit is the case the cache cannot see, and is why a
+   descriptor is documented as a value. */
+const revised = copy(example);
+revised.definitions.paints.shell.fill = "#0abab5";
+twin.setDescriptor(revised);
+assert.equal(twin.descriptor.definitions.paints.shell.fill, "#0abab5");
+for (const creature of [twin, otherTwin, matching]) creature.destroy();
+checks += 6;
+
 const borrowedPose = beefwife.getPose();
 assert.equal(beefwife.getPose(), borrowedPose);
 borrowedPose.head.x = -100;
