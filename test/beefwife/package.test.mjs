@@ -68,6 +68,7 @@ try {
     "src/bend.mjs",
     "src/body.mjs",
     "src/carry.mjs",
+    "src/chain.mjs",
     "src/descriptor.mjs",
     "src/display.mjs",
     "src/drive.mjs",

@@ -62,11 +62,13 @@ for (let frame = 0; frame < 240; frame++) {
   const throttle = frame < 120 ? 1 : 0.4;
   step(base, throttle, direction);
   step(scaled, throttle, direction);
-  base.body.chunks.forEach((chunk, index) => {
-    const other = scaled.body.chunks[index];
+  base.body.chain.x.forEach((baseX, index) => {
     worstDrift = Math.max(
       worstDrift,
-      Math.hypot(other.x - chunk.x * K, other.y - chunk.y * K),
+      Math.hypot(
+        scaled.body.chain.x[index] - baseX * K,
+        scaled.body.chain.y[index] - base.body.chain.y[index] * K,
+      ),
     );
   });
   base.skin.ornaments.forEach((ornament, index) => {

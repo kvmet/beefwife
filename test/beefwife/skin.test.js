@@ -48,7 +48,7 @@ const runtime = runtimeFor(descriptor);
 const state = runtime.skin.writeRenderState();
 assert.equal(
   state.chunks.length,
-  runtime.body.chunks.length * state.layout.chunkStride,
+  runtime.body.chain.count * state.layout.chunkStride,
 );
 assert.equal(
   state.legs.length,
@@ -102,12 +102,12 @@ shortRuntime.skin.writeRenderState(state);
 assert.notEqual(state.chunks, grownStorage);
 assert.equal(
   state.chunks.length,
-  shortRuntime.body.chunks.length * state.layout.chunkStride,
+  shortRuntime.body.chain.count * state.layout.chunkStride,
 );
 checks += 9;
 
 const beforeTranslation = runtime.skin.writeRenderState();
-runtime.body.translate({ x: 7, y: -11 });
+runtime.body.chain.translate({ x: 7, y: -11 });
 runtime.legs.translate({ x: 7, y: -11 });
 runtime.skin.translate({ x: 7, y: -11 });
 const afterTranslation = runtime.skin.writeRenderState();
@@ -176,30 +176,36 @@ const probeSkin = (fields) => {
     },
   ];
   const model = Model.compile(source);
-  const chunk = { x: 0, y: 0, dx: 1, dy: 0 };
+  const chain = {
+    count: 1,
+    x: Float64Array.of(0),
+    y: Float64Array.of(0),
+    dx: Float64Array.of(1),
+    dy: Float64Array.of(0),
+  };
   return {
-    chunk,
-    skin: new Skin(model, { chunks: [chunk] }, { legs: [] }),
+    chain,
+    skin: new Skin(model, { chain }, { legs: [] }),
   };
 };
 const turnTrace = (fields, rate, driveSteps, settleSteps, dt) => {
-  const { chunk, skin } = probeSkin(fields);
+  const { chain, skin } = probeSkin(fields);
   const trace = [];
   let heading = 0;
   for (let step = 0; step < driveSteps + settleSteps; step++) {
     if (step < driveSteps) heading += rate * dt;
-    chunk.dx = Math.cos(heading);
-    chunk.dy = Math.sin(heading);
+    chain.dx[0] = Math.cos(heading);
+    chain.dy[0] = Math.sin(heading);
     skin.update(dt);
     trace.push(skin.ornaments[0].angle);
   }
   return trace;
 };
 const slideTrace = (fields, rate, driveSteps, settleSteps, dt) => {
-  const { chunk, skin } = probeSkin(fields);
+  const { chain, skin } = probeSkin(fields);
   const trace = [];
   for (let step = 0; step < driveSteps + settleSteps; step++) {
-    if (step < driveSteps) chunk.y += rate * dt;
+    if (step < driveSteps) chain.y[0] += rate * dt;
     skin.update(dt);
     trace.push(skin.ornaments[0].angle);
   }

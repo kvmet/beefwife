@@ -64,17 +64,19 @@ class Bend {
     }
   }
 
-  relax(chunks, jointCorrectionHalf) {
+  relax(chain, jointCorrectionHalf) {
     for (
-      let span = Math.min(MAX_BEND_SPAN, chunks.length >> 2);
+      let span = Math.min(MAX_BEND_SPAN, chain.count >> 2);
       span >= 1;
       span >>= 1
     )
-      this.relaxSpan(chunks, jointCorrectionHalf, span);
+      this.relaxSpan(chain, jointCorrectionHalf, span);
   }
 
-  relaxSpan(chunks, jointCorrectionHalf, span) {
-    const count = chunks.length;
+  relaxSpan(chain, jointCorrectionHalf, span) {
+    const count = chain.count;
+    const chunkX = chain.x;
+    const chunkY = chain.y;
     const wantedX = this.wantedX;
     const wantedY = this.wantedY;
     const nextX = this.spanX;
@@ -82,13 +84,12 @@ class Bend {
     for (let pivot = span; pivot + span < count; pivot += span) {
       const from = pivot - span;
       const to = pivot + span;
-      const chunk = chunks[pivot];
-      const before = chunks[from];
-      const after = chunks[to];
-      const ax = chunk.x - before.x;
-      const ay = chunk.y - before.y;
-      const bx = after.x - chunk.x;
-      const by = after.y - chunk.y;
+      const pivotX = chunkX[pivot];
+      const pivotY = chunkY[pivot];
+      const ax = pivotX - chunkX[from];
+      const ay = pivotY - chunkY[from];
+      const bx = chunkX[to] - pivotX;
+      const by = chunkY[to] - pivotY;
       const turn = Math.atan2(ax * by - ay * bx, ax * bx + ay * by);
       const wx = wantedX[pivot] - wantedX[from];
       const wy = wantedY[pivot] - wantedY[from];
@@ -101,11 +102,11 @@ class Bend {
       /* Each half turns about the pivot, so no rest length inside the span
          changes and only the two links at its ends are left to the passes. */
       for (let index = from; index <= to; index++) {
-        const x = chunks[index].x - chunk.x;
-        const y = chunks[index].y - chunk.y;
+        const x = chunkX[index] - pivotX;
+        const y = chunkY[index] - pivotY;
         const away = index < pivot ? -sine : sine;
-        nextX[index] = chunk.x + x * cosine - y * away;
-        nextY[index] = chunk.y + x * away + y * cosine;
+        nextX[index] = pivotX + x * cosine - y * away;
+        nextY[index] = pivotY + x * away + y * cosine;
       }
       /* Turning the two halves opposite ways still leaves the span as a whole
          drifting and spinning, and a span is a lever long enough to throw the
@@ -116,10 +117,10 @@ class Bend {
       let centerX = 0;
       let centerY = 0;
       for (let index = from; index <= to; index++) {
-        driftX += nextX[index] - chunks[index].x;
-        driftY += nextY[index] - chunks[index].y;
-        centerX += chunks[index].x;
-        centerY += chunks[index].y;
+        driftX += nextX[index] - chunkX[index];
+        driftY += nextY[index] - chunkY[index];
+        centerX += chunkX[index];
+        centerY += chunkY[index];
       }
       driftX /= width;
       driftY /= width;
@@ -128,19 +129,19 @@ class Bend {
       let moment = 0;
       let inertia = 0;
       for (let index = from; index <= to; index++) {
-        const rx = chunks[index].x - centerX;
-        const ry = chunks[index].y - centerY;
+        const rx = chunkX[index] - centerX;
+        const ry = chunkY[index] - centerY;
         moment +=
-          rx * (nextY[index] - chunks[index].y - driftY) -
-          ry * (nextX[index] - chunks[index].x - driftX);
+          rx * (nextY[index] - chunkY[index] - driftY) -
+          ry * (nextX[index] - chunkX[index] - driftX);
         inertia += rx * rx + ry * ry;
       }
       const spin = inertia > 1e-12 ? moment / inertia : 0;
       for (let index = from; index <= to; index++) {
-        const rx = chunks[index].x - centerX;
-        const ry = chunks[index].y - centerY;
-        chunks[index].x = nextX[index] - driftX + spin * ry;
-        chunks[index].y = nextY[index] - driftY - spin * rx;
+        const rx = chunkX[index] - centerX;
+        const ry = chunkY[index] - centerY;
+        chunkX[index] = nextX[index] - driftX + spin * ry;
+        chunkY[index] = nextY[index] - driftY - spin * rx;
       }
     }
   }
@@ -148,17 +149,15 @@ class Bend {
   /* What the gait asked each joint for last substep against the turn it is
      actually making. Read on demand: nothing is accumulated, so a caller
      wanting an average over a cycle has to take its own samples. */
-  response(chunks, into = []) {
+  response(chain, into = []) {
     const targets = this.targets;
+    const { x, y, count } = chain;
     into.length = 0;
-    for (let index = 1; index < chunks.length - 1; index++) {
-      const before = chunks[index - 1];
-      const chunk = chunks[index];
-      const after = chunks[index + 1];
-      const ax = chunk.x - before.x;
-      const ay = chunk.y - before.y;
-      const bx = after.x - chunk.x;
-      const by = after.y - chunk.y;
+    for (let index = 1; index < count - 1; index++) {
+      const ax = x[index] - x[index - 1];
+      const ay = y[index] - y[index - 1];
+      const bx = x[index + 1] - x[index];
+      const by = y[index + 1] - y[index];
       into.push({
         joint: index,
         commanded: targets[index],
