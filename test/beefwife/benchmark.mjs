@@ -62,11 +62,19 @@ const populate = (names, count) => {
   return crowd;
 };
 
+/* Shapes are particles out of a baked atlas, and the atlas is only built once
+   a renderer arrives. Drawing without one leaves a creature holding its two
+   meshes and no shapes at all, which reads as a draw two thirds cheaper than
+   the one a page pays. Standing in for the renderer costs only the rasterising,
+   which is the GPU's half and not what this measures. */
+const STAND_IN_RENDERER = { render() {} };
+
 /* Every creature is stepped before any is drawn, matching how the canvas
    runtime drives a population: one update pass, then one render pass. */
 const frameOf = (crowd, controls, draw) => () => {
   for (const beefwife of crowd) beefwife.step(FRAME, controls);
-  if (draw) for (const beefwife of crowd) beefwife.onRender?.();
+  if (draw)
+    for (const beefwife of crowd) beefwife.onRender?.(STAND_IN_RENDERER);
 };
 
 const microsecondsPer = (run, count, milliseconds) => {
