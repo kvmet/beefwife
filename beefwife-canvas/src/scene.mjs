@@ -1,5 +1,7 @@
 /** Pixi application, stage, canvas sizing, and display ownership. */
 
+import { PIXI, available } from "../../beefwife/src/pixi.mjs";
+
 class BeefwifeCanvasScene {
   constructor(options = {}) {
     this.ownsCanvas = !options.canvas;
@@ -23,7 +25,7 @@ class BeefwifeCanvasScene {
   }
 
   async initialize() {
-    if (typeof PIXI === "undefined") throw new Error("PIXI must load first");
+    if (!available) throw new Error("PIXI must load first");
     this._syncPixelResolution();
     if (this.reusableApplication) {
       this.application = this.reusableApplication;
@@ -161,6 +163,4 @@ class BeefwifeCanvasScene {
   }
 }
 
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = BeefwifeCanvasScene;
-}
+export { BeefwifeCanvasScene };

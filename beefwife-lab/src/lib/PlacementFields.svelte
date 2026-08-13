@@ -15,7 +15,7 @@
   import ControlRow from "./ControlRow.svelte";
   import StepperRow from "./StepperRow.svelte";
   import Tooltip from "./Tooltip.svelte";
-  import { descriptor, SECTION_NAMES } from "./descriptor.js";
+  import { descriptor, idPattern, SECTION_NAMES } from "./descriptor.js";
 
   /* Which placement these fields edit: a list in chain.skin plus an index
      into it. Binding through the store path keeps edits inside the list. */
@@ -28,8 +28,6 @@
   export let advanced = false;
 
   const title = (name) => name[0].toUpperCase() + name.slice(1);
-  /* Mirrors BeefwifeDescriptor's ID_PATTERN; the validator rejects others. */
-  const ID_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 
   $: entry = $descriptor.chain.skin[list][index];
   $: ornament = list === "ornaments";
@@ -58,7 +56,7 @@
     const taken = [...skin.plates, ...skin.ornaments].some(
       (placement) => placement.id === to,
     );
-    if (!ID_PATTERN.test(to) || taken) {
+    if (!idPattern().test(to) || taken) {
       event.target.value = from;
       return;
     }

@@ -6,7 +6,14 @@
  * `bounds` reports what the schema enforces for one field.
  */
 
-import { VERSION, LIMITS, SECTIONS, ID_PATTERN, schema } from "./schema.mjs";
+import {
+  VERSION,
+  LIMITS,
+  SECTIONS,
+  ID_PATTERN,
+  NAME_PATTERN,
+  schema,
+} from "./schema.mjs";
 
 const fail = (path, message) => {
   throw new Error(`${path}: ${message}`);
@@ -370,4 +377,14 @@ const stringify = (value, space = 2) => {
   return JSON.stringify(read(value), null, space);
 };
 
-export { VERSION, LIMITS, read, parse, stringify, scale, bounds };
+export {
+  VERSION,
+  LIMITS,
+  ID_PATTERN,
+  NAME_PATTERN,
+  read,
+  parse,
+  stringify,
+  scale,
+  bounds,
+};

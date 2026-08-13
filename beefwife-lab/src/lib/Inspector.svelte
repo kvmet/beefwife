@@ -2,6 +2,7 @@
   import { tick } from "svelte";
   import ChainMap from "./ChainMap.svelte";
   import ConfigPanel from "./ConfigPanel.svelte";
+  import LegsPanel from "./LegsPanel.svelte";
   import LookPanel from "./LookPanel.svelte";
   import MotionPanel from "./MotionPanel.svelte";
   import PartsPanel from "./PartsPanel.svelte";
@@ -176,6 +177,7 @@
             onselect={(value) => (selectedPlacement = value)}
             oneditpart={revealPart}
           />
+          <LegsPanel advanced={advancedMode} oneditpart={revealPart} />
         {:else if activeTab === "Config"}
           <ConfigPanel advanced={advancedMode} />
         {:else if activeTab === "Motion"}

@@ -1,16 +1,9 @@
 <script>
   import JsonPanel from "./JsonPanel.svelte";
   import Tooltip from "./Tooltip.svelte";
-  import { applyError, descriptor } from "./descriptor.js";
+  import { applyError, descriptor, namePattern } from "./descriptor.js";
 
   export let advanced = false;
-
-  /* The hyphen must be escaped: `pattern` compiles in unicodeSets mode, where
-     a bare one is an invalid character class, and a pattern that fails to
-     compile is ignored rather than reported.
-     TODO: mirrors BeefwifeDescriptor's NAME_PATTERN; read it from the library
-     once the canvas bundle exports the descriptor API. */
-  const NAME_PATTERN = "[a-z0-9][a-z0-9\\-]{0,63}";
 
   /* Committed on change rather than on input, so a half-typed name never
      reaches the runtime as a rejected document. */
@@ -33,7 +26,7 @@
       >
       <input
         value={$descriptor.name}
-        pattern={NAME_PATTERN}
+        pattern={namePattern()}
         maxlength="64"
         spellcheck="false"
         onchange={renameOnCommit}

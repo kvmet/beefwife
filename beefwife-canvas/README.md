@@ -23,20 +23,19 @@ looks for `data-beefwife-canvas` when auto-mounting.
 ></canvas>
 ```
 
-Load Pixi 8, then the runtime. `bb bundle` writes `dist/beefwife-canvas.js`, one
-file whose only global is `BeefwifeCanvas`:
+Load Pixi 8, then the runtime. Beefwife and Terrain ride inside
+`beefwife-canvas.js`, so the page needs nothing else and gains one global:
 
 ```html
 <script src="pixi.min.js"></script>
-<script src="dist/beefwife-canvas.js"></script>
+<script src="beefwife-canvas/beefwife-canvas.js"></script>
 ```
 
-The integrated development example is in
+`npm run build` writes that file and its minified twin from
+[`src`](src/); both are committed. The integrated development example is in
 [`examples/beefwife-canvas`](../examples/beefwife-canvas/).
 
-Without the bundle, load the runtime files in this order; each one then
-declares its file-level names in shared script scope.
-`beefwife-canvas.js` auto-mounts every marked canvas after the DOM is ready.
+The bundle auto-mounts every marked canvas after the DOM is ready.
 Listen for `beefwifecanvasready` or `beefwifecanvaserror`, await the `ready`
 promise on a handle returned by `BeefwifeCanvas.get(canvas)`, or inspect
 `data-beefwife-state`, whose values are `loading`, `ready`, `running`, `paused`,
@@ -51,24 +50,6 @@ and `pauseReason` getters; `pauseReason` is `null` unless state is `paused`.
 `canvas[data-beefwife-canvas]` elements. The initial document is scanned
 automatically; call `scan()` after adding declarative canvases dynamically.
 Already mounted canvases are left alone.
-
-```html
-<script src="pixi.min.js"></script>
-<script src="terrain/terrain.js"></script>
-<script src="beefwife/beefwife.js"></script>
-<script src="beefwife-canvas/beefwife-canvas-path.js"></script>
-<script src="beefwife-canvas/beefwife-canvas-steering.js"></script>
-<script src="beefwife-canvas/beefwife-canvas-actor.js"></script>
-<script src="beefwife-canvas/beefwife-canvas-options.js"></script>
-<script src="beefwife-canvas/beefwife-canvas-targeting.js"></script>
-<script src="beefwife-canvas/beefwife-canvas-population.js"></script>
-<script src="beefwife-canvas/beefwife-canvas-render.js"></script>
-<script src="beefwife-canvas/beefwife-canvas-scene.js"></script>
-<script src="beefwife-canvas/beefwife-canvas-runtime.js"></script>
-<script src="beefwife-canvas/beefwife-canvas-cast.js"></script>
-<script src="beefwife-canvas/beefwife-canvas-mount-options.js"></script>
-<script src="beefwife-canvas/beefwife-canvas.js"></script>
-```
 
 The manifest is deliberately small and versioned. Relative source URLs are
 resolved from the manifest URL. Weights affect random spawning, not loading.

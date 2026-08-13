@@ -13,11 +13,11 @@ const bundlePath = path.join(
   __dirname,
   "..",
   "..",
-  "dist",
+  "beefwife-canvas",
   "beefwife-canvas.js",
 );
 if (!fs.existsSync(bundlePath))
-  throw new Error("run `bb bundle` before the bundle test");
+  throw new Error("run `npm --prefix beefwife-canvas run build` first");
 
 const queuedMicrotasks = [];
 const document = {

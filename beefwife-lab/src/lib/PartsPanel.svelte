@@ -6,6 +6,7 @@
     applyError,
     defaults,
     descriptor,
+    idPattern,
     SECTION_NAMES,
   } from "./descriptor.js";
 
@@ -14,8 +15,6 @@
   export let onselect;
   export let advanced = false;
 
-  /* Mirrors BeefwifeDescriptor's ID_PATTERN; the validator rejects others. */
-  const ID_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
   const TABLE = { shape: "shapes", paint: "paints", material: "materials" };
 
   const NEW_SHAPE = { path: "M 0 -3 L 3 0 L 0 3 L -3 0 Z" };
@@ -133,7 +132,7 @@
     const to = event.target.value.trim();
     const table = TABLE[kind];
     if (to === from) return;
-    if (!ID_PATTERN.test(to) || $descriptor.definitions[table][to]) {
+    if (!idPattern().test(to) || $descriptor.definitions[table][to]) {
       event.target.value = from;
       return;
     }

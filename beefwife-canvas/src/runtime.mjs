@@ -1,42 +1,20 @@
 /** Coordinates scene, population, terrain observation, and frame timing. */
 
-const canRequireBeefwifeCanvasModules =
-  typeof module !== "undefined" && module.exports;
-const RuntimeBeefwifeCanvasOptions =
-  typeof BeefwifeCanvasOptions !== "undefined"
-    ? BeefwifeCanvasOptions
-    : canRequireBeefwifeCanvasModules &&
-      require("./beefwife-canvas-options.js");
-if (!RuntimeBeefwifeCanvasOptions)
-  throw new Error("BeefwifeCanvasOptions must load first");
-const RuntimeBeefwifeCanvasRender =
-  typeof BeefwifeCanvasRender !== "undefined"
-    ? BeefwifeCanvasRender
-    : canRequireBeefwifeCanvasModules && require("./beefwife-canvas-render.js");
-if (!RuntimeBeefwifeCanvasRender)
-  throw new Error("BeefwifeCanvasRender must load first");
-const RuntimeBeefwifeCanvasScene =
-  typeof BeefwifeCanvasScene !== "undefined"
-    ? BeefwifeCanvasScene
-    : canRequireBeefwifeCanvasModules && require("./beefwife-canvas-scene.js");
-if (!RuntimeBeefwifeCanvasScene)
-  throw new Error("BeefwifeCanvasScene must load first");
-const RuntimeBeefwifeCanvasPopulation =
-  typeof BeefwifeCanvasPopulation !== "undefined"
-    ? BeefwifeCanvasPopulation
-    : canRequireBeefwifeCanvasModules &&
-      require("./beefwife-canvas-population.js");
-if (!RuntimeBeefwifeCanvasPopulation)
-  throw new Error("BeefwifeCanvasPopulation must load first");
-const {
-  config: BEEFWIFE_CANVAS_CONFIG,
+import Terrain from "../../terrain/src/terrain.mjs";
+import { BEEFWIFE_CANVAS_ROUTE_DEFAULTS } from "./steering.mjs";
+import { BeefwifeCanvasRouter } from "./path.mjs";
+import {
+  config as BEEFWIFE_CANVAS_CONFIG,
   debugOf,
   imageRenderingOf,
   physicsFpsOf,
   renderFpsOf,
   resolutionScaleOf,
   timeScaleOf,
-} = RuntimeBeefwifeCanvasOptions;
+} from "./options.mjs";
+import * as RuntimeBeefwifeCanvasRender from "./render.mjs";
+import { BeefwifeCanvasScene as RuntimeBeefwifeCanvasScene } from "./scene.mjs";
+import { BeefwifeCanvasPopulation as RuntimeBeefwifeCanvasPopulation } from "./population.mjs";
 
 class BeefwifeCanvasRuntime {
   static async create(options = {}) {
@@ -412,6 +390,4 @@ class BeefwifeCanvasRuntime {
     });
 }
 
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = { BeefwifeCanvasRuntime };
-}
+export { BeefwifeCanvasRuntime };

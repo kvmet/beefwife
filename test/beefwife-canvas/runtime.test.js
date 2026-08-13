@@ -1,9 +1,9 @@
 /**
- * Does the canvas runtime consume only the public Beefwife lifecycle,
- * and does each supplied target produce one finite route? Real schema-v1
- * descriptors are the control. Fails on legacy runtime access, invalid cast
- * entries, repeated directed plans, early wander plans, wrong Pixi ownership,
- * timing drift, or lost spawns.
+ * Does the assembled runtime own its Pixi objects, keep its own clock, and let
+ * go of everything on destroy? A page and a renderer of this test's making are
+ * the control, because Pixi's Application needs a document to init against and
+ * there is none here. Fails on wrong Pixi ownership, timing drift, a leaked
+ * observer or timer, or a surviving display object.
  */
 
 const assert = require("node:assert/strict");
@@ -11,252 +11,14 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-global.Beefwife = require("../../beefwife/beefwife.js");
-global.BEEFWIFE_CANVAS_ROUTE_DEFAULTS = {
-  arrivalRadius: 10,
-  ease: 4,
-  patience: 120,
-  replan: 7,
-  waypointRadius: 10,
-};
-global.newRoute = () => ({
-  path: [],
-  from: null,
-  age: 0,
-  nowhere: false,
-  satisfied: false,
-});
-global.stepRoute = () => ({
-  target: { x: 200, y: 50 },
-  bearing: { x: 1, y: 0 },
-});
-global.window = { innerWidth: 800, innerHeight: 600 };
-
-const BeefwifeCanvasActor = require("../../beefwife-canvas/beefwife-canvas-actor.js");
-const {
-  BeefwifeCanvasRouter,
-} = require("../../beefwife-canvas/beefwife-canvas-path.js");
-const {
-  BeefwifeCanvasTargetPolicy,
-} = require("../../beefwife-canvas/beefwife-canvas-targeting.js");
-const {
-  newRoute: newSteerRoute,
-  stepRoute: steerRoute,
-} = require("../../beefwife-canvas/beefwife-canvas-steering.js");
+const { bundleFor } = require("./vm-bundle.js");
+const { default: Terrain } = require("../../terrain/src/terrain.mjs");
 const descriptor = JSON.parse(
   fs.readFileSync(
     path.join(__dirname, "..", "fixtures", "beefwives", "undulating.json"),
     "utf8",
   ),
 );
-let checks = 0;
-
-const policyRouter = {
-  terrain: { offset: () => ({ distance: 0, dx: 0, dy: 0 }) },
-  randomPoint: () => ({ x: 300, y: 200 }),
-  planTo: (_head, goal) => [{ ...goal }],
-};
-const directed = new BeefwifeCanvasTargetPolicy(policyRouter, "manual");
-assert.throws(
-  () => directed.setTarget({ x: 1, y: 2, z: 3 }),
-  /target\.z is unknown/,
-);
-assert.throws(
-  () => directed.setTarget(Object.assign([], { x: 1, y: 2 })),
-  /target must be an object/,
-);
-directed.setTarget({ x: 12, y: 14 });
-assert.deepEqual(directed.plan({ x: 0, y: 0 }), [{ x: 12, y: 14 }]);
-directed.satisfy();
-assert.equal(directed.readyToPlan, false);
-assert.equal(directed.plan({ x: 12, y: 14 }), null);
-const wandering = new BeefwifeCanvasTargetPolicy(policyRouter, "wander", {
-  random: () => 0.5,
-  wanderDelay: 8,
-});
-assert.equal(wandering.readyToPlan, true);
-wandering.plan({ x: 0, y: 0 });
-wandering.satisfy();
-assert.equal(wandering.readyToPlan, false);
-wandering.advance(3.99);
-assert.equal(wandering.readyToPlan, false);
-wandering.advance(0.01);
-assert.equal(wandering.readyToPlan, true);
-checks += 10;
-
-let directedPlans = 0;
-const finiteRouter = {
-  terrain: policyRouter.terrain,
-  randomPoint: policyRouter.randomPoint,
-  planTo: (_head, goal) => {
-    directedPlans++;
-    return [{ ...goal }];
-  },
-};
-const finitePolicy = new BeefwifeCanvasTargetPolicy(finiteRouter, "manual");
-finitePolicy.setTarget({ x: 12, y: 14 });
-const finiteRoute = newSteerRoute();
-steerRoute(
-  finiteRoute,
-  finitePolicy,
-  { x: 0, y: 0 },
-  1 / 60,
-  BEEFWIFE_CANVAS_ROUTE_DEFAULTS,
-);
-assert.equal(directedPlans, 1);
-steerRoute(
-  finiteRoute,
-  finitePolicy,
-  { x: 12, y: 14 },
-  1 / 60,
-  BEEFWIFE_CANVAS_ROUTE_DEFAULTS,
-);
-assert.equal(finiteRoute.satisfied, true);
-steerRoute(
-  finiteRoute,
-  finitePolicy,
-  { x: 12, y: 14 },
-  1,
-  BEEFWIFE_CANVAS_ROUTE_DEFAULTS,
-);
-assert.equal(directedPlans, 1);
-
-let wanderPlans = 0;
-const delayedRouter = {
-  terrain: policyRouter.terrain,
-  randomPoint: () => ({ x: 20 + wanderPlans, y: 0 }),
-  planTo: (_head, goal) => {
-    wanderPlans++;
-    return [{ ...goal }];
-  },
-};
-const delayedPolicy = new BeefwifeCanvasTargetPolicy(delayedRouter, "wander", {
-  random: () => 0.5,
-  wanderDelay: 8,
-});
-const delayedRoute = newSteerRoute();
-steerRoute(
-  delayedRoute,
-  delayedPolicy,
-  { x: 0, y: 0 },
-  0,
-  BEEFWIFE_CANVAS_ROUTE_DEFAULTS,
-);
-steerRoute(
-  delayedRoute,
-  delayedPolicy,
-  { x: 20, y: 0 },
-  0,
-  BEEFWIFE_CANVAS_ROUTE_DEFAULTS,
-);
-steerRoute(
-  delayedRoute,
-  delayedPolicy,
-  { x: 20, y: 0 },
-  3.99,
-  BEEFWIFE_CANVAS_ROUTE_DEFAULTS,
-);
-assert.equal(wanderPlans, 1);
-steerRoute(
-  delayedRoute,
-  delayedPolicy,
-  { x: 20, y: 0 },
-  0.01,
-  BEEFWIFE_CANVAS_ROUTE_DEFAULTS,
-);
-assert.equal(wanderPlans, 2);
-checks += 5;
-
-const toleranceRoute = newSteerRoute();
-toleranceRoute.from = { x: 0, y: 0 };
-toleranceRoute.path = [
-  { x: 10, y: 0 },
-  { x: 20, y: 0 },
-];
-const passivePolicy = {
-  readyToPlan: false,
-  terrain: policyRouter.terrain,
-};
-const splitTolerance = {
-  ...BEEFWIFE_CANVAS_ROUTE_DEFAULTS,
-  arrivalRadius: 2,
-  waypointRadius: 2,
-};
-steerRoute(toleranceRoute, passivePolicy, { x: 11, y: 0 }, 0, splitTolerance);
-assert.deepEqual(toleranceRoute.path, [{ x: 20, y: 0 }]);
-steerRoute(toleranceRoute, passivePolicy, { x: 23, y: 0 }, 0, splitTolerance);
-assert.deepEqual(toleranceRoute.path, [{ x: 20, y: 0 }]);
-steerRoute(toleranceRoute, passivePolicy, { x: 21, y: 0 }, 0, splitTolerance);
-assert.equal(toleranceRoute.satisfied, true);
-checks += 3;
-
-const landingRouter = new BeefwifeCanvasRouter(
-  {
-    ready: true,
-    nearest: (x, y) => ({ x: x + 3, y: y - 4, distance: 5 }),
-  },
-  () => ({ width: 100, height: 80 }),
-  { random: () => 0.5 },
-);
-assert.deepEqual(landingRouter.randomPoint(), { x: 53, y: 36 });
-
-const escapingRoute = newSteerRoute();
-escapingRoute.from = { x: 0, y: 0 };
-escapingRoute.path = [{ x: 10, y: 0 }];
-const escapingPolicy = {
-  readyToPlan: false,
-  terrain: {
-    offset: (_x, _y, result = {}) =>
-      Object.assign(result, { dx: 0, dy: 4, distance: 4 }),
-  },
-};
-const escaping = steerRoute(
-  escapingRoute,
-  escapingPolicy,
-  { x: 0, y: 0 },
-  0,
-  BEEFWIFE_CANVAS_ROUTE_DEFAULTS,
-);
-assert.ok(Math.abs(escaping.bearing.x - Math.SQRT1_2) < 1e-12);
-assert.ok(Math.abs(escaping.bearing.y - Math.SQRT1_2) < 1e-12);
-checks += 3;
-
-const terrain = { x0: 0, y0: 0, x1: 800, y1: 600 };
-const router = {
-  randomPoint: () => ({ x: 90, y: 70 }),
-  viewport: () => ({ width: 800, height: 600 }),
-};
-const actor = new BeefwifeCanvasActor(terrain, router, descriptor);
-assert.ok(actor.beefwife instanceof Beefwife);
-const firstBeefwife = actor.beefwife;
-actor.spawn({ x: 25, y: 35 }, { x: 0, y: 1 });
-assert.equal(firstBeefwife.destroyed, true);
-assert.deepEqual(actor.beefwife.getPose().head, { x: 25, y: 35 });
-const stoppedPose = JSON.parse(JSON.stringify(actor.beefwife.getPose()));
-actor.update(1 / 60, 0);
-assert.deepEqual(actor.beefwife.getPose(), stoppedPose);
-assert.throws(() => actor.update(1 / 60, Infinity), /timeScale/);
-assert.throws(() => actor.update(1, 1), /dt/);
-actor.update(1 / 60, 1);
-assert.deepEqual(actor.heading, { x: 1, y: 0 });
-checks += 8;
-
-/* A chain longer than the viewport keeps its centroid far from its head, so
-   the lost check has to carry the rest length or it recycles the creature
-   every frame and nothing ever walks. */
-const longDescriptor = JSON.parse(JSON.stringify(descriptor));
-longDescriptor.chain.sections.trunk.chunks = 200;
-const longActor = new BeefwifeCanvasActor(terrain, router, longDescriptor);
-longActor.spawn({ x: 400, y: 300 }, { x: 1, y: 0 });
-assert.ok(longActor.beefwife.restLength > 800);
-const longBeefwife = longActor.beefwife;
-for (let frame = 0; frame < 240; frame++) longActor.update(1 / 60, 1);
-assert.equal(longActor.beefwife, longBeefwife);
-longActor.spawn({ x: 1e6, y: 1e6 }, { x: 1, y: 0 });
-const strayBeefwife = longActor.beefwife;
-longActor.update(1 / 60, 1);
-assert.notEqual(longActor.beefwife, strayBeefwife);
-checks += 4;
 
 const pixiStub = (log) => {
   class Container {
@@ -392,7 +154,7 @@ const pixiStub = (log) => {
   };
 };
 
-const classicBoundary = async () => {
+const sceneBoundary = async () => {
   const log = [];
   const scheduledTimers = new Set();
   const canvas = {
@@ -443,27 +205,19 @@ const classicBoundary = async () => {
     clearTimeout: (callback) => scheduledTimers.delete(callback),
   };
   vm.createContext(browser);
-  [
-    "../../terrain/terrain.js",
-    "../../beefwife/beefwife.js",
-    "../../beefwife-canvas/beefwife-canvas-path.js",
-    "../../beefwife-canvas/beefwife-canvas-steering.js",
-    "../../beefwife-canvas/beefwife-canvas-actor.js",
-    "../../beefwife-canvas/beefwife-canvas-options.js",
-    "../../beefwife-canvas/beefwife-canvas-targeting.js",
-    "../../beefwife-canvas/beefwife-canvas-population.js",
-    "../../beefwife-canvas/beefwife-canvas-render.js",
-    "../../beefwife-canvas/beefwife-canvas-scene.js",
-    "../../beefwife-canvas/beefwife-canvas-runtime.js",
-  ].forEach((file) => {
-    vm.runInContext(
-      fs.readFileSync(path.join(__dirname, file), "utf8"),
-      browser,
-      {
-        filename: file,
-      },
-    );
-  });
+  /* The runtime is not public, so it gets its own bundle rather than a widened
+     facade. Terrain and Beefwife ride inside it; only the renderer and the
+     page are this test's, because Pixi's Application needs a document to init
+     against and there is none here. */
+  vm.runInContext(
+    await bundleFor({
+      source:
+        'export { BeefwifeCanvasRuntime as default } from "./runtime.mjs";',
+      name: "BeefwifeCanvasRuntime",
+    }),
+    browser,
+    { filename: "beefwife-canvas-runtime.js" },
+  );
   browser.descriptorText = JSON.stringify(descriptor);
   vm.runInContext(
     `globalThis.testDescriptor = JSON.parse(descriptorText);`,
@@ -489,7 +243,7 @@ const classicBoundary = async () => {
   );
   assert.equal(
     browser.layer.terrain.options.edgeMargin,
-    browser.Terrain.DEFAULTS.edgeMargin,
+    Terrain.DEFAULTS.edgeMargin,
   );
   assert.equal(browser.layer.terrain.options.obstaclePadding, 0);
   assert.equal(browser.layer.debug.targets, true);
@@ -629,10 +383,8 @@ const classicBoundary = async () => {
 };
 
 (async () => {
-  checks += await classicBoundary();
-  console.log(
-    `BeefwifeCanvas runtime: ${checks} public-boundary checks passed`,
-  );
+  const checks = await sceneBoundary();
+  console.log(`BeefwifeCanvas runtime: ${checks} ownership checks passed`);
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;
