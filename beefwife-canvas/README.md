@@ -120,7 +120,9 @@ for the life of that renderer, so a remount cannot change it.
 Performance and appearance options are `resolutionScale`, `roundVertices`,
 `antialias`, `simulationFps`, `drawFps`, `maxPixelRatio`, `imageRendering`,
 `kneePerspective`, `maxKneeOffset`, `kneeProjectionCenter`, and programmatic
-`filters`. Knee perspective affects leg-knee rendering only; planted feet and
+`filters`. `drawFps` is held at `simulationFps`, because a draw between two
+simulation steps repeats the frame before it. Knee perspective affects
+leg-knee rendering only; planted feet and
 the simulated body are unchanged. `kneeProjectionCenter` is
 `canvas` by default; `viewport` makes separate canvases share one apparent
 knee-projection field. `resolutionScale` accepts 0.125 through 1 and defaults

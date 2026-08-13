@@ -33,8 +33,17 @@ class BeefwifeCanvasRuntime {
     const resolutionScale = resolutionScaleOf(options.resolutionScale ?? 1);
     const imageRendering = imageRenderingOf(options.imageRendering ?? "auto");
     this.renderFps = renderFpsOf(options.renderFps);
-    this.renderInterval = this.renderFps ? 1000 / this.renderFps : 0;
     this.physicsFps = physicsFpsOf(options.physicsFps);
+    /* A draw landing between two physics updates repeats the frame before it,
+       because nothing interpolates. So the draw rate follows the physics rate
+       down: the extra pass costs a whole scene traversal and shows nothing
+       new. A physics rate of 0 steps every frame, which no draw rate outpaces. */
+    if (
+      this.physicsFps &&
+      (!this.renderFps || this.renderFps > this.physicsFps)
+    )
+      this.renderFps = this.physicsFps;
+    this.renderInterval = this.renderFps ? 1000 / this.renderFps : 0;
     this.physicsInterval = this.physicsFps ? 1000 / this.physicsFps : 0;
     const maxPixelRatio = options.maxPixelRatio ?? Infinity;
     if (

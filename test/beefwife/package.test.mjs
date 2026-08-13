@@ -65,6 +65,7 @@ try {
     "package.json",
     "src/beefwife.mjs",
     "src/body.mjs",
+    "src/carry.mjs",
     "src/descriptor.mjs",
     "src/display.mjs",
     "src/drive.mjs",
@@ -76,6 +77,7 @@ try {
     "src/pixi.mjs",
     "src/schema.mjs",
     "src/skin.mjs",
+    "src/tables.mjs",
   ]);
 
   const consumer = join(temporary, "consumer");

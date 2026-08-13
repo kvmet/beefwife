@@ -376,6 +376,28 @@ const sceneBoundary = async () => {
       /renderFps/,
     );
   });
+  /* Drawing faster than the simulation repeats frames, so the draw rate is
+     held at the physics rate however high it was asked for, including the 0
+     that otherwise means every frame. */
+  [
+    [0, 60, 60],
+    [120, 60, 60],
+    [60, 30, 30],
+    [24, 60, 24],
+    [120, 0, 120],
+    [0, 0, 0],
+  ].forEach(([renderFps, physicsFps, expected]) => {
+    browser.rates = { renderFps, physicsFps, count: 0, timeScale: 0 };
+    const capped = vm.runInContext(
+      "new BeefwifeCanvasRuntime(rates).renderFps",
+      browser,
+    );
+    assert.equal(
+      capped,
+      expected,
+      `renderFps ${renderFps} with physicsFps ${physicsFps}`,
+    );
+  });
   browser.layer.destroy();
   assert.ok(log.some(([operation]) => operation === "remove"));
   assert.ok(log.some(([operation]) => operation === "destroy"));
