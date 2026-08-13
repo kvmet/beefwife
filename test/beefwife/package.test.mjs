@@ -63,6 +63,7 @@ try {
     "beefwife.js",
     "beefwife.min.js",
     "package.json",
+    "src/atlas.mjs",
     "src/beefwife.mjs",
     "src/body.mjs",
     "src/carry.mjs",

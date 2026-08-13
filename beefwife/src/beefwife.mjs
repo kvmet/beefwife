@@ -275,7 +275,11 @@ class Beefwife extends Container {
     this.#skin = new Skin(this.#model, this.#body, this.#legs);
     this.#refreshPose();
     this.label = this.#model.descriptor.name;
-    this.onRender = Graphics.available ? () => this.#syncGraphics() : null;
+    /* Pixi hands the renderer to this callback, and it is the only place a
+       beefwife is sure to see one; the shape frames are baked from it. */
+    this.onRender = Graphics.available
+      ? (renderer) => this.#syncGraphics(renderer)
+      : null;
     this.#replaceGraphics();
   }
 
@@ -467,9 +471,9 @@ class Beefwife extends Container {
       );
   }
 
-  #syncGraphics() {
+  #syncGraphics(renderer = null) {
     this.#renderState = this.#skin.writeRenderState(this.#renderState);
-    this.#graphics.sync(this.#renderState);
+    this.#graphics.sync(this.#renderState, renderer);
   }
 }
 

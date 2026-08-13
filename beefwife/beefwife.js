@@ -839,11 +839,148 @@ pixi_js = __toESM(pixi_js, 1);
 	};
 
 //#endregion
+//#region src/tables.mjs
+/**
+	* The model, flattened for the solver. Every per-chunk and per-link constant
+	* a substep reads, unpacked from the model's nested records into parallel
+	* typed arrays: the substep runs over every chunk many times a second, and a
+	* frozen `spec.material.grip.forward` is four loads where an array index is
+	* one. Nothing here is state; rebuilding it from the same model, gait and
+	* substep gives the same numbers.
+	*/
+	var REFERENCE_SUBSTEP_RATE = 60;
+	var REFERENCE_LINK_SOLVE_RATE = 480;
+	var shareAtRate = (share, rate, referenceRate) => {
+		if (rate === referenceRate) return share;
+		if (!(share > 0)) return 0;
+		if (share >= 1) return 1;
+		return 1 - Math.pow(1 - share, referenceRate / rate);
+	};
+	var ChainTables = class {
+		constructor(model, gait, substep, relaxPasses) {
+			const count = model.chunks.length;
+			const linkCount = model.links.length;
+			this.retention = new Float64Array(count);
+			this.gripForward = new Float64Array(count);
+			this.gripBackward = new Float64Array(count);
+			this.gripLateral = new Float64Array(count);
+			this.motionThrust = new Float64Array(count);
+			this.motionContact = new Float64Array(count);
+			this.motionBend = new Float64Array(count);
+			this.bendScale = new Float64Array(count);
+			this.bendPhaseSine = new Float64Array(count);
+			this.bendPhaseCosine = new Float64Array(count);
+			this.jointCorrectionHalf = new Float64Array(count);
+			this.phaseLag = new Float64Array(count);
+			this.linkRestLength = new Float64Array(linkCount);
+			this.linkCorrectionHalf = new Float64Array(linkCount);
+			this.gatherScale = new Float64Array(linkCount);
+			this.gatherPhaseSine = new Float64Array(linkCount);
+			this.gatherPhaseCosine = new Float64Array(linkCount);
+			this.linkBreathes = new Uint8Array(linkCount);
+			this.refresh(model, gait, substep, relaxPasses);
+		}
+		refresh(model, gait, substep, relaxPasses) {
+			const lag = gait.phaseLagRadiansPerPixel;
+			const substepRate = 1 / substep;
+			const linkSolveRate = relaxPasses / substep;
+			const perSubstep = (share) => shareAtRate(share, substepRate, REFERENCE_SUBSTEP_RATE);
+			for (let index = 0; index < model.chunks.length; index++) {
+				const spec = model.chunks[index];
+				const grip = spec.material.grip;
+				this.retention[index] = Math.pow(spec.material.velocityRetention, substep);
+				this.gripForward[index] = perSubstep(grip.forward);
+				this.gripBackward[index] = perSubstep(grip.backward);
+				this.gripLateral[index] = perSubstep(grip.lateral);
+				this.motionThrust[index] = spec.motionScale.thrust;
+				this.motionContact[index] = spec.motionScale.contact;
+				this.motionBend[index] = spec.motionScale.bend;
+				this.bendScale[index] = spec.bendScale;
+				this.bendPhaseSine[index] = spec.bendPhaseSine;
+				this.bendPhaseCosine[index] = spec.bendPhaseCosine;
+				this.jointCorrectionHalf[index] = perSubstep(spec.material.jointCorrection) * .5;
+				this.phaseLag[index] = spec.restDistance * lag;
+			}
+			for (let index = 0; index < model.links.length; index++) {
+				const link = model.links[index];
+				this.linkRestLength[index] = link.restLength;
+				this.linkCorrectionHalf[index] = shareAtRate(link.linkCorrection, linkSolveRate, REFERENCE_LINK_SOLVE_RATE) * .5;
+				this.gatherScale[index] = link.gatherScale;
+				this.gatherPhaseSine[index] = link.gatherPhaseSine;
+				this.gatherPhaseCosine[index] = link.gatherPhaseCosine;
+				this.linkBreathes[index] = link.breathingScale ? 1 : 0;
+			}
+		}
+	};
+
+//#endregion
+//#region src/carry.mjs
+/**
+	* Moving chunk state onto a chain whose section counts changed. A chunk the
+	* descriptor still names keeps its position and velocity; an added one is
+	* seeded from its neighbours. The creature settles from where it was rather
+	* than snapping straight, and since head always holds a chunk the new chain
+	* always has something to carry from.
+	*/
+	var nameOf = (spec) => `${spec.section}:${spec.localIndex}`;
+	var carryChunks = (chunks, model, previousChunks, previousModel) => {
+		const source = /* @__PURE__ */ new Map();
+		previousModel.chunks.forEach((spec, index) => source.set(nameOf(spec), previousChunks[index]));
+		const carried = model.chunks.map((spec, index) => {
+			const from = source.get(nameOf(spec));
+			if (!from) return false;
+			const chunk = chunks[index];
+			chunk.x = from.x;
+			chunk.y = from.y;
+			chunk.px = from.px;
+			chunk.py = from.py;
+			chunk.dx = from.dx;
+			chunk.dy = from.dy;
+			chunk.idle = from.idle;
+			chunk.gain = from.gain;
+			return true;
+		});
+		for (let index = 0; index < chunks.length; index++) {
+			if (carried[index]) continue;
+			let before = index - 1;
+			while (before >= 0 && !carried[before]) before--;
+			let after = index + 1;
+			while (after < chunks.length && !carried[after]) after++;
+			const chunk = chunks[index];
+			if (before >= 0 && after < chunks.length) {
+				const start = chunks[before];
+				const end = chunks[after];
+				const along = (index - before) / (after - before);
+				chunk.x = start.x + (end.x - start.x) * along;
+				chunk.y = start.y + (end.y - start.y) * along;
+				chunk.px = start.px + (end.px - start.px) * along;
+				chunk.py = start.py + (end.py - start.py) * along;
+				chunk.dx = start.dx;
+				chunk.dy = start.dy;
+			} else {
+				const anchorIndex = before >= 0 ? before : after;
+				const anchor = chunks[anchorIndex];
+				const heading = before >= 0 ? -1 : 1;
+				const link = model.links[before >= 0 ? index - 1 : index];
+				const reach = (link ? link.restLength : 0) * Math.abs(index - anchorIndex);
+				chunk.x = anchor.x + anchor.dx * heading * reach;
+				chunk.y = anchor.y + anchor.dy * heading * reach;
+				chunk.px = chunk.x;
+				chunk.py = chunk.y;
+				chunk.dx = anchor.dx;
+				chunk.dy = anchor.dy;
+			}
+			chunk.idle = 0;
+			chunk.gain = 0;
+		}
+	};
+
+//#endregion
 //#region src/body.mjs
 /** Schema-v1 Verlet chain. Private state is owned by one Beefwife instance. */
 	var TAU$1 = Math.PI * 2;
-	var PHYSICS_STEP = 1 / 120;
-	var RELAX_PASSES = 4;
+	var PHYSICS_STEP = 1 / 60;
+	var RELAX_PASSES = 8;
 	var AXIS_RATE = 1.5;
 	var MAX_LINK_STRETCH = 3;
 	var magnitude$2 = /* @__PURE__ */ __name((x, y) => Math.sqrt(x * x + y * y), "magnitude");
@@ -904,18 +1041,14 @@ pixi_js = __toESM(pixi_js, 1);
 				x: 0,
 				y: 0
 			};
-			this.retention = new Float64Array(model.chunks.length);
-			this._refreshRetention();
-		}
-		_refreshRetention() {
-			for (let index = 0; index < this.model.chunks.length; index++) this.retention[index] = Math.pow(this.model.chunks[index].material.velocityRetention, PHYSICS_STEP);
+			this.tables = new ChainTables(model, model.gait, PHYSICS_STEP, RELAX_PASSES);
 		}
 		reconfigure(model, gait, throttle = 1, breathingPhase = this.breathingPhase) {
 			if (model.chunks.length !== this.chunks.length) throw new Error("cannot reconfigure a different chunk count");
 			this.model = model;
 			this.gait = gait;
 			this.breathingPhase = breathingPhase;
-			this._refreshRetention();
+			this.tables.refresh(model, model.gait, PHYSICS_STEP, RELAX_PASSES);
 			this.refreshContacts(throttle);
 		}
 		place(position, direction) {
@@ -937,55 +1070,7 @@ pixi_js = __toESM(pixi_js, 1);
 			this.refreshContacts(1);
 		}
 		adopt(previous) {
-			const source = /* @__PURE__ */ new Map();
-			previous.model.chunks.forEach((spec, index) => source.set(`${spec.section}:${spec.localIndex}`, previous.chunks[index]));
-			const carried = this.model.chunks.map((spec, index) => {
-				const from = source.get(`${spec.section}:${spec.localIndex}`);
-				if (!from) return false;
-				const chunk = this.chunks[index];
-				chunk.x = from.x;
-				chunk.y = from.y;
-				chunk.px = from.px;
-				chunk.py = from.py;
-				chunk.dx = from.dx;
-				chunk.dy = from.dy;
-				chunk.idle = from.idle;
-				chunk.gain = from.gain;
-				return true;
-			});
-			for (let index = 0; index < this.chunks.length; index++) {
-				if (carried[index]) continue;
-				let before = index - 1;
-				while (before >= 0 && !carried[before]) before--;
-				let after = index + 1;
-				while (after < this.chunks.length && !carried[after]) after++;
-				const chunk = this.chunks[index];
-				if (before >= 0 && after < this.chunks.length) {
-					const start = this.chunks[before];
-					const end = this.chunks[after];
-					const along = (index - before) / (after - before);
-					chunk.x = start.x + (end.x - start.x) * along;
-					chunk.y = start.y + (end.y - start.y) * along;
-					chunk.px = start.px + (end.px - start.px) * along;
-					chunk.py = start.py + (end.py - start.py) * along;
-					chunk.dx = start.dx;
-					chunk.dy = start.dy;
-				} else {
-					const anchorIndex = before >= 0 ? before : after;
-					const anchor = this.chunks[anchorIndex];
-					const heading = before >= 0 ? -1 : 1;
-					const link = this.model.links[before >= 0 ? index - 1 : index];
-					const reach = (link ? link.restLength : 0) * Math.abs(index - anchorIndex);
-					chunk.x = anchor.x + anchor.dx * heading * reach;
-					chunk.y = anchor.y + anchor.dy * heading * reach;
-					chunk.px = chunk.x;
-					chunk.py = chunk.y;
-					chunk.dx = anchor.dx;
-					chunk.dy = anchor.dy;
-				}
-				chunk.idle = 0;
-				chunk.gain = 0;
-			}
+			carryChunks(this.chunks, this.model, previous.chunks, previous.model);
 			this.axis = { ...previous.axis };
 			this.steeringBias = previous.steeringBias;
 			this.accumulator = previous.accumulator;
@@ -1098,16 +1183,18 @@ pixi_js = __toESM(pixi_js, 1);
 			}
 		}
 		_updateTangentsAndAxis(dt) {
-			const last = this.chunks.length - 1;
+			const chunks = this.chunks;
+			const count = chunks.length;
+			const last = count - 1;
 			let axisX = 0;
 			let axisY = 0;
-			for (let index = 0; index < this.chunks.length; index++) {
-				const chunk = this.chunks[index];
-				const ahead = this.chunks[Math.max(0, index - 1)];
-				const behind = this.chunks[Math.min(last, index + 1)];
+			for (let index = 0; index < count; index++) {
+				const chunk = chunks[index];
+				const ahead = chunks[index === 0 ? 0 : index - 1];
+				const behind = chunks[index === last ? last : index + 1];
 				const x = ahead.x - behind.x;
 				const y = ahead.y - behind.y;
-				const tangentLength = magnitude$2(x, y);
+				const tangentLength = Math.sqrt(x * x + y * y);
 				if (tangentLength >= 1e-9) {
 					chunk.dx = x / tangentLength;
 					chunk.dy = y / tangentLength;
@@ -1115,7 +1202,7 @@ pixi_js = __toESM(pixi_js, 1);
 				axisX += chunk.x - chunk.px;
 				axisY += chunk.y - chunk.py;
 			}
-			const axisLength = magnitude$2(axisX, axisY);
+			const axisLength = Math.sqrt(axisX * axisX + axisY * axisY);
 			if (axisLength < 1e-9) return;
 			const amount = Math.min(1, dt * AXIS_RATE);
 			this.axis.x += (axisX / axisLength - this.axis.x) * amount;
@@ -1126,32 +1213,54 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		_integrate(dt, throttle) {
 			const dtSquared = dt * dt;
-			for (let index = 0; index < this.chunks.length; index++) {
-				const chunk = this.chunks[index];
-				const spec = this.model.chunks[index];
-				const retention = this.retention[index];
-				const velocityX = (chunk.x - chunk.px) * retention;
-				const velocityY = (chunk.y - chunk.py) * retention;
+			const chunks = this.chunks;
+			const count = chunks.length;
+			const gait = this.gait.gait;
+			const phase = this.gait.phase;
+			const contact = gait.contact;
+			const thrust = gait.thrust;
+			const contactHarmonic = contact.harmonic;
+			const thrustHarmonic = thrust.harmonic;
+			const contactPhaseOffset = contact.phaseOffset;
+			const thrustPhaseOffset = thrust.phaseOffset;
+			const contactDuty = contact.dutyCycle;
+			const thrustDuty = thrust.dutyCycle;
+			const contactAmplitude = contact.amplitude;
+			const thrustAcceleration = thrust.acceleration;
+			const autoLift = this.model.physics.autoLift.amount;
+			const axisX = this.axis.x;
+			const axisY = this.axis.y;
+			const { retention, gripForward, gripBackward, gripLateral, motionContact, motionThrust, phaseLag } = this.tables;
+			for (let index = 0; index < count; index++) {
+				const chunk = chunks[index];
+				const hold = retention[index];
+				const velocityX = (chunk.x - chunk.px) * hold;
+				const velocityY = (chunk.y - chunk.py) * hold;
 				chunk.px = chunk.x;
 				chunk.py = chunk.y;
 				chunk.x += velocityX;
 				chunk.y += velocityY;
-				const grip = spec.material.grip;
+				const dx = chunk.dx;
+				const dy = chunk.dy;
 				const x = chunk.x - chunk.px;
 				const y = chunk.y - chunk.py;
-				const along = x * chunk.dx + y * chunk.dy;
-				const lateral = x * -chunk.dy + y * chunk.dx;
-				chunk.gaitContact = this.gait.contactAt(spec.restDistance, throttle, spec.motionScale.contact);
-				const contact = Math.max(0, Math.min(1, chunk.gaitContact * (1 - this.model.physics.autoLift.amount * chunk.idle * throttle)));
-				chunk.contact = contact;
-				const retainedAlong = along * (1 - contact * (along < 0 ? grip.backward : grip.forward));
-				const retainedLateral = lateral * (1 - contact * grip.lateral);
-				chunk.x = chunk.px + chunk.dx * retainedAlong - chunk.dy * retainedLateral;
-				chunk.y = chunk.py + chunk.dy * retainedAlong + chunk.dx * retainedLateral;
-				chunk.gain = -((along - retainedAlong) * (chunk.dx * this.axis.x + chunk.dy * this.axis.y) + (lateral - retainedLateral) * (-chunk.dy * this.axis.x + chunk.dx * this.axis.y));
-				const acceleration = this.gait.thrustAt(spec.restDistance, throttle, spec.motionScale.thrust);
-				chunk.x += chunk.dx * acceleration * dtSquared;
-				chunk.y += chunk.dy * acceleration * dtSquared;
+				const along = x * dx + y * dy;
+				const lateral = x * -dy + y * dx;
+				const lagged = phase - phaseLag[index];
+				const contactCycle = positiveModulo(contactHarmonic * lagged + contactPhaseOffset, TAU$1) / TAU$1;
+				const gaitContact = contactCycle >= contactDuty ? 1 : 1 - contactAmplitude * motionContact[index] * throttle * Math.sin(Math.PI * contactCycle / contactDuty);
+				chunk.gaitContact = gaitContact;
+				const grounded = Math.max(0, Math.min(1, gaitContact * (1 - autoLift * chunk.idle * throttle)));
+				chunk.contact = grounded;
+				const retainedAlong = along * (1 - grounded * (along < 0 ? gripBackward[index] : gripForward[index]));
+				const retainedLateral = lateral * (1 - grounded * gripLateral[index]);
+				chunk.x = chunk.px + dx * retainedAlong - dy * retainedLateral;
+				chunk.y = chunk.py + dy * retainedAlong + dx * retainedLateral;
+				chunk.gain = -((along - retainedAlong) * (dx * axisX + dy * axisY) + (lateral - retainedLateral) * (-dy * axisX + dx * axisY));
+				const thrustCycle = positiveModulo(thrustHarmonic * lagged + thrustPhaseOffset, TAU$1) / TAU$1;
+				const acceleration = thrustCycle >= thrustDuty ? 0 : thrustAcceleration * motionThrust[index] * throttle * Math.sin(Math.PI * thrustCycle / thrustDuty);
+				chunk.x += dx * acceleration * dtSquared;
+				chunk.y += dy * acceleration * dtSquared;
 			}
 		}
 		_steer(direction, dt) {
@@ -1167,17 +1276,21 @@ pixi_js = __toESM(pixi_js, 1);
 			const phase = channel.harmonic * this.gait.phase;
 			const phaseSine = Math.sin(phase);
 			const phaseCosine = Math.cos(phase);
-			for (let index = 1; index < this.chunks.length - 1; index++) {
-				const before = this.chunks[index - 1];
-				const chunk = this.chunks[index];
-				const after = this.chunks[index + 1];
+			const chunks = this.chunks;
+			const last = chunks.length - 1;
+			const amplitude = channel.amplitude;
+			const biasThrottle = bias * throttle;
+			const { motionBend, bendPhaseSine, bendPhaseCosine, bendScale, jointCorrectionHalf } = this.tables;
+			let before = chunks[0];
+			let chunk = chunks[1];
+			for (let index = 1; index < last; index++) {
+				const after = chunks[index + 1];
 				const ax = chunk.x - before.x;
 				const ay = chunk.y - before.y;
 				const bx = after.x - chunk.x;
 				const by = after.y - chunk.y;
 				const turn = Math.atan2(ax * by - ay * bx, ax * bx + ay * by);
-				const spec = this.model.chunks[index];
-				const correction = ((channel.amplitude * spec.motionScale.bend * throttle * (phaseSine * spec.bendPhaseCosine + phaseCosine * spec.bendPhaseSine) + bias * throttle) * spec.bendScale - turn) * spec.material.jointCorrection * .5;
+				const correction = ((amplitude * motionBend[index] * throttle * (phaseSine * bendPhaseCosine[index] + phaseCosine * bendPhaseSine[index]) + biasThrottle) * bendScale[index] - turn) * jointCorrectionHalf[index];
 				const cosine = Math.cos(correction);
 				const sine = Math.sin(correction);
 				const nextBeforeX = chunk.x - (ax * cosine + ay * sine);
@@ -1192,6 +1305,8 @@ pixi_js = __toESM(pixi_js, 1);
 				after.y = nextAfterY - shiftY;
 				chunk.x -= shiftX;
 				chunk.y -= shiftY;
+				before = chunk;
+				chunk = after;
 			}
 		}
 		_updateLinkTargets(throttle) {
@@ -1199,42 +1314,52 @@ pixi_js = __toESM(pixi_js, 1);
 			const phase = channel.harmonic * this.gait.phase;
 			const phaseSine = Math.sin(phase);
 			const phaseCosine = Math.cos(phase);
-			for (let index = 0; index < this.model.links.length; index++) {
-				const link = this.model.links[index];
-				const wave = phaseCosine * link.gatherPhaseCosine - phaseSine * link.gatherPhaseSine;
-				const gather = 1 + channel.amplitude * link.gatherScale * throttle * wave;
-				const breathing = 1 + (link.breathingScale ? this.breathingScale : 0);
-				this.linkTargets[index] = link.restLength * gather * breathing;
+			const amplitude = channel.amplitude;
+			const breathing = this.breathingScale;
+			const targets = this.linkTargets;
+			const { linkRestLength, gatherScale, gatherPhaseSine, gatherPhaseCosine, linkBreathes } = this.tables;
+			for (let index = 0; index < targets.length; index++) {
+				const wave = phaseCosine * gatherPhaseCosine[index] - phaseSine * gatherPhaseSine[index];
+				const gather = 1 + amplitude * gatherScale[index] * throttle * wave;
+				targets[index] = linkRestLength[index] * gather * (linkBreathes[index] ? 1 + breathing : 1);
 			}
 		}
 		_relaxLinks() {
-			for (let index = 0; index < this.model.links.length; index++) {
-				const link = this.model.links[index];
-				const before = this.chunks[link.from];
-				const after = this.chunks[link.to];
+			const chunks = this.chunks;
+			const targets = this.linkTargets;
+			const correctionHalf = this.tables.linkCorrectionHalf;
+			const count = targets.length;
+			let before = chunks[0];
+			for (let index = 0; index < count; index++) {
+				const after = chunks[index + 1];
 				const x = after.x - before.x;
 				const y = after.y - before.y;
-				const distance = magnitude$2(x, y) || .001;
-				const shift = (distance - this.linkTargets[index]) / distance * .5 * link.linkCorrection;
+				const distance = Math.sqrt(x * x + y * y) || .001;
+				const shift = (distance - targets[index]) / distance * correctionHalf[index];
 				before.x += x * shift;
 				before.y += y * shift;
 				after.x -= x * shift;
 				after.y -= y * shift;
+				before = after;
 			}
 		}
 		_clampLinks() {
-			for (let index = 0; index < this.model.links.length; index++) {
-				const limit = this.linkTargets[index] * 3;
-				const link = this.model.links[index];
-				const before = this.chunks[link.from];
-				const after = this.chunks[link.to];
+			const chunks = this.chunks;
+			const targets = this.linkTargets;
+			const count = targets.length;
+			let before = chunks[0];
+			for (let index = 0; index < count; index++) {
+				const after = chunks[index + 1];
+				const limit = targets[index] * 3;
 				const x = after.x - before.x;
 				const y = after.y - before.y;
-				const distance = magnitude$2(x, y);
-				if (distance <= limit) continue;
-				const scale = limit / distance;
-				after.x = before.x + x * scale;
-				after.y = before.y + y * scale;
+				const distance = Math.sqrt(x * x + y * y);
+				if (distance > limit) {
+					const scale = limit / distance;
+					after.x = before.x + x * scale;
+					after.y = before.y + y * scale;
+				}
+				before = after;
 			}
 		}
 		_applyAutoLift(dt, throttle) {
@@ -1762,7 +1887,7 @@ pixi_js = __toESM(pixi_js, 1);
 		if (spread > 1e-6) {
 			cornerX = (thighNormalX + shinNormalX) / spread;
 			cornerY = (thighNormalY + shinNormalY) / spread;
-			const along = -(cornerX * thighX + cornerY * thighY) / thighLength * half;
+			const along = Math.abs((cornerX * thighX + cornerY * thighY) / thighLength * half);
 			const bone = Math.min(thighLength, shinLength);
 			if (along > bone) {
 				cornerX = cornerX * bone / along;
@@ -1805,39 +1930,16 @@ pixi_js = __toESM(pixi_js, 1);
 
 //#endregion
 //#region src/display.mjs
-/** Pixi resource lifetime and caching for the parts a Beefwife draws. */
-	var sharedContexts = /* @__PURE__ */ new WeakMap();
+/** Pixi resource lifetime and construction for the parts a Beefwife draws. */
 	var discard = (parent, child) => {
 		if (child.parent === parent) parent.removeChild(child);
 		const geometry = child.geometry ?? null;
-		if (child.context) child.context = new PIXI.GraphicsContext();
 		child.destroy();
 		if (geometry) geometry.destroy();
 	};
-	var resizeGraphics = (parent, list, count) => {
-		if (list.length === count) return false;
-		while (list.length > count) discard(parent, list.pop());
-		while (list.length < count) list.push(new PIXI.Graphics());
-		return true;
-	};
-	var SCALE_STEPS_PER_E = 63;
-	var scaleBucketFor = (scale) => Math.round(Math.log(scale) * SCALE_STEPS_PER_E);
-	var contextFor = (shape, paint, scaleBucket) => {
-		let paintContexts = sharedContexts.get(shape);
-		if (!paintContexts) {
-			paintContexts = /* @__PURE__ */ new WeakMap();
-			sharedContexts.set(shape, paintContexts);
-		}
-		let scaleContexts = paintContexts.get(paint);
-		if (!scaleContexts) {
-			scaleContexts = /* @__PURE__ */ new Map();
-			paintContexts.set(paint, scaleContexts);
-		}
-		let context = scaleContexts.get(scaleBucket);
-		if (context) return context;
-		const scale = Math.exp(scaleBucket / SCALE_STEPS_PER_E);
+	var contextFor = (shape, paint, scale) => {
 		const path = new PIXI.GraphicsPath(shape.path).transform(new PIXI.Matrix(scale, 0, 0, scale, 0, 0));
-		context = new PIXI.GraphicsContext().path(path);
+		const context = new PIXI.GraphicsContext().path(path);
 		if (paint.fill !== null) context.fill(paint.fill);
 		if (paint.stroke !== null && paint.strokeWidth > 0) context.stroke({
 			color: paint.stroke,
@@ -1845,7 +1947,6 @@ pixi_js = __toESM(pixi_js, 1);
 			cap: "butt",
 			join: "miter"
 		});
-		scaleContexts.set(scaleBucket, context);
 		return context;
 	};
 	var meshFor = (positions, indices, color) => {
@@ -1865,20 +1966,158 @@ pixi_js = __toESM(pixi_js, 1);
 		mesh.positionBuffer = geometry.getBuffer("aPosition");
 		return mesh;
 	};
-	var setShapeTransform = (graphics, spec, x, y, directionX, directionY, scale, mirror = 1, pixelResolution = 0, inversePixelResolution = 0) => {
-		const scaleBucket = scaleBucketFor(scale);
-		if (graphics.scaleBucket !== scaleBucket) {
-			graphics.context = contextFor(spec.shape, spec.paint, scaleBucket);
-			graphics.scaleBucket = scaleBucket;
+
+//#endregion
+//#region src/atlas.mjs
+/**
+	* One texture holding every shape a Beefwife places, so its feet, plates and
+	* ornaments draw as particles out of a shared frame instead of a Graphics
+	* apiece. Planning is separable from baking: the plan names the frames, sizes
+	* them and packs them without a renderer, and only the bake needs a GPU.
+	*/
+	var BAKE_SUPERSAMPLE = 4;
+	var PAD_STROKES = 1;
+	var MIN_PAD_TEXELS = 1;
+	var ATLAS_TEXEL_LIMIT = 2048;
+	var frameKeyFor = (shape, paint, scale) => `${shape.path}|${paint.fill}|${paint.stroke}|${paint.strokeWidth}|${scale}`;
+	var baked = /* @__PURE__ */ new Map();
+	var planAtlas = (model, renderResolution) => {
+		const resolution = renderResolution * 4;
+		const entries = /* @__PURE__ */ new Map();
+		const claim = (shape, paint, scale) => {
+			if (!(scale > 0)) return null;
+			const key = frameKeyFor(shape, paint, scale);
+			if (entries.has(key)) return key;
+			const context = contextFor(shape, paint, scale);
+			const bounds = context.bounds;
+			const pad = Math.max(MIN_PAD_TEXELS, Math.ceil(paint.strokeWidth * scale * PAD_STROKES * resolution));
+			entries.set(key, {
+				key,
+				shape,
+				paint,
+				scale,
+				context,
+				pad,
+				originX: pad + Math.ceil(-bounds.minX * resolution),
+				originY: pad + Math.ceil(-bounds.minY * resolution),
+				width: Math.ceil(bounds.width * resolution) + pad * 2,
+				height: Math.ceil(bounds.height * resolution) + pad * 2
+			});
+			return key;
+		};
+		const foot = model.legs.skin.foot;
+		const feet = model.legs.pairs ? claim(foot.shape, foot.paint, foot.scale * Math.max(1, foot.plantedScale)) : null;
+		const load = 1 + Math.max(0, model.skin.loadScale);
+		const plates = model.skin.platesTailFirst.map((plate) => claim(plate.shape, plate.paint, plate.scale * model.chunks[plate.chunk].plateScale * load));
+		const ornaments = model.skin.ornaments.map((ornament) => claim(ornament.shape, ornament.paint, ornament.scale));
+		const packed = [...entries.values()].sort((a, b) => b.height - a.height);
+		let shelfX = 0;
+		let shelfY = 0;
+		let shelfHeight = 0;
+		let width = 0;
+		for (const entry of packed) {
+			if (shelfX > 0 && shelfX + entry.width > ATLAS_TEXEL_LIMIT) {
+				shelfX = 0;
+				shelfY += shelfHeight;
+				shelfHeight = 0;
+			}
+			entry.x = shelfX;
+			entry.y = shelfY;
+			shelfX += entry.width;
+			shelfHeight = Math.max(shelfHeight, entry.height);
+			width = Math.max(width, shelfX);
 		}
-		graphics.position.set(snapCoordinate(x, pixelResolution, inversePixelResolution), snapCoordinate(y, pixelResolution, inversePixelResolution));
-		graphics.rotation = Math.atan2(directionY, directionX);
-		graphics.scale.set(1, mirror);
+		return {
+			key: `${resolution}\n${packed.map((entry) => entry.key).join("\n")}`,
+			resolution,
+			width,
+			height: shelfY + shelfHeight,
+			entries: packed,
+			feet,
+			plates,
+			ornaments
+		};
+	};
+	var bakeAtlas = (plan, renderer) => {
+		const texel = 1 / plan.resolution;
+		const target = PIXI.RenderTexture.create({
+			width: plan.width * texel,
+			height: plan.height * texel,
+			resolution: plan.resolution,
+			antialias: false,
+			scaleMode: "nearest"
+		});
+		const frames = /* @__PURE__ */ new Map();
+		let clear = true;
+		for (const entry of plan.entries) {
+			const graphics = new PIXI.Graphics(entry.context);
+			renderer.render({
+				container: graphics,
+				target,
+				clear,
+				transform: new PIXI.Matrix(1, 0, 0, 1, (entry.x + entry.originX) * texel, (entry.y + entry.originY) * texel)
+			});
+			clear = false;
+			graphics.destroy();
+			frames.set(entry.key, {
+				texture: new PIXI.Texture({
+					source: target.source,
+					frame: new PIXI.Rectangle(entry.x * texel, entry.y * texel, entry.width * texel, entry.height * texel)
+				}),
+				scale: entry.scale,
+				anchorX: entry.originX / entry.width,
+				anchorY: entry.originY / entry.height
+			});
+		}
+		return {
+			key: plan.key,
+			target,
+			frames
+		};
+	};
+	/**
+	* Hands back the atlas a plan names, baking it the first time anyone asks.
+	* Populations share one descriptor's frames, and a live edit that abandons a
+	* set of frames takes the texture with it.
+	*/
+	var acquireAtlas = (plan, renderer) => {
+		let held = baked.get(plan.key);
+		if (!held && plan.entries.length) {
+			held = {
+				atlas: bakeAtlas(plan, renderer),
+				uses: 0
+			};
+			baked.set(plan.key, held);
+		}
+		for (const entry of plan.entries) entry.context.destroy();
+		if (!held) return null;
+		held.uses++;
+		return held.atlas;
+	};
+	var releaseAtlas = (atlas) => {
+		const held = atlas && baked.get(atlas.key);
+		if (!held || --held.uses > 0) return;
+		baked.delete(atlas.key);
+		for (const frame of atlas.frames.values()) frame.texture.destroy();
+		atlas.target.destroy(true);
 	};
 
 //#endregion
 //#region src/graphics.mjs
 /** Pixi display ownership for one Beefwife. */
+	var BAND_LABELS = [
+		"feet",
+		"ornaments-under",
+		"plates",
+		"ornaments-over"
+	];
+	var PARTICLE_PROPERTIES = {
+		position: true,
+		vertex: true,
+		rotation: true,
+		uvs: false,
+		color: false
+	};
 	var HeadlessGraphics = class {
 		static available = false;
 		static prepare() {}
@@ -1905,9 +2144,14 @@ pixi_js = __toESM(pixi_js, 1);
 			this.parent = host.addChild(new PIXI.Container());
 			this.model = state.model;
 			this.options = options || {};
-			this.feet = [];
-			this.ornaments = [];
-			this.plates = [];
+			this.footParticles = [];
+			this.ornamentParticles = [];
+			this.plateParticles = [];
+			this.shapeContainers = [];
+			this.atlas = null;
+			this.atlasResolution = 0;
+			this.plan = null;
+			this.legCount = 0;
 			this.limbPositions = null;
 			this.limbFill = null;
 			this.limbStroke = null;
@@ -1916,27 +2160,15 @@ pixi_js = __toESM(pixi_js, 1);
 			this.ribbonFill = null;
 			this.ribbonStroke = null;
 			this.ribbonCount = -1;
-			this.layers = null;
 			this.adopt(state);
 		}
 		adopt(state) {
 			this.model = state.model;
-			const legCount = state.legs.length / state.layout.legStride;
-			const layers = this.model.skin.ornaments.map((ornament) => ornament.layer).join("");
-			let changed = resizeGraphics(this.parent, this.feet, legCount);
-			changed = resizeGraphics(this.parent, this.plates, this.model.skin.platesTailFirst.length) || changed;
-			changed = resizeGraphics(this.parent, this.ornaments, this.model.skin.ornaments.length) || changed;
-			changed = this._syncLimbParts(legCount) || changed;
+			this.legCount = state.legs.length / state.layout.legStride;
+			this.plan = null;
+			let changed = this._syncLimbParts(this.legCount);
 			changed = this._syncRibbonParts() || changed;
-			if (changed || layers !== this.layers) {
-				this.layers = layers;
-				this._arrange();
-			}
-			for (const child of [
-				...this.feet,
-				...this.ornaments,
-				...this.plates
-			]) child.scaleBucket = null;
+			if (changed) this._arrange();
 			this.sync(state);
 		}
 		_drop(child) {
@@ -2002,17 +2234,71 @@ pixi_js = __toESM(pixi_js, 1);
 			return changed;
 		}
 		_arrange() {
-			const onLayer = (layer) => this.ornaments.filter((_, index) => this.model.skin.ornaments[index].layer === layer);
+			const [feet, under, plates, over] = this.shapeContainers;
 			for (const child of [
-				...this.feet,
+				feet,
 				this.limbFill,
 				this.limbStroke,
-				...onLayer("under"),
+				under,
 				this.ribbonFill,
 				this.ribbonStroke,
-				...this.plates,
-				...onLayer("over")
+				plates,
+				over
 			]) if (child) this.parent.addChild(child);
+		}
+		_buildParticles(plan) {
+			for (const container of this.shapeContainers) if (container) discard(this.parent, container);
+			const bands = [
+				null,
+				null,
+				null,
+				null
+			];
+			const bandFor = (index) => {
+				if (!bands[index]) bands[index] = new PIXI.ParticleContainer({
+					label: BAND_LABELS[index],
+					dynamicProperties: PARTICLE_PROPERTIES
+				});
+				return bands[index];
+			};
+			const place = (index, key) => {
+				const frame = key === null ? null : this.atlas.frames.get(key);
+				if (!frame) return null;
+				const particle = new PIXI.Particle({
+					texture: frame.texture,
+					anchorX: frame.anchorX,
+					anchorY: frame.anchorY
+				});
+				particle.bakeScale = frame.scale;
+				bandFor(index).addParticle(particle);
+				return particle;
+			};
+			this.footParticles = Array.from({ length: this.legCount }, () => place(0, plan.feet));
+			this.ornamentParticles = plan.ornaments.map((key, index) => place(this.model.skin.ornaments[index].layer === "under" ? 1 : 3, key));
+			this.plateParticles = plan.plates.map((key) => place(2, key));
+			this.shapeContainers = bands;
+			this._arrange();
+		}
+		_syncAtlas(renderer) {
+			const resolution = this.options.pixelResolution ?? 1;
+			if (this.plan && this.atlasResolution === resolution) return;
+			if (!renderer) return;
+			const plan = planAtlas(this.model, resolution);
+			const atlas = acquireAtlas(plan, renderer);
+			releaseAtlas(this.atlas);
+			this.atlas = atlas;
+			this.atlasResolution = resolution;
+			this.plan = plan;
+			this._buildParticles(plan);
+		}
+		_place(particle, x, y, directionX, directionY, scale, mirror, pixelResolution, inversePixelResolution) {
+			if (!particle) return;
+			particle.x = snapCoordinate(x, pixelResolution, inversePixelResolution);
+			particle.y = snapCoordinate(y, pixelResolution, inversePixelResolution);
+			particle.rotation = Math.atan2(directionY, directionX);
+			const drawn = scale / particle.bakeScale;
+			particle.scaleX = drawn;
+			particle.scaleY = drawn * mirror;
 		}
 		_syncLimbs(state, pixelResolution, inversePixelResolution) {
 			const legs = state.legs;
@@ -2115,39 +2401,40 @@ pixi_js = __toESM(pixi_js, 1);
 				width: paint.strokeWidth
 			});
 		}
-		sync(state) {
+		sync(state, renderer = null) {
 			if (state.model !== this.model) throw new Error("render state model does not match Beefwife graphics");
 			const pixelResolution = this.options.roundVertices === true ? this.options.pixelResolution ?? 1 : 0;
 			const inversePixelResolution = pixelResolution > 0 ? 1 / pixelResolution : 0;
 			this._syncLimbs(state, pixelResolution, inversePixelResolution);
+			this._syncRibbon(state, pixelResolution, inversePixelResolution);
+			this._syncAtlas(renderer);
 			const legs = state.legs;
-			for (let index = 0; index < this.feet.length; index++) {
+			for (let index = 0; index < this.footParticles.length; index++) {
 				const offset = index * state.layout.legStride;
-				setShapeTransform(this.feet[index], this.model.legs.skin.foot, legs[offset + 4], legs[offset + 5], legs[offset + 6], legs[offset + 7], legs[offset + 8], legs[offset + 9], pixelResolution, inversePixelResolution);
+				this._place(this.footParticles[index], legs[offset + 4], legs[offset + 5], legs[offset + 6], legs[offset + 7], legs[offset + 8], legs[offset + 9], pixelResolution, inversePixelResolution);
 			}
 			const ornaments = state.ornaments;
-			for (let index = 0; index < this.ornaments.length; index++) {
+			for (let index = 0; index < this.ornamentParticles.length; index++) {
 				const offset = index * state.layout.ornamentStride;
-				setShapeTransform(this.ornaments[index], this.model.skin.ornaments[index], ornaments[offset], ornaments[offset + 1], ornaments[offset + 2], ornaments[offset + 3], ornaments[offset + 4], ornaments[offset + 5], pixelResolution, inversePixelResolution);
+				this._place(this.ornamentParticles[index], ornaments[offset], ornaments[offset + 1], ornaments[offset + 2], ornaments[offset + 3], ornaments[offset + 4], ornaments[offset + 5], pixelResolution, inversePixelResolution);
 			}
-			this._syncRibbon(state, pixelResolution, inversePixelResolution);
 			const plates = state.plates;
-			for (let index = 0; index < this.plates.length; index++) {
+			for (let index = 0; index < this.plateParticles.length; index++) {
 				const offset = index * state.layout.plateStride;
-				setShapeTransform(this.plates[index], this.model.skin.platesTailFirst[index], plates[offset], plates[offset + 1], plates[offset + 2], plates[offset + 3], plates[offset + 4], 1, pixelResolution, inversePixelResolution);
+				this._place(this.plateParticles[index], plates[offset], plates[offset + 1], plates[offset + 2], plates[offset + 3], plates[offset + 4], 1, pixelResolution, inversePixelResolution);
 			}
 		}
 		destroy() {
 			const children = [
-				...this.feet,
+				...this.shapeContainers,
 				this.limbFill,
 				this.limbStroke,
-				...this.ornaments,
 				this.ribbonFill,
-				this.ribbonStroke,
-				...this.plates
+				this.ribbonStroke
 			];
-			for (const child of children) if (child !== null) discard(this.parent, child);
+			for (const child of children) if (child) discard(this.parent, child);
+			releaseAtlas(this.atlas);
+			this.atlas = null;
 			this.parent.destroy();
 		}
 	};
@@ -2344,7 +2631,7 @@ pixi_js = __toESM(pixi_js, 1);
 			this.#skin = new Skin(this.#model, this.#body, this.#legs);
 			this.#refreshPose();
 			this.label = this.#model.descriptor.name;
-			this.onRender = graphics_default.available ? () => this.#syncGraphics() : null;
+			this.onRender = graphics_default.available ? (renderer) => this.#syncGraphics(renderer) : null;
 			this.#replaceGraphics();
 		}
 		get descriptor() {
@@ -2461,9 +2748,9 @@ pixi_js = __toESM(pixi_js, 1);
 			if (this.#graphics) this.#graphics.adopt(this.#renderState);
 			else if (graphics_default.available) this.#graphics = new graphics_default(this, this.#renderState, this.#renderOptions);
 		}
-		#syncGraphics() {
+		#syncGraphics(renderer = null) {
 			this.#renderState = this.#skin.writeRenderState(this.#renderState);
-			this.#graphics.sync(this.#renderState);
+			this.#graphics.sync(this.#renderState, renderer);
 		}
 	};
 	Object.defineProperty(Beefwife, "MAX_STEP_SECONDS", {
