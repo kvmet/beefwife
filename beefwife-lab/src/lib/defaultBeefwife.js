@@ -1,9 +1,9 @@
-import chevronGuySource from "../../../beefwife/samples/chevron-guy.json";
+import undulating from "../../../beefwife/samples/undulating.json";
 
-// The preview is not color graded or post-processed. Its look comes entirely
-// from this initial descriptor, which will eventually be replaced by the
-// document assembled by the editor controls.
-export const chevronGuy = {
-  ...structuredClone(chevronGuySource),
+// The body the lab opens on, and the one it falls back to when a saved
+// document will not load. Its look comes entirely from this descriptor: the
+// preview is not color graded or post-processed.
+export const defaultBeefwife = {
+  ...structuredClone(undulating),
   name: "beefwife",
 };

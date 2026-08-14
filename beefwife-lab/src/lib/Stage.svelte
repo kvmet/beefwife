@@ -6,7 +6,7 @@
   import StageTools, { DEFAULT_OPTIONS } from "./StageTools.svelte";
   import TargetMarker from "./TargetMarker.svelte";
   import TerrainBoxes from "./TerrainBoxes.svelte";
-  import { chevronGuy } from "./defaultBeefwife.js";
+  import { defaultBeefwife } from "./defaultBeefwife.js";
   import { applyError, descriptor } from "./descriptor.js";
 
   /* The selector the runtime measures its terrain with. Its own default,
@@ -258,7 +258,7 @@
       return seed;
     } catch (error) {
       applyError.set(error.message);
-      return structuredClone(chevronGuy);
+      return structuredClone(defaultBeefwife);
     }
   }
 

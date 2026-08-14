@@ -1,5 +1,5 @@
 import { get, writable } from "svelte/store";
-import { chevronGuy } from "./defaultBeefwife.js";
+import { defaultBeefwife } from "./defaultBeefwife.js";
 
 /* One slot, holding the document under edit. The lab keeps no history; this
    is here so a refresh or a closed tab costs nothing. */
@@ -50,7 +50,7 @@ function restore() {
 
 /* The descriptor under edit, which the panels write in place. Stage sends a
    copy to the live actor, because the library freezes what it is handed. */
-export const descriptor = writable(restore() ?? structuredClone(chevronGuy));
+export const descriptor = writable(restore() ?? structuredClone(defaultBeefwife));
 
 /** Whether the document carries edits made since it was last replaced. */
 export const dirty = writable(false);
