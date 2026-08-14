@@ -29,7 +29,7 @@ let checks = 0;
 
 const leggedSource = JSON.parse(
   fs.readFileSync(
-    path.join(__dirname, "..", "fixtures", "beefwives", "long-girl.json"),
+    path.join(__dirname, "..", "..", "beefwife", "samples", "long-girl.json"),
     "utf8",
   ),
 );

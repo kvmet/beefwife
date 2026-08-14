@@ -122,7 +122,7 @@ checks += 2;
    disk is already in canonical order is formatting, not behaviour, so it is
    collected and reported at the end rather than stopping the schema checks on
    the first stale file. `bb format-cast` rewrites them. */
-const castDir = path.join(__dirname, "..", "fixtures", "beefwives");
+const castDir = path.join(__dirname, "..", "..", "beefwife", "samples");
 const uncanonical = [];
 fs.readdirSync(castDir)
   .filter((name) => name.endsWith(".json") && name !== "index.json")

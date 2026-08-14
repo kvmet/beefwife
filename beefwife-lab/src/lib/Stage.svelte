@@ -6,6 +6,7 @@
   import StageTools, { DEFAULT_OPTIONS } from "./StageTools.svelte";
   import TargetMarker from "./TargetMarker.svelte";
   import TerrainBoxes from "./TerrainBoxes.svelte";
+  import { chevronGuy } from "./defaultBeefwife.js";
   import { applyError, descriptor } from "./descriptor.js";
 
   /* The selector the runtime measures its terrain with. Its own default,
@@ -243,11 +244,29 @@
     return [filter];
   }
 
+  /* Mounting a document the schema rejects throws, and a mount that failed
+     leaves applyDescriptor with no runtime to hand later edits to, so the
+     panels could not fix the value that caused it. The editor opens on
+     whatever the last session saved, which may be out of range, so the seed
+     falls back to the starting body and reports why. */
+  function mountSeed() {
+    try {
+      const seed = window.BeefwifeCanvas.Descriptor.read(
+        structuredClone(get(descriptor)),
+      );
+      applyError.set(null);
+      return seed;
+    } catch (error) {
+      applyError.set(error.message);
+      return structuredClone(chevronGuy);
+    }
+  }
+
   async function mountCanvas(token = mountToken) {
     const padding = Math.max(0, +options.obstaclePadding || 0);
     try {
       const mounted = await window.BeefwifeCanvas.mount(canvas, {
-        descriptors: [structuredClone(get(descriptor))],
+        descriptors: [mountSeed()],
         count: Math.max(0, Math.round(options.count)),
         avoid: TERRAIN_SELECTOR,
         resolutionScale: Math.min(
@@ -282,6 +301,7 @@
         requestAnimationFrame(sendTarget);
     } catch (error) {
       console.error("Beefwife canvas failed to mount", error);
+      applyError.set(error.message);
     }
   }
 

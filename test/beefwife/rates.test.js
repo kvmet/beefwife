@@ -19,7 +19,7 @@ let checks = 0;
 const SHIPPED_PASSES = 8;
 const descriptor = JSON.parse(
   fs.readFileSync(
-    path.join(__dirname, "..", "fixtures", "beefwives", "chevron-guy.json"),
+    path.join(__dirname, "..", "..", "beefwife", "samples", "chevron-guy.json"),
     "utf8",
   ),
 );

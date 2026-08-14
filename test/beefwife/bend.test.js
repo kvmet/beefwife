@@ -22,7 +22,7 @@ const fixture = (name) =>
   compile(
     JSON.parse(
       fs.readFileSync(
-        path.join(__dirname, "..", "fixtures", "beefwives", `${name}.json`),
+        path.join(__dirname, "..", "..", "beefwife", "samples", `${name}.json`),
         "utf8",
       ),
     ),

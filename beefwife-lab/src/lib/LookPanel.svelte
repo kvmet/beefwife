@@ -6,7 +6,6 @@
   import Tooltip from "./Tooltip.svelte";
   import {
     applyError,
-    defaults,
     descriptor,
     placementChunks,
     SECTION_NAMES,
@@ -146,7 +145,7 @@
         label="Load scale"
         tip="Swells each plate with the grip under its chunk. Negative values shrink them under grip instead; 0 keeps plates at one size."
         bind:value={$descriptor.chain.skin.loadScale}
-        reset={defaults.chain.skin.loadScale}
+        reset={0}
         field={[-1, 10, 0.01]}
         slider={[-1, 2, 0.01]}
       />
@@ -264,7 +263,7 @@
         unit="px"
         digits={1}
         bind:value={$descriptor.chain.sections[name].profile.ribbonWidth.start}
-        reset={defaults.chain.sections[name].profile.ribbonWidth.start}
+        reset={4.5}
         field={[0, 1000, 0.1]}
         slider={[0, 20, 0.1]}
       />
@@ -274,7 +273,7 @@
         unit="px"
         digits={1}
         bind:value={$descriptor.chain.sections[name].profile.ribbonWidth.end}
-        reset={defaults.chain.sections[name].profile.ribbonWidth.end}
+        reset={4.5}
         field={[0, 1000, 0.1]}
         slider={[0, 20, 0.1]}
       />
@@ -283,7 +282,7 @@
           label="Plate scale start"
           tip="Plate size at the first chunk of this section."
           bind:value={$descriptor.chain.sections[name].profile.plateScale.start}
-          reset={defaults.chain.sections[name].profile.plateScale.start}
+          reset={1}
           field={[0, 100, 0.01]}
           slider={[0, 3, 0.01]}
         />
@@ -291,7 +290,7 @@
           label="Plate scale end"
           tip="Plate size at the last chunk of this section."
           bind:value={$descriptor.chain.sections[name].profile.plateScale.end}
-          reset={defaults.chain.sections[name].profile.plateScale.end}
+          reset={1}
           field={[0, 100, 0.01]}
           slider={[0, 3, 0.01]}
         />

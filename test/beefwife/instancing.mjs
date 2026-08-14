@@ -45,7 +45,7 @@ const setShapeTransform = (graphics, spec, x, y, dx, dy, scale, mirror) => {
 const here = path.dirname(fileURLToPath(import.meta.url));
 const descriptor = JSON.parse(
   fs.readFileSync(
-    path.join(here, "..", "fixtures", "beefwives", "chevron-guy.json"),
+    path.join(here, "..", "..", "beefwife", "samples", "chevron-guy.json"),
     "utf8",
   ),
 );

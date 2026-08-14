@@ -1,5 +1,11 @@
 <script>
-  import { applyError, descriptor } from "./descriptor.js";
+  import {
+    applyError,
+    copyText,
+    descriptor,
+    downloadDocument,
+    openDocumentFile,
+  } from "./descriptor.js";
 
   let draft = "";
   let editing = false;
@@ -7,16 +13,8 @@
   let copyNotice = null;
   let picker;
 
-  /* The editor writes plainly so a half-finished document still shows; only a
-     document the schema accepts can be written in canonical key order. */
+  /* The editor writes plainly so a half-finished document still shows. */
   const shown = (value) => JSON.stringify(value, null, 2);
-  const canonical = (value) => {
-    try {
-      return `${window.BeefwifeCanvas.Descriptor.stringify(value)}\n`;
-    } catch {
-      return shown(value);
-    }
-  };
 
   $: if (!editing) {
     draft = shown($descriptor);
@@ -49,33 +47,25 @@
     }
   }
 
-  /* The clipboard is refused outright under some permissions policies, and a
-     copy that quietly did nothing is worse than one that says so. */
   function copy() {
-    navigator.clipboard.writeText(draft).then(
-      () => (copyNotice = "Copied"),
-      (error) => (copyNotice = error.message),
-    );
-  }
-
-  /* A file leaving the lab is the checked-in form, so it goes out canonical
-     however the store happens to order its keys. */
-  function exportJson() {
-    const url = URL.createObjectURL(
-      new Blob([canonical($descriptor)], { type: "application/json" }),
-    );
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${$descriptor.name}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
+    copyText(draft).then((notice) => (copyNotice = notice));
   }
 
   async function importJson(event) {
     const file = event.target.files[0];
     // Clear the picker so choosing the same file twice loads it twice.
     event.target.value = "";
-    if (file) load(await file.text());
+    if (!file) return;
+    try {
+      await openDocumentFile(file);
+      parseError = null;
+      editing = false;
+    } catch (error) {
+      // The text the file carried, so the panel can be edited into shape.
+      draft = await file.text();
+      editing = true;
+      parseError = error.message;
+    }
   }
 </script>
 
@@ -83,7 +73,7 @@
   <button onclick={() => picker.click()}>Import file</button>
   <button onclick={copy}>Copy</button>
   {#if copyNotice}<span class="notice">{copyNotice}</span>{/if}
-  <button class="export-button" onclick={exportJson}>Export JSON</button>
+  <button class="export-button" onclick={downloadDocument}>Export JSON</button>
   <input
     bind:this={picker}
     class="picker"

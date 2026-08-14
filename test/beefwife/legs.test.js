@@ -15,7 +15,7 @@ const { Legs } = require("../../beefwife/src/legs.mjs");
 
 const source = JSON.parse(
   fs.readFileSync(
-    path.join(__dirname, "..", "fixtures", "beefwives", "long-girl.json"),
+    path.join(__dirname, "..", "..", "beefwife", "samples", "long-girl.json"),
     "utf8",
   ),
 );

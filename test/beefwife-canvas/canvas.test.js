@@ -17,7 +17,7 @@ const { bundleFor } = require("./vm-bundle.js");
    a short one. */
 const template = JSON.parse(
   fs.readFileSync(
-    path.join(__dirname, "..", "fixtures", "beefwives", "undulating.json"),
+    path.join(__dirname, "..", "..", "beefwife", "samples", "undulating.json"),
     "utf8",
   ),
 );

@@ -2,14 +2,17 @@
   import Inspector from "./lib/Inspector.svelte";
   import Stage from "./lib/Stage.svelte";
   import Tooltip from "./lib/Tooltip.svelte";
+  import { saveError, saveState } from "./lib/descriptor.js";
   import packageInfo from "../package.json";
+
+  const SAVE_LABELS = { saving: "Saving", saved: "Saved", failed: "Not saved" };
 
   const version = packageInfo.version;
   let theme = "light";
 
   $: document.documentElement.dataset.theme = theme;
 
-  let activeTab = "Look";
+  let activeTab = "Easy";
   let sidebarOpen = true;
   let sidebarWidth = 480;
   let resizeStartX = 0;
@@ -68,7 +71,14 @@
     </a>
 
     <div class="top-actions">
-      <span class="save-state">Unsaved</span>
+      <Tooltip
+        label={$saveError ??
+          "This beefwife is kept in the browser, so a refresh costs nothing."}
+      >
+        <span class="save-state" class:failed={$saveState === "failed"}>
+          {SAVE_LABELS[$saveState]}
+        </span>
+      </Tooltip>
       <Tooltip label="Undo" keys="⌘Z">
         <button class="quiet" aria-label="Undo">
           <svg viewBox="0 0 16 16" aria-hidden="true">

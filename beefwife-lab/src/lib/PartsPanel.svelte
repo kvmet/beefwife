@@ -4,7 +4,6 @@
   import Tooltip from "./Tooltip.svelte";
   import {
     applyError,
-    defaults,
     descriptor,
     idPattern,
     SECTION_NAMES,
@@ -18,7 +17,10 @@
   const TABLE = { shape: "shapes", paint: "paints", material: "materials" };
 
   const NEW_SHAPE = { path: "M 0 -3 L 3 0 L 0 3 L -3 0 Z" };
-  const NEW_PAINT = { fill: "#a8444a", stroke: { colour: "#17191d", width: 1 } };
+  const NEW_PAINT = {
+    fill: "#a8444a",
+    stroke: { colour: "#17191d", width: 1 },
+  };
   const NEW_MATERIAL = {
     velocityRetention: 0.026,
     jointCorrection: 0.5,
@@ -32,6 +34,11 @@
     in: (value) => Math.pow(value, 0.25),
     out: (position) => Math.pow(position, 4),
   };
+
+  /* Switching a fill or stroke off leaves no colour in the document, so the
+     panel holds the last one to put back. Keyed by paint id. */
+  const lastFill = new Map();
+  const lastStroke = new Map();
 
   let sections = {};
 
@@ -170,9 +177,9 @@
   }
 
   function toggleFill(on) {
-    const fallback =
-      defaults.definitions.paints[selection.id]?.fill ?? "#888888";
-    setFill(on ? fallback : null);
+    const paint = $descriptor.definitions.paints[selection.id];
+    if (!on) lastFill.set(selection.id, paint.fill);
+    setFill(on ? (lastFill.get(selection.id) ?? NEW_PAINT.fill) : null);
   }
 
   function setStrokeColour(value) {
@@ -180,12 +187,12 @@
   }
 
   function toggleStroke(on) {
-    const fallback = defaults.definitions.paints[selection.id]?.stroke;
-    $descriptor.definitions.paints[selection.id].stroke = on
-      ? fallback
-        ? structuredClone(fallback)
-        : { colour: "#888888", width: 1 }
+    const paint = $descriptor.definitions.paints[selection.id];
+    if (!on) lastStroke.set(selection.id, paint.stroke);
+    paint.stroke = on
+      ? structuredClone(lastStroke.get(selection.id) ?? NEW_PAINT.stroke)
       : null;
+    $descriptor.definitions.paints[selection.id] = paint;
   }
 </script>
 
@@ -318,7 +325,7 @@
           unit="px"
           digits={1}
           bind:value={$descriptor.definitions.paints[selection.id].stroke.width}
-          reset={defaults.definitions.paints[selection.id]?.stroke?.width ?? 1}
+          reset={NEW_PAINT.stroke.width}
           field={[0, 1000, 0.1]}
           slider={[0, 10, 0.1]}
         />
@@ -344,8 +351,7 @@
       <button onclick={() => add("material", NEW_MATERIAL)}>+ Add</button>
     </div>
     {#if selection?.kind === "material" && materials[selection.id]}
-      {@const reset =
-        defaults.definitions.materials[selection.id] ?? NEW_MATERIAL}
+      {@const reset = NEW_MATERIAL}
       <div class="rows">
         <ControlRow
           label="Velocity retention"

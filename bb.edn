@@ -82,7 +82,7 @@
    :task (shell "npm" "--prefix" "beefwife-lab" "run" "check")}
 
   format-cast
-  {:doc "Rewrite the example and cast fixtures in canonical schema form."
+  {:doc "Rewrite the example and every sample body in canonical schema form."
    :task (shell "node" "bb/format-cast.js")}
 
   kipple

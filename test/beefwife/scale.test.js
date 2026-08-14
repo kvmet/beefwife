@@ -18,7 +18,7 @@ const { Skin } = require("../../beefwife/src/skin.mjs");
 
 const source = JSON.parse(
   fs.readFileSync(
-    path.join(__dirname, "..", "fixtures", "beefwives", "chevron-guy.json"),
+    path.join(__dirname, "..", "..", "beefwife", "samples", "chevron-guy.json"),
     "utf8",
   ),
 );

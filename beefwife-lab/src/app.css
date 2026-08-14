@@ -324,10 +324,14 @@ input[type="checkbox"]:focus-visible {
 
 .save-state {
   margin-right: 10px;
-  color: var(--danger);
+  color: var(--muted);
   font-size: 10px;
   letter-spacing: 0.09em;
   text-transform: uppercase;
+}
+
+.save-state.failed {
+  color: var(--danger);
 }
 
 /* One height for the whole row, rather than letting padding and font size

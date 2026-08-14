@@ -4,7 +4,6 @@
   import Tooltip from "./Tooltip.svelte";
   import {
     applyError,
-    defaults,
     descriptor,
     SECTION_MINIMUMS,
     SECTION_NAMES,
@@ -17,6 +16,12 @@
   const DEG = 180 / Math.PI;
   const CHANNEL_NAMES = ["bend", "thrust", "gather", "contact"];
   const PHASE = [-180, 180, 1];
+  /* Segment resets: a short head, a long trunk, and a tail between them. */
+  const SECTION_PRESET = {
+    head: { chunks: 2, spacing: 12 },
+    trunk: { chunks: 8, spacing: 12 },
+    tail: { chunks: 4, spacing: 12 },
+  };
 
   /* Every channel carries these three rows, and they mean the same thing in
      each one. */
@@ -48,7 +53,8 @@
   /* Presentation only: the schema stores phaseLagRadiansPerPixel; the panel
      shows it as a wavelength and a travel direction. */
   const TAU = Math.PI * 2;
-  let lastWavelength = 200;
+  const DEFAULT_WAVELENGTH = 200;
+  let lastWavelength = DEFAULT_WAVELENGTH;
   $: lag = $descriptor.gait.phaseLagRadiansPerPixel;
   $: travelDirection = lag === 0 ? "none" : lag > 0 ? "head-tail" : "tail-head";
   $: if (lag !== 0) lastWavelength = TAU / Math.abs(lag);
@@ -76,11 +82,6 @@
     if (Number.isFinite(typed))
       applyWavelength(Math.min(5000, Math.max(5, typed)));
     event.target.value = Math.round(lastWavelength);
-  }
-
-  function resetTravel() {
-    $descriptor.gait.phaseLagRadiansPerPixel =
-      defaults.gait.phaseLagRadiansPerPixel;
   }
 
   let sectionPanels = {};
@@ -127,7 +128,7 @@
       tip="Gait cycles each second. Every channel reads this one clock."
       unit="Hz"
       bind:value={$descriptor.gait.cyclesPerSecond}
-      reset={defaults.gait.cyclesPerSecond}
+      reset={1}
       field={[0, 100, 0.01]}
       slider={[0, 10, 0.01]}
     />
@@ -157,7 +158,7 @@
         value={lastWavelength}
         disabled={travelDirection === "none"}
         oninput={(event) => applyWavelength(+event.target.value)}
-        ondblclick={resetTravel}
+        ondblclick={() => applyWavelength(DEFAULT_WAVELENGTH)}
       />
     </label>
   </div>
@@ -170,7 +171,7 @@
       label="Amplitude"
       tip="Curve the wave puts in each joint, in radians at the trunk's resting spacing."
       bind:value={$descriptor.gait.bend.amplitude}
-      reset={defaults.gait.bend.amplitude}
+      reset={0}
       field={[0, 10, 0.01]}
       slider={[0, 2, 0.01]}
     />
@@ -196,7 +197,7 @@
       digits={0}
       curve={thrustCurve}
       bind:value={$descriptor.gait.thrust.acceleration}
-      reset={defaults.gait.thrust.acceleration}
+      reset={0}
       field={[0, 1000000, 1]}
       slider={[0, 1, 0.001]}
     />
@@ -215,7 +216,7 @@
         digits={0}
         scale={DEG}
         bind:value={$descriptor.gait.thrust.phaseOffset}
-        reset={defaults.gait.thrust.phaseOffset}
+        reset={0}
         field={PHASE}
         slider={PHASE}
       />
@@ -223,7 +224,7 @@
         label="Duty cycle"
         tip={DUTY_TIP}
         bind:value={$descriptor.gait.thrust.dutyCycle}
-        reset={defaults.gait.thrust.dutyCycle}
+        reset={0.5}
         field={[0.01, 1, 0.01]}
         slider={[0.01, 1, 0.01]}
       />
@@ -238,7 +239,7 @@
       label="Amplitude"
       tip="Fraction the wave shortens and lengthens the resting spacing between chunks."
       bind:value={$descriptor.gait.gather.amplitude}
-      reset={defaults.gait.gather.amplitude}
+      reset={0}
       field={[0, 0.95, 0.01]}
       slider={[0, 0.95, 0.01]}
     />
@@ -257,7 +258,7 @@
         digits={0}
         scale={DEG}
         bind:value={$descriptor.gait.gather.phaseOffset}
-        reset={defaults.gait.gather.phaseOffset}
+        reset={0}
         field={PHASE}
         slider={PHASE}
       />
@@ -272,7 +273,7 @@
       label="Amplitude"
       tip="Grip the contact rhythm takes away at its peak. At 1 a chunk fully releases the ground there."
       bind:value={$descriptor.gait.contact.amplitude}
-      reset={defaults.gait.contact.amplitude}
+      reset={0}
       field={[0, 1, 0.01]}
       slider={[0, 1, 0.01]}
     />
@@ -291,7 +292,7 @@
         digits={0}
         scale={DEG}
         bind:value={$descriptor.gait.contact.phaseOffset}
-        reset={defaults.gait.contact.phaseOffset}
+        reset={0}
         field={PHASE}
         slider={PHASE}
       />
@@ -299,7 +300,7 @@
         label="Duty cycle"
         tip={DUTY_TIP}
         bind:value={$descriptor.gait.contact.dutyCycle}
-        reset={defaults.gait.contact.dutyCycle}
+        reset={0.5}
         field={[0.01, 1, 0.01]}
         slider={[0.01, 1, 0.01]}
       />
@@ -343,7 +344,7 @@
         tip="Number of chunks in this section. Head and trunk hold at least one; the tail may be empty."
         digits={0}
         bind:value={$descriptor.chain.sections[name].chunks}
-        reset={defaults.chain.sections[name].chunks}
+        reset={SECTION_PRESET[name].chunks}
         field={[SECTION_MINIMUMS[name], 256, 1]}
         slider={[SECTION_MINIMUMS[name], 64, 1]}
       />
@@ -353,7 +354,7 @@
         unit="px"
         digits={1}
         bind:value={$descriptor.chain.sections[name].spacing}
-        reset={defaults.chain.sections[name].spacing}
+        reset={SECTION_PRESET[name].spacing}
         field={[0.000001, 1000, 0.5]}
         slider={[1, 40, 0.5]}
       />
@@ -364,7 +365,7 @@
             label="{title(channel)} sensitivity"
             tip="Scales the {channel} channel in this section. 0 mutes it, 1 leaves it whole."
             bind:value={$descriptor.chain.sections[name].motionScale[channel]}
-            reset={defaults.chain.sections[name].motionScale[channel]}
+            reset={1}
             field={[0, 4, 0.05]}
             slider={[0, 2, 0.05]}
           />
@@ -382,7 +383,7 @@
         label="Gain"
         tip="Turn the head asks for per unit of heading error. Higher values steer harder."
         bind:value={$descriptor.chain.physics.steering.gain}
-        reset={defaults.chain.physics.steering.gain}
+        reset={0.6}
         field={[0, 100, 0.05]}
         slider={[0, 5, 0.05]}
       />
@@ -393,7 +394,7 @@
         digits={0}
         scale={DEG}
         bind:value={$descriptor.chain.physics.steering.limit}
-        reset={defaults.chain.physics.steering.limit}
+        reset={0.5}
         field={[0, 180, 1]}
         slider={[0, 180, 1]}
       />
@@ -403,7 +404,7 @@
         unit="/s"
         digits={1}
         bind:value={$descriptor.chain.physics.steering.rate}
-        reset={defaults.chain.physics.steering.rate}
+        reset={6}
         field={[0, 1000, 0.5]}
         slider={[0, 50, 0.5]}
       />
@@ -418,7 +419,7 @@
       label="Amount"
       tip="Picks up the chunks pushing the least, whatever the contact rhythm says. 0 holds every chunk down."
       bind:value={$descriptor.chain.physics.autoLift.amount}
-      reset={defaults.chain.physics.autoLift.amount}
+      reset={0}
       field={[0, 1, 0.01]}
       slider={[0, 1, 0.01]}
     />
@@ -428,7 +429,7 @@
         tip="Fraction of the chain that may lift at one time."
         digits={3}
         bind:value={$descriptor.chain.physics.autoLift.share}
-        reset={defaults.chain.physics.autoLift.share}
+        reset={0.3}
         field={[0, 1, 0.005]}
         slider={[0, 1, 0.005]}
       />
@@ -438,7 +439,7 @@
         unit="/s"
         digits={1}
         bind:value={$descriptor.chain.physics.autoLift.rate}
-        reset={defaults.chain.physics.autoLift.rate}
+        reset={12}
         field={[0, 1000, 0.5]}
         slider={[0, 50, 0.5]}
       />
@@ -453,7 +454,7 @@
       label="Breathing"
       tip="Slow swell and shrink of the trunk links. At 1 their length changes by 10%."
       bind:value={$descriptor.chain.breathing}
-      reset={defaults.chain.breathing}
+      reset={0}
       field={[0, 1, 0.01]}
       slider={[0, 1, 0.01]}
     />

@@ -1,5 +1,5 @@
 /**
- * Rewrite the example and every cast fixture in canonical schema form.
+ * Rewrite the example and every sample body in canonical schema form.
  * `read` validates and returns canonical key order, so this changes ordering
  * and the trailing newline only; a file it cannot read is left alone and
  * reported.
@@ -10,7 +10,7 @@ const path = require("node:path");
 const BeefwifeDescriptor = require("../beefwife/beefwife-descriptor.js");
 
 const root = path.join(__dirname, "..");
-const castDir = path.join(root, "test", "fixtures", "beefwives");
+const castDir = path.join(root, "beefwife", "samples");
 const files = [
   path.join(root, "beefwife", "beefwife.example.json"),
   ...fs

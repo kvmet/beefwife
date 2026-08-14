@@ -306,7 +306,7 @@ checks += 4;
 
 const boundaryDescriptor = JSON.parse(
   fs.readFileSync(
-    path.join(__dirname, "..", "fixtures", "beefwives", "long-girl.json"),
+    path.join(__dirname, "..", "..", "beefwife", "samples", "long-girl.json"),
     "utf8",
   ),
 );
@@ -508,7 +508,7 @@ independentA.translate({ x: 10, y: 0 });
 assert.equal(independentB.getPose().head.x, 0);
 checks++;
 
-const castDir = path.join(__dirname, "..", "fixtures", "beefwives");
+const castDir = path.join(__dirname, "..", "..", "beefwife", "samples");
 fs.readdirSync(castDir)
   .filter((name) => name.endsWith(".json") && name !== "index.json")
   .forEach((name) => {

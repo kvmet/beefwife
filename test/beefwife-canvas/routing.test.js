@@ -26,7 +26,7 @@ const {
 } = require("../../beefwife-canvas/src/steering.mjs");
 const descriptor = JSON.parse(
   fs.readFileSync(
-    path.join(__dirname, "..", "fixtures", "beefwives", "undulating.json"),
+    path.join(__dirname, "..", "..", "beefwife", "samples", "undulating.json"),
     "utf8",
   ),
 );

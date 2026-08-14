@@ -2,6 +2,7 @@
   import { tick } from "svelte";
   import ChainMap from "./ChainMap.svelte";
   import ConfigPanel from "./ConfigPanel.svelte";
+  import EasyPanel from "./EasyPanel.svelte";
   import LegsPanel from "./LegsPanel.svelte";
   import LookPanel from "./LookPanel.svelte";
   import MotionPanel from "./MotionPanel.svelte";
@@ -15,7 +16,7 @@
   export let ontab;
   export let onhide;
 
-  const tabs = ["Config", "Motion", "Look", "Parts"];
+  const tabs = ["Easy", "Config", "Motion", "Look", "Parts"];
   const TAU = Math.PI * 2;
 
   let selectedSection = null;
@@ -159,18 +160,23 @@
         role="tabpanel"
         aria-label={activeTab}
       >
-        <div class="slim-heading">
-          <label class="advanced-mode">
-            <Tooltip
-              label="Adds the detail controls to every tab, from ornament Layer to gait phases. Hidden fields keep their current values."
-              ><span>Advanced mode</span></Tooltip
-            >
-            <div class="switch">
-              <input type="checkbox" bind:checked={advancedMode} />
-            </div>
-          </label>
-        </div>
-        {#if activeTab === "Look"}
+        <!-- The easy tab has no detail rows for the switch to add. -->
+        {#if activeTab !== "Easy"}
+          <div class="slim-heading">
+            <label class="advanced-mode">
+              <Tooltip
+                label="Adds the detail controls to every tab, from ornament Layer to gait phases. Hidden fields keep their current values."
+                ><span>Advanced mode</span></Tooltip
+              >
+              <div class="switch">
+                <input type="checkbox" bind:checked={advancedMode} />
+              </div>
+            </label>
+          </div>
+        {/if}
+        {#if activeTab === "Easy"}
+          <EasyPanel />
+        {:else if activeTab === "Look"}
           <LookPanel
             advanced={advancedMode}
             selection={selectedPlacement}

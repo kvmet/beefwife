@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import { Beefwife } from "../../beefwife/src/beefwife.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const fixtures = path.join(here, "..", "fixtures", "beefwives");
+const fixtures = path.join(here, "..", "..", "beefwife", "samples");
 const read = (name) =>
   JSON.parse(fs.readFileSync(path.join(fixtures, `${name}.json`), "utf8"));
 
