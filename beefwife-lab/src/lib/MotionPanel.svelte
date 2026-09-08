@@ -86,6 +86,15 @@
 
   let sectionPanels = {};
 
+  function panelMode(panel, isAdvanced) {
+    panel.open = !isAdvanced;
+    return {
+      update(value) {
+        panel.open = !value;
+      },
+    };
+  }
+
   $: materialIds = Object.keys($descriptor.definitions.materials);
 
   /** Open a section's panel and bring it into view. Called by the chain map. */
@@ -104,7 +113,7 @@
 <!-- Basic mode opens every panel so the short list reads as one page;
      advanced mode adds enough rows that open panels bury the summaries, so
      switching collapses them. -->
-<details open={!advanced}>
+<details use:panelMode={advanced}>
   <summary>Gait clock</summary>
   <div class="fields">
     <label>
@@ -164,7 +173,7 @@
   </div>
 </details>
 
-<details open={!advanced}>
+<details use:panelMode={advanced}>
   <summary>Bend</summary>
   <div class="rows">
     <ControlRow
@@ -187,7 +196,7 @@
   </div>
 </details>
 
-<details open={!advanced}>
+<details use:panelMode={advanced}>
   <summary>Thrust</summary>
   <div class="rows">
     <ControlRow
@@ -232,7 +241,7 @@
   </div>
 </details>
 
-<details open={!advanced}>
+<details use:panelMode={advanced}>
   <summary>Gather</summary>
   <div class="rows">
     <ControlRow
@@ -266,7 +275,7 @@
   </div>
 </details>
 
-<details open={!advanced}>
+<details use:panelMode={advanced}>
   <summary>Contact</summary>
   <div class="rows">
     <ControlRow
@@ -309,7 +318,7 @@
 </details>
 
 {#each SECTION_NAMES as name}
-  <details bind:this={sectionPanels[name]} open={!advanced}>
+  <details bind:this={sectionPanels[name]} use:panelMode={advanced}>
     <summary>{title(name)}</summary>
     {#if advanced}
       <div class="fields">
@@ -412,7 +421,7 @@
   </details>
 {/if}
 
-<details open={!advanced}>
+<details use:panelMode={advanced}>
   <summary>Ground lift</summary>
   <div class="rows">
     <ControlRow
@@ -447,7 +456,7 @@
   </div>
 </details>
 
-<details open={!advanced}>
+<details use:panelMode={advanced}>
   <summary>Idle behavior</summary>
   <div class="rows">
     <ControlRow
