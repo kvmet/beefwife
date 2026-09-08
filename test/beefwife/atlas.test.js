@@ -1,11 +1,4 @@
-/**
- * Does the atlas name, size and place a frame for every shape a Beefwife
- * draws? Naming and packing are the halves that need no renderer, so this is
- * where the drawn scale, the outline width and the packing are held. Fails if
- * a frame is baked below the largest a part reaches, if a shape's origin lands
- * off its frame, if two frames overlap, if a population re-bakes what it could
- * share, or if two renderers are handed one texture between them.
- */
+/** Atlas packing, geometry compensation, sharing and resource ownership. */
 
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -44,7 +37,13 @@ const stubRenderer = () => {
   return {
     drawn,
     render({ container, target, clear, transform }) {
-      drawn.push({ container, target, clear, x: transform.tx, y: transform.ty });
+      drawn.push({
+        container,
+        target,
+        clear,
+        x: transform.tx,
+        y: transform.ty,
+      });
     },
   };
 };
@@ -77,9 +76,8 @@ for (const key of [plan.feet, ...plan.plates, ...plan.ornaments])
   if (key !== null) assert.ok(keys.has(key), `${key} has no frame`);
 checks += 2;
 
-/* A frame is baked at the largest its placement ever draws, so a live particle
-   only ever scales down. The foot plants at `plantedScale`, and a plate rides
-   the load to `1 + loadScale`. */
+/* Within the texture budget, frames retain detail at maximum load and foot
+   contact scale. */
 const footEntry = sheet.entries.find((entry) => entry.key === plan.feet);
 const foot = legged.legs.skin.foot;
 assert.equal(footEntry.scale, foot.scale * foot.plantedScale);
@@ -243,7 +241,11 @@ releaseAtlas(atlasA);
 assert.equal(shared.destroyed, false, "an atlas went while a creature held it");
 releaseAtlas(atlasB);
 assert.equal(shared.destroyed, true, "the last release left the atlas behind");
-assert.notEqual(bound.resources, null, "a spent sheet took a bind group with it");
+assert.notEqual(
+  bound.resources,
+  null,
+  "a spent sheet took a bind group with it",
+);
 // A third comer bakes afresh rather than handing back the destroyed sheet.
 const revived = acquireAtlas(planAtlas(Model.compile(legged), 0.5), renderer);
 assert.notEqual(revived.target.source, shared);
@@ -286,14 +288,12 @@ assert.equal(
 releaseAtlas(onRight);
 checks += 5;
 
-/* Wrapping bounds the sheet's width, and nothing bounds its height, so a
-   resolution high enough runs it off the end. A texture past what the GPU
-   takes comes back blank rather than refused, so this has to say so. */
-assert.throws(
-  () => packAtlas(planAtlas(model, ATLAS_TEXEL_LIMIT)),
-  /past the 2048 limit/,
-);
-checks += 1;
+// Texture cost stays bounded even when requested raster density is enormous.
+const denseSheet = packAtlas(planAtlas(model, ATLAS_TEXEL_LIMIT));
+assert.ok(denseSheet.width <= ATLAS_TEXEL_LIMIT);
+assert.ok(denseSheet.height <= ATLAS_TEXEL_LIMIT);
+for (const entry of denseSheet.entries) entry.context.destroy();
+checks += 2;
 
 const Descriptor = require("../../beefwife/src/descriptor.mjs");
 const centipede = JSON.parse(
@@ -310,14 +310,11 @@ assert.equal(
   "profile sizes duplicated shape frames",
 );
 let bigger = centipede;
-for (let click = 0; click < 6; click++)
-  bigger = Descriptor.scale(bigger, 1.25);
+for (let click = 0; click < 6; click++) bigger = Descriptor.scale(bigger, 1.25);
 const biggerPlan = planAtlas(Model.compile(bigger), 0.5);
 const biggerSheet = packAtlas(biggerPlan);
 for (const entry of baseSheet.entries) {
-  const grown = biggerSheet.entries.find(
-    (other) => other.key === entry.key,
-  );
+  const grown = biggerSheet.entries.find((other) => other.key === entry.key);
   assert.ok(
     Math.abs(
       grown.context.bounds.width / entry.context.bounds.width - 1.25 ** 6,
@@ -330,6 +327,87 @@ assert.ok(biggerSheet.height <= ATLAS_TEXEL_LIMIT);
 for (const entry of [...baseSheet.entries, ...biggerSheet.entries])
   entry.context.destroy();
 checks += 4;
+
+// One large frame must not lower the resolution of ordinary neighbours.
+const giant = copy(legged);
+giant.chain.skin.plates[1].scale = 1000;
+const giantPlan = planAtlas(Model.compile(giant), 1);
+const giantSheet = packAtlas(giantPlan);
+assert.ok(giantSheet.width <= ATLAS_TEXEL_LIMIT);
+assert.ok(giantSheet.height <= ATLAS_TEXEL_LIMIT);
+assert.ok(
+  giantSheet.entries.every(
+    (entry) => entry.width <= 1024 && entry.height <= 1024,
+  ),
+);
+const giantKey = giantPlan.plates.find(
+  (key) => giantPlan.frames.find((frame) => frame.key === key)?.scale > 100,
+);
+assert.ok(
+  giantSheet.entries.find((entry) => entry.key === giantKey).scale < 100,
+);
+const ordinaryEye = giantSheet.entries.find(
+  (entry) => entry.key === giantPlan.ornaments[0],
+);
+assert.equal(ordinaryEye.scale, 1, "a large plate coarsened its small eye");
+checks += 5;
+
+// Different paints force distinct frames even when the path is shared.
+const { crowdedDescriptor } = require("./atlas-fixtures.mjs");
+const crowded = crowdedDescriptor(legged);
+const crowdedPlan = planAtlas(Model.compile(crowded), 1);
+const crowdedSheet = packAtlas(crowdedPlan);
+assert.ok(crowdedPlan.frames.length >= 512);
+assert.ok(crowdedSheet.width <= ATLAS_TEXEL_LIMIT);
+assert.ok(crowdedSheet.height <= ATLAS_TEXEL_LIMIT);
+for (const entry of crowdedSheet.entries) {
+  assert.ok(entry.x + entry.width <= crowdedSheet.width);
+  assert.ok(entry.y + entry.height <= crowdedSheet.height);
+  for (const other of crowdedSheet.entries)
+    if (entry !== other)
+      assert.ok(
+        entry.x + entry.width <= other.x ||
+          other.x + other.width <= entry.x ||
+          entry.y + entry.height <= other.y ||
+          other.y + other.height <= entry.y,
+      );
+}
+checks += 4;
+
+// Lower raster density must preserve geometry, outlines and the local origin.
+for (const [limitedPlan, limitedSheet] of [
+  [giantPlan, giantSheet],
+  [crowdedPlan, crowdedSheet],
+]) {
+  const limitedRenderer = stubRenderer();
+  const atlas = acquireAtlas(limitedPlan, limitedRenderer);
+  for (const entry of limitedSheet.entries) {
+    const spec = limitedPlan.frames.find((frame) => frame.key === entry.key);
+    const bakedFrame = atlas.frames.get(entry.key);
+    const compensation = spec.scale / bakedFrame.scale;
+    const actualWidth = drawnWidthOf(entry.context) * compensation;
+    const wantedWidth = pathWidthOf(spec.shape.path) * spec.scale;
+    assert.ok(
+      Math.abs(actualWidth - wantedWidth) < 1e-6 * Math.max(1, wantedWidth),
+    );
+    for (const stroke of strokesOf(entry.context))
+      assert.ok(
+        Math.abs(
+          stroke.width * compensation - spec.paint.strokeWidth * spec.scale,
+        ) < 1e-6,
+      );
+    const bounds = entry.context.bounds;
+    const texel = 1 / limitedSheet.resolution;
+    const origin = bakedFrame.anchorX * bakedFrame.texture.frame.width;
+    assert.ok(Math.abs(origin - entry.originX * texel) < 1e-9);
+    assert.ok(origin + bounds.minX >= texel - 1e-9);
+    assert.ok(origin + bounds.maxX <= bakedFrame.texture.frame.width + 1e-9);
+    assert.ok(entry.scale > 0 && entry.scale <= spec.scale);
+  }
+  releaseAtlas(atlas);
+  for (const entry of limitedSheet.entries) entry.context.destroy();
+}
+checks += 6;
 
 assert.ok(PIXI.ParticleContainer, "the renderer has no particle container");
 checks += 1;

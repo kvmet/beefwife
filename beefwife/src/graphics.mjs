@@ -239,9 +239,8 @@ class Graphics {
       if (child) this.parent.addChild(child);
   }
 
-  /* One particle per placement, holding the frame baked for the largest that
-     placement ever draws. A placement with no frame, which is a plate a
-     profile scaled to nothing, keeps its slot and draws nothing. */
+  /* One particle per placement. Its bake scale preserves world size when
+     the atlas reduces detail. A plate profiled to zero keeps an empty slot. */
   _buildParticles(plan) {
     const bands = [null, null, null, null];
     const bandFor = (index) => {

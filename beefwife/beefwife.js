@@ -2140,6 +2140,7 @@ pixi_js = __toESM(pixi_js, 1);
 	var PAD_STROKES = 1;
 	var MIN_PAD_TEXELS = 1;
 	var ATLAS_TEXEL_LIMIT = 2048;
+	var FRAME_TEXEL_LIMIT = ATLAS_TEXEL_LIMIT / 2;
 	var frameKeyFor = (shape, paint) => `${shape.path}|${paint.fill}|${paint.stroke}|${paint.strokeWidth}`;
 	var baked = /* @__PURE__ */ new WeakMap();
 	var prepared = /* @__PURE__ */ new WeakMap();
@@ -2173,28 +2174,8 @@ pixi_js = __toESM(pixi_js, 1);
 			ornaments
 		};
 	};
-	/**
-	* Measures each frame and lays the sheet out. The entries come back carrying
-	* a live context apiece, which the bake draws and then destroys.
-	*/
-	var packAtlas = (plan) => {
-		const resolution = plan.resolution;
-		const entries = plan.frames.map(({ key, shape, paint, scale }) => {
-			const context = contextFor(shape, paint, scale);
-			const bounds = context.bounds;
-			const pad = Math.max(MIN_PAD_TEXELS, Math.ceil(paint.strokeWidth * scale * PAD_STROKES * resolution));
-			return {
-				key,
-				scale,
-				context,
-				pad,
-				originX: pad + Math.ceil(-bounds.minX * resolution),
-				originY: pad + Math.ceil(-bounds.minY * resolution),
-				width: Math.ceil(bounds.width * resolution) + pad * 2,
-				height: Math.ceil(bounds.height * resolution) + pad * 2
-			};
-		});
-		entries.sort((a, b) => b.height - a.height);
+	var arrangeEntries = (entries) => {
+		entries.sort((a, b) => b.height - a.height || a.key.localeCompare(b.key));
 		let shelfX = 0;
 		let shelfY = 0;
 		let shelfHeight = 0;
@@ -2211,17 +2192,68 @@ pixi_js = __toESM(pixi_js, 1);
 			shelfHeight = Math.max(shelfHeight, entry.height);
 			width = Math.max(width, shelfX);
 		}
-		const height = shelfY + shelfHeight;
-		if (width > 2048 || height > 2048) {
-			for (const entry of entries) entry.context.destroy();
-			throw new RangeError(`atlas needs ${width} by ${height} texels at resolution ${resolution}, past the ${ATLAS_TEXEL_LIMIT} limit`);
-		}
 		return {
-			resolution,
 			width,
-			height,
-			entries
+			height: shelfY + shelfHeight
 		};
+	};
+	/** Measure once, then fit frames by reducing their raster scale. */
+	var packAtlas = (plan) => {
+		const resolution = plan.resolution;
+		const entries = [];
+		try {
+			for (const spec of plan.frames) {
+				const context = contextFor(spec.shape, spec.paint, spec.scale);
+				const entry = {
+					...spec,
+					context,
+					requestedScale: spec.scale
+				};
+				entries.push(entry);
+				const bounds = context.bounds;
+				entry.bounds = {
+					minX: bounds.minX,
+					minY: bounds.minY,
+					width: bounds.width,
+					height: bounds.height
+				};
+				if (!Object.values(entry.bounds).every(Number.isFinite)) throw new RangeError("atlas shape bounds must be finite");
+			}
+			let frameLimit = FRAME_TEXEL_LIMIT;
+			let size;
+			for (;;) {
+				for (const entry of entries) {
+					const { bounds, paint, requestedScale } = entry;
+					const stroke = paint.strokeWidth * requestedScale * PAD_STROKES * resolution;
+					const extent = Math.max(bounds.width, bounds.height) * resolution;
+					const factor = Math.ceil(extent) + 2 * Math.max(MIN_PAD_TEXELS, Math.ceil(stroke)) <= frameLimit ? 1 : (frameLimit - 3) / (extent + 2 * stroke);
+					entry.scale = requestedScale * factor;
+					entry.pad = Math.max(MIN_PAD_TEXELS, Math.ceil(stroke * factor));
+					entry.originX = entry.pad + Math.ceil(-bounds.minX * factor * resolution);
+					entry.originY = entry.pad + Math.ceil(-bounds.minY * factor * resolution);
+					entry.width = Math.ceil(bounds.width * factor * resolution) + entry.pad * 2;
+					entry.height = Math.ceil(bounds.height * factor * resolution) + entry.pad * 2;
+				}
+				size = arrangeEntries(entries);
+				if (size.width <= 2048 && size.height <= 2048) break;
+				if (frameLimit === 4) throw new RangeError("too many atlas frames for the texture budget");
+				frameLimit = Math.max(4, Math.floor(frameLimit * .75));
+			}
+			for (const entry of entries) {
+				if (entry.scale === entry.requestedScale) continue;
+				entry.context.destroy();
+				entry.context = null;
+				entry.context = contextFor(entry.shape, entry.paint, entry.scale);
+			}
+			return {
+				resolution,
+				...size,
+				entries
+			};
+		} catch (error) {
+			for (const entry of entries) entry.context?.destroy();
+			throw error;
+		}
 	};
 	var prepareAtlas = (model, renderResolution) => {
 		const held = prepared.get(model);

@@ -14,8 +14,7 @@
     }
   </style>
   <p>
-    Serve the repository root over HTTP. Add ?min to test the minified
-    bundle.
+    Serve the repository root over HTTP. Add ?min to test the minified bundle.
   </p>
   <pre id="results">Running</pre>
   <canvas id="stage"></canvas>
@@ -60,20 +59,22 @@
         targetMode: "manual",
         random: () => 0.5,
       };
-      const oversized = structuredClone(source);
-      oversized.chain.skin.plates[1].scale = 100;
+      const invalidShape = structuredClone(source);
+      invalidShape.definitions.shapes[
+        invalidShape.chain.skin.plates[1].shape
+      ].path = "M 0 0 L 1e309 0 L 0 10 Z";
       let rejected = null;
       try {
         await BeefwifeCanvas.mount(canvas, {
           ...options,
-          descriptors: [oversized],
+          descriptors: [invalidShape],
         });
       } catch (error) {
         rejected = error;
       }
       assert(
-        rejected?.message.includes("past the 2048 limit"),
-        "oversized mount did not reject",
+        rejected?.message.includes("bounds must be finite"),
+        "invalid shape mount did not reject",
       );
       assert(
         events.length === 1 && events[0].error === rejected,
@@ -81,32 +82,38 @@
       );
       const failedMount = events[0].controller;
       handle = await BeefwifeCanvas.mount(canvas, options);
-      assert(
-        failedMount.state === "error",
-        "old handle followed the remount",
-      );
+      assert(failedMount.state === "error", "old handle followed the remount");
       const actor = handle.getActors()[0];
       rejected = null;
       try {
-        actor.setDescriptor(oversized);
+        actor.setDescriptor(invalidShape);
       } catch (error) {
         rejected = error;
       }
       assert(
-        rejected?.message.includes("past the 2048 limit"),
-        "oversized edit did not reject",
+        rejected?.message.includes("bounds must be finite"),
+        "invalid shape edit did not reject",
       );
       assert(
         handle.state === "running",
         "rejected edit stopped the valid creature",
       );
       let descriptor = source;
-      for (let click = 0; click < 6; click++) {
+      for (let click = 0; click < 18; click++) {
         descriptor = BeefwifeCanvas.Descriptor.scale(descriptor, 1.25);
         actor.setDescriptor(descriptor);
         await new Promise(requestAnimationFrame);
       }
       assert(events.length === 1, "scaling emitted a render error");
+      const { crowdedDescriptor } =
+        await import("../beefwife/atlas-fixtures.mjs");
+      actor.setDescriptor(crowdedDescriptor(source));
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+      assert(
+        handle.state === "running" && events.length === 1,
+        "crowded atlas stopped the runtime",
+      );
       handle.destroy();
       const previous = handle;
       handle = await BeefwifeCanvas.mount(canvas, {
@@ -168,7 +175,7 @@
         renderer.gl.getError() === renderer.gl.NO_ERROR,
         "WebGL error after recovery",
       );
-      output.textContent = `PASS ${bundle}: 12 WebGL lifecycle checks`;
+      output.textContent = `PASS ${bundle}: 13 WebGL lifecycle checks`;
     } catch (error) {
       output.textContent = `FAIL: ${error.stack}`;
       throw error;

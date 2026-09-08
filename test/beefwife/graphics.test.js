@@ -47,16 +47,16 @@ const particlesOf = (beefwife, label) =>
   };
   let checks = 0;
 
-  const oversized = copy(source);
-  oversized.chain.skin.plates[1].scale = 100;
-  assert.throws(() => new Beefwife(oversized), /past the 2048 limit/);
+  const invalidShape = copy(source);
+  invalidShape.definitions.shapes.bodyPlate.path = "M 0 0 L 1e309 0 L 0 10 Z";
+  assert.throws(() => new Beefwife(invalidShape), /bounds must be finite/);
   const unchanged = new Beefwife(copy(source), { random: () => 0.5 });
   await draw(unchanged);
   const originalDescriptor = unchanged.descriptor;
   const originalParts = [...partsOf(unchanged)];
   assert.throws(
-    () => unchanged.setDescriptor(oversized),
-    /past the 2048 limit/,
+    () => unchanged.setDescriptor(invalidShape),
+    /bounds must be finite/,
   );
   assert.equal(unchanged.descriptor, originalDescriptor);
   assert.deepEqual(partsOf(unchanged), originalParts);
@@ -76,7 +76,7 @@ const particlesOf = (beefwife, label) =>
     render: { pixelResolution: 0.5 },
   });
   let enlarged = centipede;
-  for (let click = 0; click < 6; click++) {
+  for (let click = 0; click < 18; click++) {
     enlarged = Descriptor.scale(enlarged, 1.25);
     growing.setDescriptor(enlarged);
     await draw(growing);
@@ -85,7 +85,12 @@ const particlesOf = (beefwife, label) =>
       plates.length,
       Model.compile(enlarged).skin.platesTailFirst.length,
     );
-    assert.ok(plates.every((particle) => particle.scaleX <= 1 + 1e-9));
+    assert.ok(
+      plates.every(
+        (particle) => Number.isFinite(particle.scaleX) && particle.scaleX > 0,
+      ),
+    );
+    assert.ok(bandsOf(growing).size <= 4);
     const beforeMove = plates.map(({ x }) => x);
     growing.translate({ x: 100, y: 0 });
     await draw(growing);
@@ -112,6 +117,79 @@ const particlesOf = (beefwife, label) =>
   checks += 2;
   growing.destroy();
   checks += 2;
+
+  const { crowdedDescriptor } = require("./atlas-fixtures.mjs");
+  const renderPolicy = { pixelResolution: 0.5 };
+  const crowded = new Beefwife(crowdedDescriptor(source), {
+    random: () => 0.5,
+    render: renderPolicy,
+  });
+  await draw(crowded);
+  assert.equal(bandsOf(crowded).size, 4);
+  assert.equal(particlesOf(crowded, "ornaments-under").length, 256);
+  assert.equal(particlesOf(crowded, "ornaments-over").length, 256);
+  const worldTransforms = () =>
+    [...bandsOf(crowded)].map(([label, band]) => [
+      label,
+      band.particleChildren.map((part) => [
+        part.x,
+        part.y,
+        part.rotation,
+        part.scaleX * part.bakeScale,
+        part.scaleY * part.bakeScale,
+      ]),
+    ]);
+  const originalTransforms = worldTransforms();
+  const crowdedSource = particlesOf(crowded, "feet")[0].texture.source;
+  renderPolicy.pixelResolution = 8;
+  await draw(crowded);
+  const rebaked = worldTransforms();
+  assert.notEqual(
+    particlesOf(crowded, "feet")[0].texture.source,
+    crowdedSource,
+  );
+  assert.equal(crowdedSource.destroyed, true);
+  for (let band = 0; band < rebaked.length; band++) {
+    assert.equal(rebaked[band][0], originalTransforms[band][0]);
+    for (let part = 0; part < rebaked[band][1].length; part++)
+      for (let value = 0; value < 5; value++)
+        assert.ok(
+          Math.abs(
+            rebaked[band][1][part][value] -
+              originalTransforms[band][1][part][value],
+          ) < 1e-8,
+        );
+  }
+  const allParticles = [...bandsOf(crowded).values()].flatMap(
+    (band) => band.particleChildren,
+  );
+  const sources = new Set(allParticles.map((part) => part.texture.source));
+  assert.equal(sources.size, 1, "crowded shapes split the texture source");
+  const textureSource = [...sources][0];
+  assert.ok(
+    textureSource.pixelWidth <= 2048 && textureSource.pixelHeight <= 2048,
+  );
+  assert.ok(
+    allParticles.some((part) => part.scaleX > 1),
+    "stress case did not magnify a bounded frame",
+  );
+  crowded.translate({ x: 100, y: -50 });
+  await draw(crowded);
+  const moved = worldTransforms();
+  for (let band = 0; band < moved.length; band++)
+    for (let part = 0; part < moved[band][1].length; part++) {
+      assert.ok(
+        Math.abs(moved[band][1][part][0] - rebaked[band][1][part][0] - 100) <
+          1e-8,
+      );
+      assert.ok(
+        Math.abs(moved[band][1][part][1] - rebaked[band][1][part][1] + 50) <
+          1e-8,
+      );
+    }
+  crowded.destroy();
+  assert.equal(textureSource.destroyed, true);
+  checks += 9;
 
   const failing = new Beefwife(copy(source));
   const bakeFailure = new Error("texture render failed");
@@ -191,9 +269,8 @@ const particlesOf = (beefwife, label) =>
   );
   checks += 2;
 
-  /* A foot plants at `plantedScale` and swings at 1, and its frame is baked at
-     the larger, so the particle scales down to draw and never up. Mirroring is
-     the sign on the vertical, as it was on the child's own scale. */
+  /* These feet fit at full detail, including their largest contact scale.
+     Mirroring changes the sign of the vertical scale. */
   const feet = particlesOf(beefwife, "feet");
   assert.ok(feet.every((foot) => Math.abs(foot.scaleX) <= 1 + 1e-9));
   assert.ok(feet.every((foot) => Math.abs(foot.scaleY) === foot.scaleX));
@@ -416,9 +493,7 @@ const particlesOf = (beefwife, label) =>
     bandsOf(beefwife).get("feet").particleChildren[0].texture.source;
   assert.equal(sheet.destroyed, false);
   const owned = [...partsOf(beefwife)];
-  const ownedBuffers = owned.flatMap(
-    (child) => child.geometry?.buffers || [],
-  );
+  const ownedBuffers = owned.flatMap((child) => child.geometry?.buffers || []);
   beefwife.destroy();
   assert.ok(ownedBuffers.every((buffer) => buffer.destroyed));
   checks++;
@@ -509,14 +584,8 @@ const particlesOf = (beefwife, label) =>
     next.chain.sections.trunk.chunks = trunkCount;
     resizing.setDescriptor(next);
     await draw(resizing);
-    const fills = partsOf(resizing).filter(
-      (child) => child instanceof Mesh,
-    );
-    assert.equal(
-      fills.length,
-      1,
-      "a legless creature retained a limb mesh",
-    );
+    const fills = partsOf(resizing).filter((child) => child instanceof Mesh);
+    assert.equal(fills.length, 1, "a legless creature retained a limb mesh");
     assert.ok(fills[0].geometry.indices.length > 0);
     assert.equal(fills[0].batched, trunkCount <= 25);
     assert.equal(

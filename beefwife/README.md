@@ -210,10 +210,17 @@ JSON value with fixed fields and definition keys in canonical order. Unknown
 keys, omitted fields, non-plain objects, invalid references, and values outside
 their declared bounds are errors.
 
-With Pixi loaded, construction and `setDescriptor` also check that the shapes
-fit a texture sheet at the requested pixel resolution. A rejected edit leaves
-the current creature intact. Texture rendering failures emit `error` on the
-Beefwife; without a listener, the error is thrown. A failed bake is retried
+Feet, plates, and ornaments share one texture sheet per distinct appearance
+and renderer. The sheet is capped at 2048 × 2048 texels, with each frame capped
+at 1024 × 1024. When the frames together exceed the sheet budget, the frame cap
+is reduced until they fit. Shapes below that cap retain their requested detail.
+Large or complex creatures can therefore look coarser while keeping their world
+size, attachment positions, drawing order, and particle batches. Repeated shapes
+with the same paint share a frame.
+
+With Pixi loaded, construction and `setDescriptor` also validate shape bounds.
+A rejected edit leaves the current creature intact. Texture rendering failures
+emit `error` on the Beefwife; without a listener, the error is thrown. A failed bake is retried
 only after an edit, a resolution change, or a renderer change.
 
 Descriptor px are world pixels, and `scale(descriptor, factor)` is the one way

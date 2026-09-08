@@ -13,12 +13,13 @@
     }
   </style>
   <p>
-    Serve the repository root over HTTP and open this page. Add ?min to test
-    the minified bundle.
+    Serve the repository root over HTTP and open this page. Add ?min to test the
+    minified bundle.
   </p>
   <pre id="results">Running</pre>
   <script src="../../beefwife/node_modules/pixi.js/dist/pixi.js"></script>
   <script type="module">
+    const { crowdedDescriptor } = await import("./atlas-fixtures.mjs");
     const output = document.querySelector("#results");
     const bundle = new URLSearchParams(location.search).has("min")
       ? "beefwife.min.js"
@@ -35,9 +36,9 @@
       if (!condition) throw new Error(message);
     };
     try {
-      const source = await fetch(
-        "../../beefwife/beefwife.example.json",
-      ).then((response) => response.json());
+      const source = await fetch("../../beefwife/beefwife.example.json").then(
+        (response) => response.json(),
+      );
       await app.init({
         width: 800,
         height: 600,
@@ -112,7 +113,7 @@
         "../../beefwife/samples/chevron-guy.json",
       ).then((response) => response.json());
       let grown = centipede;
-      for (let click = 0; click <= 6; click++) {
+      for (let click = 0; click <= 18; click++) {
         if (click) grown = Beefwife.Descriptor.scale(grown, 1.25);
         creature.setDescriptor(grown);
         creature.reset({
@@ -124,7 +125,7 @@
           pixelCount() > 0,
           `centipede disappeared after ${click} size increases`,
         );
-        creature.translate({ x: 10000, y: 0 });
+        creature.translate({ x: 100000, y: 0 });
         await draw();
         assert(
           pixelCount() === 0,
@@ -133,6 +134,112 @@
         checks += 2;
       }
       checkGl("size changes");
+      creature.setDescriptor(crowdedDescriptor(source));
+      creature.reset({
+        position: { x: 450, y: 300 },
+        direction: { x: 1, y: 0 },
+      });
+      await draw();
+      const bands = creature.children[0].children.filter(
+        (part) => part instanceof PIXI.ParticleContainer,
+      );
+      assert(bands.length === 4, "crowded atlas added particle batches");
+      const textureSources = new Set(
+        bands.flatMap((band) =>
+          band.particleChildren.map((part) => part.texture.source),
+        ),
+      );
+      assert(
+        textureSources.size === 1,
+        "crowded atlas split the texture source",
+      );
+      for (const texture of textureSources)
+        assert(
+          texture.pixelWidth <= 2048 && texture.pixelHeight <= 2048,
+          "crowded atlas exceeded the texture budget",
+        );
+      assert(pixelCount() > 0, "crowded creature disappeared");
+      creature.translate({ x: 100000, y: 0 });
+      await draw();
+      assert(pixelCount() === 0, "crowded creature left detached pixels");
+      checkGl("crowded atlas");
+      checks += 5;
+
+      // An off-center triangle exposes anchor errors, clipping and mirrored frames.
+      const offsetShape = structuredClone(source);
+      offsetShape.chain.skin.plates = [];
+      offsetShape.legs.pairs = 0;
+      offsetShape.definitions.shapes.eye.path = "M 10 5 L 30 8 L 18 25 Z";
+      offsetShape.definitions.paints.eye = {
+        fill: "#ffffff",
+        stroke: { colour: "#ffffff", width: 1 },
+      };
+      offsetShape.chain.skin.ornaments[0].scale = 1000;
+      creature.setDescriptor(offsetShape);
+      creature.reset({
+        position: { x: 450, y: 300 },
+        direction: { x: 1, y: 0 },
+      });
+      await draw();
+      const part = creature.children[0].children.find(
+        (child) => child.label === "ornaments-over",
+      ).particleChildren[0];
+      assert(part.scaleX > 1, "triangle did not exceed the frame budget");
+      creature.visible = false;
+      const probe = new PIXI.ParticleContainer();
+      const sprite = new PIXI.Particle({
+        texture: part.texture,
+        anchorX: part.anchorX,
+        anchorY: part.anchorY,
+        x: 350,
+        y: 280,
+      });
+      probe.addParticle(sprite);
+      app.stage.addChild(probe);
+      const reference = new PIXI.Graphics()
+        .path(new PIXI.GraphicsPath(offsetShape.definitions.shapes.eye.path))
+        .fill("#ffffff")
+        .stroke({ color: "#ffffff", width: 1, join: "miter" });
+      reference.position.set(350, 280);
+      app.stage.addChild(reference);
+      const mask = () => {
+        context.clearRect(0, 0, snapshot.width, snapshot.height);
+        context.drawImage(app.canvas, 0, 0);
+        return context.getImageData(0, 0, snapshot.width, snapshot.height).data;
+      };
+      for (const mirror of [-1, 1]) {
+        for (const rotation of [0, 0.7, 2.4]) {
+          sprite.scaleX = 5 / part.bakeScale;
+          sprite.scaleY = sprite.scaleX * mirror;
+          sprite.rotation = rotation;
+          probe.update();
+          reference.scale.set(5, 5 * mirror);
+          reference.rotation = rotation;
+          probe.visible = true;
+          reference.visible = false;
+          app.render();
+          const actual = mask();
+          probe.visible = false;
+          reference.visible = true;
+          app.render();
+          const expected = mask();
+          let intersection = 0;
+          let union = 0;
+          for (let pixel = 3; pixel < actual.length; pixel += 4) {
+            if (actual[pixel] && expected[pixel]) intersection++;
+            if (actual[pixel] || expected[pixel]) union++;
+          }
+          assert(
+            union > 100 && intersection / union > 0.9,
+            `bounded frame differs from vector silhouette: ${mirror}, ${rotation}, overlap ${intersection / union}`,
+          );
+          checks++;
+        }
+      }
+      probe.destroy();
+      reference.destroy();
+      creature.visible = true;
+      checkGl("bounded frame silhouette");
       creature.setDescriptor(centipede);
       creature.reset({
         position: { x: 450, y: 300 },

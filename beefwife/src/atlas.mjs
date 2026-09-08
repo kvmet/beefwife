@@ -10,10 +10,7 @@
 import { PIXI } from "./pixi.mjs";
 import { contextFor } from "./display.mjs";
 
-/* A particle samples its frame where a Graphics rasterises its path afresh,
-   so a frame carrying one texel per drawn pixel loses the silhouette as soon
-   as it turns. Four holds it; the frames are tens of texels across, so the
-   texture stays small either way. */
+// Supersampling preserves small silhouettes when particles rotate.
 const BAKE_SUPERSAMPLE = 4;
 /* A context's bounds already carry half a stroke width, and a miter reaches
    past that on a sharp enough corner, so a whole width is left around the
@@ -22,6 +19,8 @@ const BAKE_SUPERSAMPLE = 4;
 const PAD_STROKES = 1;
 const MIN_PAD_TEXELS = 1;
 const ATLAS_TEXEL_LIMIT = 2048;
+// One frame may occupy at most a quarter of the sheet's texel budget.
+const FRAME_TEXEL_LIMIT = ATLAS_TEXEL_LIMIT / 2;
 
 // Matching shape and paint values share a frame at their largest draw scale.
 const frameKeyFor = (shape, paint) =>
@@ -34,8 +33,7 @@ const prepared = new WeakMap();
 const planAtlas = (model, renderResolution) => {
   const resolution = renderResolution * BAKE_SUPERSAMPLE;
   const specs = new Map();
-  /* Frames are baked at the largest a part ever draws, so a live particle
-     only ever scales down and never magnifies its own texels. */
+  // Request detail for the largest draw scale; packing applies the budget.
   const claim = (shape, paint, scale) => {
     // A plate profiled down to nothing draws nothing, and needs no frame.
     if (!(scale > 0)) return null;
@@ -80,35 +78,8 @@ const planAtlas = (model, renderResolution) => {
   };
 };
 
-/**
- * Measures each frame and lays the sheet out. The entries come back carrying
- * a live context apiece, which the bake draws and then destroys.
- */
-const packAtlas = (plan) => {
-  const resolution = plan.resolution;
-  const entries = plan.frames.map(({ key, shape, paint, scale }) => {
-    const context = contextFor(shape, paint, scale);
-    const bounds = context.bounds;
-    const pad = Math.max(
-      MIN_PAD_TEXELS,
-      Math.ceil(paint.strokeWidth * scale * PAD_STROKES * resolution),
-    );
-    return {
-      key,
-      scale,
-      context,
-      pad,
-      /* Where the shape's own origin sits inside the frame, rounded out to a
-         whole texel so the bake lands on the texture's grid. */
-      originX: pad + Math.ceil(-bounds.minX * resolution),
-      originY: pad + Math.ceil(-bounds.minY * resolution),
-      width: Math.ceil(bounds.width * resolution) + pad * 2,
-      height: Math.ceil(bounds.height * resolution) + pad * 2,
-    };
-  });
-
-  // Shelf packed tallest first, which is enough for a handful of frames.
-  entries.sort((a, b) => b.height - a.height);
+const arrangeEntries = (entries) => {
+  entries.sort((a, b) => b.height - a.height || a.key.localeCompare(b.key));
   let shelfX = 0;
   let shelfY = 0;
   let shelfHeight = 0;
@@ -125,19 +96,71 @@ const packAtlas = (plan) => {
     shelfHeight = Math.max(shelfHeight, entry.height);
     width = Math.max(width, shelfX);
   }
-  const height = shelfY + shelfHeight;
+  return { width, height: shelfY + shelfHeight };
+};
 
-  /* Wrapping bounds the width unless one frame is wider than the whole sheet,
-     and nothing bounds the height at all. A texture past what the GPU takes
-     comes back blank rather than refused, so say which way it went over. */
-  if (width > ATLAS_TEXEL_LIMIT || height > ATLAS_TEXEL_LIMIT) {
-    for (const entry of entries) entry.context.destroy();
-    throw new RangeError(
-      `atlas needs ${width} by ${height} texels at resolution ${resolution}, past the ${ATLAS_TEXEL_LIMIT} limit`,
-    );
+/** Measure once, then fit frames by reducing their raster scale. */
+const packAtlas = (plan) => {
+  const resolution = plan.resolution;
+  const entries = [];
+  try {
+    for (const spec of plan.frames) {
+      const context = contextFor(spec.shape, spec.paint, spec.scale);
+      const entry = { ...spec, context, requestedScale: spec.scale };
+      entries.push(entry);
+      const bounds = context.bounds;
+      entry.bounds = {
+        minX: bounds.minX,
+        minY: bounds.minY,
+        width: bounds.width,
+        height: bounds.height,
+      };
+      if (!Object.values(entry.bounds).every(Number.isFinite))
+        throw new RangeError("atlas shape bounds must be finite");
+    }
+    let frameLimit = FRAME_TEXEL_LIMIT;
+    let size;
+    for (;;) {
+      for (const entry of entries) {
+        const { bounds, paint, requestedScale } = entry;
+        const stroke =
+          paint.strokeWidth * requestedScale * PAD_STROKES * resolution;
+        const extent = Math.max(bounds.width, bounds.height) * resolution;
+        const fullSize =
+          Math.ceil(extent) + 2 * Math.max(MIN_PAD_TEXELS, Math.ceil(stroke));
+        // Three texels cover outward rounding and the minimum border.
+        const factor =
+          fullSize <= frameLimit ? 1 : (frameLimit - 3) / (extent + 2 * stroke);
+        entry.scale = requestedScale * factor;
+        entry.pad = Math.max(MIN_PAD_TEXELS, Math.ceil(stroke * factor));
+        entry.originX =
+          entry.pad + Math.ceil(-bounds.minX * factor * resolution);
+        entry.originY =
+          entry.pad + Math.ceil(-bounds.minY * factor * resolution);
+        entry.width =
+          Math.ceil(bounds.width * factor * resolution) + entry.pad * 2;
+        entry.height =
+          Math.ceil(bounds.height * factor * resolution) + entry.pad * 2;
+      }
+      size = arrangeEntries(entries);
+      if (size.width <= ATLAS_TEXEL_LIMIT && size.height <= ATLAS_TEXEL_LIMIT)
+        break;
+      // Four texels leave room for a shape and its border even at minimum detail.
+      if (frameLimit === 4)
+        throw new RangeError("too many atlas frames for the texture budget");
+      frameLimit = Math.max(4, Math.floor(frameLimit * 0.75));
+    }
+    for (const entry of entries) {
+      if (entry.scale === entry.requestedScale) continue;
+      entry.context.destroy();
+      entry.context = null;
+      entry.context = contextFor(entry.shape, entry.paint, entry.scale);
+    }
+    return { resolution, ...size, entries };
+  } catch (error) {
+    for (const entry of entries) entry.context?.destroy();
+    throw error;
   }
-
-  return { resolution, width, height, entries };
 };
 
 /* Validate before an instance adopts the model. One measurement per shared
