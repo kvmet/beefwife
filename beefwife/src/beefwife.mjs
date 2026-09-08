@@ -293,6 +293,7 @@ class Beefwife extends Container {
     this.#renderOptions = renderOptionsOf(options.render);
     this.#requestedDirection = { ...facing };
     this.#model = modelFor(descriptor);
+    Graphics.prepareAtlas(this.#model, this.#renderOptions);
     this.#gait = new Gait(this.#model.gait, phase);
     const breathingPhase = this.#model.breathing.strain
       ? TAU * this.#sampleRandom()
@@ -365,6 +366,7 @@ class Beefwife extends Container {
   setDescriptor(descriptor) {
     this.#live("setDescriptor");
     const nextModel = modelFor(descriptor);
+    Graphics.prepareAtlas(nextModel, this.#renderOptions);
     const nextGait = new Gait(nextModel.gait, this.#gait.phase);
     const breathingPhase =
       !this.#model.breathing.strain && nextModel.breathing.strain

@@ -21,8 +21,9 @@ const descriptor = JSON.parse(
 );
 
 const pixiStub = (log) => {
-  class Container {
+  class Container extends require("node:events").EventEmitter {
     constructor() {
+      super();
       this.children = [];
       this.parent = null;
       this.destroyed = false;
@@ -89,6 +90,8 @@ const pixiStub = (log) => {
     }
   }
   class GraphicsContext {
+    bounds = { minX: -1, minY: -1, width: 2, height: 2 };
+    destroy() {}
     path() {
       return this;
     }
@@ -535,10 +538,26 @@ const sceneBoundary = async () => {
       `renderFps ${renderFps} with physicsFps ${physicsFps}`,
     );
   });
+  let renderError = null;
+  browser.layer.onError = (error) => {
+    renderError = error;
+  };
+  const failure = new Error("render failed");
+  browser.layer.actors[0].beefwife.emit("error", failure);
+  assert.equal(renderError, failure);
+  assert.equal(browser.layer.running, false);
+  assert.equal(browser.layer.frameId, null);
+  renderError = null;
+  browser.layer._draw = () => {
+    throw failure;
+  };
+  browser.layer._tick(5000);
+  assert.equal(renderError, failure);
+  assert.equal(browser.layer.frameId, null);
   browser.layer.destroy();
   assert.ok(log.some(([operation]) => operation === "remove"));
   assert.ok(log.some(([operation]) => operation === "destroy"));
-  return 61;
+  return 66;
 };
 
 (async () => {

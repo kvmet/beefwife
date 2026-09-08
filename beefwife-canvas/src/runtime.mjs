@@ -26,6 +26,7 @@ class BeefwifeCanvasRuntime {
   constructor(options = {}) {
     // BeefwifeCanvas supplies the complete, validated cast before creating the
     // runtime. Actors still wait for terrain measurement before spawning.
+    this.onError = options.onError || null;
     this.timeScale = timeScaleOf(options.timeScale ?? 1);
     if (options.random !== undefined && typeof options.random !== "function")
       throw new TypeError("random must be a function");
@@ -79,6 +80,7 @@ class BeefwifeCanvasRuntime {
       kneeProjectionCenter,
       maxPixelRatio,
       renderOptions,
+      onError: (error) => this._fail(error),
       resolutionScale,
       zIndex: options.zIndex || 9000,
     });
@@ -405,7 +407,21 @@ class BeefwifeCanvasRuntime {
     this._resetMeter(time);
   }
 
+  _fail(error) {
+    this.stop();
+    if (this.onError) this.onError(error);
+    else throw error;
+  }
+
   _tick = (time) => {
+    try {
+      this._advanceFrame(time);
+    } catch (error) {
+      this._fail(error);
+    }
+  };
+
+  _advanceFrame(time) {
     this.frameId = requestAnimationFrame(this._tick);
     let dt = 0;
     if (!this.nextPhysicsTime) {
@@ -443,7 +459,7 @@ class BeefwifeCanvasRuntime {
       this.meter.draws += 1;
     }
     this._meter(time);
-  };
+  }
 
   _draw = () =>
     RuntimeBeefwifeCanvasRender.draw({

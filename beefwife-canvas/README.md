@@ -41,8 +41,8 @@ promise on a handle returned by `BeefwifeCanvas.get(canvas)`, or inspect
 `data-beefwife-state`, whose values are `loading`, `ready`, `running`, `paused`,
 `stopped`, `error`, and `destroyed`. A paused canvas also exposes
 `data-beefwife-pause-reason` as `hidden`, `offscreen`, or `zero-size`. A mount
-that fails dispatches the error event, cleans
-itself up, and leaves the canvas in the `error` state, ready to mount again.
+or a texture render that fails dispatches the error event, stops the runtime,
+cleans itself up, and leaves the canvas in the `error` state, ready to mount again.
 The mounted handle exposes the same information through its read-only `state`
 and `pauseReason` getters; `pauseReason` is `null` unless state is `paused`.
 

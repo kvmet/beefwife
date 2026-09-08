@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>Beefwife WebGL regression</title>
+  <style>
+    body {
+      background: #222;
+      color: white;
+      font: 14px monospace;
+    }
+    canvas {
+      border: 1px solid #888;
+    }
+  </style>
+  <p>
+    Serve the repository root over HTTP and open this page. Add ?min to test
+    the minified bundle.
+  </p>
+  <pre id="results">Running</pre>
+  <script src="../../beefwife/node_modules/pixi.js/dist/pixi.js"></script>
+  <script type="module">
+    const output = document.querySelector("#results");
+    const bundle = new URLSearchParams(location.search).has("min")
+      ? "beefwife.min.js"
+      : "beefwife.js";
+    await new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = `../../beefwife/${bundle}`;
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.append(script);
+    });
+    const app = new PIXI.Application();
+    const assert = (condition, message) => {
+      if (!condition) throw new Error(message);
+    };
+    try {
+      const source = await fetch(
+        "../../beefwife/beefwife.example.json",
+      ).then((response) => response.json());
+      await app.init({
+        width: 800,
+        height: 600,
+        resolution: 0.25,
+        preference: "webgl",
+        autoStart: false,
+        backgroundAlpha: 0,
+      });
+      document.body.append(app.canvas);
+      const creature = new Beefwife(source, {
+        position: { x: 450, y: 300 },
+        random: () => 0.5,
+        render: { pixelResolution: 0.25, roundVertices: true },
+      });
+      app.stage.addChild(creature);
+      const snapshot = document.createElement("canvas");
+      snapshot.width = app.canvas.width;
+      snapshot.height = app.canvas.height;
+      const context = snapshot.getContext("2d");
+      const pixelCount = (canvas = app.canvas) => {
+        context.clearRect(0, 0, snapshot.width, snapshot.height);
+        context.drawImage(canvas, 0, 0);
+        const pixels = context.getImageData(
+          0,
+          0,
+          snapshot.width,
+          snapshot.height,
+        ).data;
+        let count = 0;
+        for (let index = 3; index < pixels.length; index += 4)
+          if (pixels[index]) count++;
+        return count;
+      };
+      const draw = async () => {
+        app.render();
+        // Atlas construction completes between render passes.
+        await Promise.resolve();
+        app.render();
+      };
+      const checkGl = (label, renderer = app.renderer) => {
+        const error = renderer.gl.getError();
+        assert(
+          error === renderer.gl.NO_ERROR,
+          `WebGL error ${error}: ${label}`,
+        );
+      };
+      let checks = 0;
+      for (const pairs of [0, 1, 0, 4, 0]) {
+        for (const chunks of [25, 26, 70, 1, 30]) {
+          const descriptor = structuredClone(source);
+          descriptor.legs.pairs = pairs;
+          descriptor.chain.sections.trunk.chunks = chunks;
+          creature.setDescriptor(descriptor);
+          creature.step(1 / 60);
+          await draw();
+          assert(
+            pixelCount() > 0,
+            `missing creature: ${pairs} pairs, ${chunks} trunk chunks`,
+          );
+          creature.translate({ x: 3000, y: 0 });
+          await draw();
+          assert(
+            pixelCount() === 0,
+            `stale pixels: ${pairs} pairs, ${chunks} trunk chunks`,
+          );
+          creature.translate({ x: -3000, y: 0 });
+          checks += 2;
+        }
+      }
+      checkGl("length changes");
+      const centipede = await fetch(
+        "../../beefwife/samples/chevron-guy.json",
+      ).then((response) => response.json());
+      let grown = centipede;
+      for (let click = 0; click <= 6; click++) {
+        if (click) grown = Beefwife.Descriptor.scale(grown, 1.25);
+        creature.setDescriptor(grown);
+        creature.reset({
+          position: { x: 450, y: 300 },
+          direction: { x: 1, y: 0 },
+        });
+        await draw();
+        assert(
+          pixelCount() > 0,
+          `centipede disappeared after ${click} size increases`,
+        );
+        creature.translate({ x: 10000, y: 0 });
+        await draw();
+        assert(
+          pixelCount() === 0,
+          `centipede parts froze after ${click} size increases`,
+        );
+        checks += 2;
+      }
+      checkGl("size changes");
+      creature.setDescriptor(centipede);
+      creature.reset({
+        position: { x: 450, y: 300 },
+        direction: { x: 1, y: 0 },
+      });
+      await draw();
+      const originalPixels = pixelCount();
+      const secondApp = new PIXI.Application();
+      await secondApp.init({
+        width: 800,
+        height: 600,
+        resolution: 0.25,
+        preference: "webgl",
+        autoStart: false,
+        backgroundAlpha: 0,
+      });
+      try {
+        checkGl("second renderer init", secondApp.renderer);
+        checkGl("before renderer switch");
+        secondApp.stage.addChild(creature);
+        secondApp.render();
+        await Promise.resolve();
+        secondApp.render();
+        assert(
+          pixelCount(secondApp.canvas) === originalPixels,
+          "moving a creature to another renderer lost its textures",
+        );
+        checkGl("second renderer", secondApp.renderer);
+        app.stage.addChild(creature);
+        await draw();
+        assert(
+          pixelCount() === originalPixels,
+          "returning to the first renderer lost textures",
+        );
+        checkGl("return to first renderer");
+        checks += 2;
+      } finally {
+        secondApp.destroy({
+          removeView: true,
+          releaseGlobalResources: false,
+        });
+      }
+      checkGl("second renderer destroyed");
+      creature.destroy();
+      app.render();
+      assert(pixelCount() === 0, "destroyed creature left pixels");
+      checkGl("creature destroyed");
+      output.textContent = `PASS ${bundle}: ${checks + 2} WebGL checks`;
+    } catch (error) {
+      output.textContent = `FAIL: ${error.stack}`;
+      throw error;
+    } finally {
+      if (app.renderer)
+        app.destroy({ removeView: true, releaseGlobalResources: false });
+    }
+  </script>
+</html>

@@ -15,7 +15,7 @@ const path = require("node:path");
 
 const { PIXI, pointsOf } = require("./pixi.js");
 const { Container, Mesh, ParticleContainer } = PIXI;
-const { Beefwife } = require("../../beefwife/src/beefwife.mjs");
+const { Beefwife, Descriptor } = require("../../beefwife/src/beefwife.mjs");
 const Model = require("../../beefwife/src/model.mjs");
 const source = JSON.parse(
   fs.readFileSync(
@@ -46,6 +46,100 @@ const particlesOf = (beefwife, label) =>
     await Promise.resolve();
   };
   let checks = 0;
+
+  const oversized = copy(source);
+  oversized.chain.skin.plates[1].scale = 100;
+  assert.throws(() => new Beefwife(oversized), /past the 2048 limit/);
+  const unchanged = new Beefwife(copy(source), { random: () => 0.5 });
+  await draw(unchanged);
+  const originalDescriptor = unchanged.descriptor;
+  const originalParts = [...partsOf(unchanged)];
+  assert.throws(
+    () => unchanged.setDescriptor(oversized),
+    /past the 2048 limit/,
+  );
+  assert.equal(unchanged.descriptor, originalDescriptor);
+  assert.deepEqual(partsOf(unchanged), originalParts);
+  await draw(unchanged);
+  assert.deepEqual(partsOf(unchanged), originalParts);
+  unchanged.destroy();
+  checks += 5;
+
+  const centipede = JSON.parse(
+    fs.readFileSync(
+      path.join(__dirname, "../../beefwife/samples/chevron-guy.json"),
+      "utf8",
+    ),
+  );
+  const growing = new Beefwife(copy(centipede), {
+    random: () => 0.5,
+    render: { pixelResolution: 0.5 },
+  });
+  let enlarged = centipede;
+  for (let click = 0; click < 6; click++) {
+    enlarged = Descriptor.scale(enlarged, 1.25);
+    growing.setDescriptor(enlarged);
+    await draw(growing);
+    const plates = particlesOf(growing, "plates");
+    assert.equal(
+      plates.length,
+      Model.compile(enlarged).skin.platesTailFirst.length,
+    );
+    assert.ok(plates.every((particle) => particle.scaleX <= 1 + 1e-9));
+    const beforeMove = plates.map(({ x }) => x);
+    growing.translate({ x: 100, y: 0 });
+    await draw(growing);
+    assert.ok(
+      plates.every(
+        (particle, index) =>
+          Math.abs(particle.x - beforeMove[index] - 100) < 1e-8,
+      ),
+    );
+    checks += 3;
+  }
+  const firstSource = particlesOf(growing, "plates")[0].texture.source;
+  const secondRenderer = { render() {} };
+  const oldBands = [...bandsOf(growing).values()];
+  growing.onRender(secondRenderer);
+  assert.ok(oldBands.every((band) => !band.visible && !band.destroyed));
+  await Promise.resolve();
+  assert.notEqual(
+    particlesOf(growing, "plates")[0].texture.source,
+    firstSource,
+  );
+  assert.equal(firstSource.destroyed, true);
+  assert.ok([...bandsOf(growing).values()].every((band) => band.visible));
+  checks += 2;
+  growing.destroy();
+  checks += 2;
+
+  const failing = new Beefwife(copy(source));
+  const bakeFailure = new Error("texture render failed");
+  const reported = [];
+  failing.on("error", (error) => reported.push(error));
+  let attempted = 0;
+  let failedTarget;
+  let failedContext;
+  const failingRenderer = {
+    render({ target, container }) {
+      attempted++;
+      failedTarget = target.source;
+      failedContext = container.context;
+      throw bakeFailure;
+    },
+  };
+  failing.onRender(failingRenderer);
+  await Promise.resolve();
+  assert.deepEqual(reported, [bakeFailure]);
+  assert.equal(failedTarget.destroyed, true);
+  assert.equal(failedContext.destroyed, true);
+  failing.onRender(failingRenderer);
+  await Promise.resolve();
+  assert.equal(attempted, 1, "failed atlas retried every frame");
+  await draw(failing);
+  assert.ok(particlesOf(failing, "plates").length > 0);
+  failing.destroy();
+  checks += 5;
 
   const legged = copy(source);
   legged.legs.pairs = 3;
@@ -303,6 +397,7 @@ const particlesOf = (beefwife, label) =>
   const oldGeometry = partsOf(beefwife)
     .filter((child) => child instanceof Mesh)
     .at(-1).geometry;
+  const oldBuffers = [...oldGeometry.buffers];
   assert.ok(oldGeometry);
   beefwife.setDescriptor(regeometried);
   // Geometry carries no destroyed flag; a destroyed one has dropped its buffers.
@@ -311,7 +406,8 @@ const particlesOf = (beefwife, label) =>
     null,
     "a replaced mesh left its geometry behind",
   );
-  checks += 2;
+  assert.ok(oldBuffers.every((buffer) => buffer.destroyed));
+  checks += 3;
 
   /* The last creature drawing a set of frames takes the texture with it, which
      is what keeps a lab session editing a descriptor from stacking up sheets. */
@@ -320,7 +416,12 @@ const particlesOf = (beefwife, label) =>
     bandsOf(beefwife).get("feet").particleChildren[0].texture.source;
   assert.equal(sheet.destroyed, false);
   const owned = [...partsOf(beefwife)];
+  const ownedBuffers = owned.flatMap(
+    (child) => child.geometry?.buffers || [],
+  );
   beefwife.destroy();
+  assert.ok(ownedBuffers.every((buffer) => buffer.destroyed));
+  checks++;
   assert.equal(beefwife.destroyed, true);
   assert.ok(owned.every((child) => child.destroyed));
   assert.equal(
@@ -396,6 +497,54 @@ const particlesOf = (beefwife, label) =>
   );
   checks += 2;
   hidden.destroy();
+
+  // At 37 chunks the ribbon leaves Pixi's batch; an empty limb would remain
+  // as a zero-count batch, which WebGL draws using the previous buffer size.
+  const legless = copy(source);
+  legless.legs.pairs = 0;
+  legless.definitions.paints.leg.stroke = { colour: "#123456", width: 1 };
+  const resizing = new Beefwife(legless, { random: () => 0.5 });
+  for (const trunkCount of [25, 26, 1, 70, 25]) {
+    const next = copy(legless);
+    next.chain.sections.trunk.chunks = trunkCount;
+    resizing.setDescriptor(next);
+    await draw(resizing);
+    const fills = partsOf(resizing).filter(
+      (child) => child instanceof Mesh,
+    );
+    assert.equal(
+      fills.length,
+      1,
+      "a legless creature retained a limb mesh",
+    );
+    assert.ok(fills[0].geometry.indices.length > 0);
+    assert.equal(fills[0].batched, trunkCount <= 25);
+    assert.equal(
+      partsOf(resizing).some((child) => child instanceof PIXI.Graphics),
+      false,
+      "a legless creature retained a limb stroke",
+    );
+    checks += 4;
+  }
+  const withLegs = copy(legless);
+  withLegs.legs.pairs = 1;
+  for (let edit = 0; edit < 2; edit++) {
+    resizing.setDescriptor(withLegs);
+    await draw(resizing);
+    const limbs = partsOf(resizing).filter(
+      (child) => child instanceof Mesh || child instanceof PIXI.Graphics,
+    );
+    assert.equal(limbs.length, 3);
+    assert.ok(limbs[0].batched, "limb batching was disabled");
+    assert.equal(particlesOf(resizing, "feet").length, 2);
+    resizing.setDescriptor(legless);
+    await draw(resizing);
+    assert.ok(limbs[0].destroyed, "the removed limb mesh survived");
+    assert.ok(limbs[1].destroyed, "the removed limb stroke survived");
+    assert.equal(particlesOf(resizing, "feet").length, 0);
+    checks += 6;
+  }
+  resizing.destroy();
 
   console.log(`beefwife graphics: ${checks} retained-scene checks passed`);
 })();

@@ -357,7 +357,34 @@ const scaleNode = (node, value, factor) => {
 const scale = (descriptor, factor) => {
   if (typeof factor !== "number" || !Number.isFinite(factor) || factor <= 0)
     fail("$", "scale factor must be a finite number greater than 0");
-  return read(scaleNode(schema, read(descriptor), factor));
+  const source = read(descriptor);
+  const scaled = scaleNode(schema, source, factor);
+  const worldPaints = new Set([
+    source.chain.skin.ribbon.paint,
+    source.legs.skin.limbPaint,
+  ]);
+  const placements = [
+    scaled.legs.skin.foot,
+    ...scaled.chain.skin.plates,
+    ...scaled.chain.skin.ornaments,
+  ];
+  const shapePaints = new Set(placements.map(({ paint }) => paint));
+  for (const id of shapePaints) {
+    const paint = source.definitions.paints[id];
+    if (!paint.stroke || paint.stroke.width === 0 || factor === 1) continue;
+    // Shape strokes already grow with placement scale; mesh strokes do not.
+    let shapeId = id;
+    if (worldPaints.has(id)) {
+      let suffix = 1;
+      do {
+        shapeId = `shape-paint-${suffix++}`;
+      } while (Object.hasOwn(scaled.definitions.paints, shapeId));
+      for (const placement of placements)
+        if (placement.paint === id) placement.paint = shapeId;
+    }
+    scaled.definitions.paints[shapeId] = paint;
+  }
+  return read(scaled);
 };
 
 const parse = (text) => {

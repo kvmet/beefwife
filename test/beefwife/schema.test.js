@@ -97,6 +97,24 @@ assert.equal(
   Descriptor.scale(strokedPaint, k).definitions.paints.ribbon.stroke.width,
   3 * k,
 );
+assert.equal(
+  scaled.definitions.paints.eye.stroke.width,
+  canonical.definitions.paints.eye.stroke.width,
+);
+const sharedPaint = copy(strokedPaint);
+sharedPaint.chain.skin.ornaments[0].paint = "ribbon";
+sharedPaint.legs.skin.foot.paint = "ribbon";
+const sharedScaled = Descriptor.scale(sharedPaint, k);
+const shapePaint = sharedScaled.chain.skin.ornaments[0].paint;
+assert.notEqual(shapePaint, "ribbon");
+assert.equal(sharedScaled.legs.skin.foot.paint, shapePaint);
+assert.equal(sharedScaled.definitions.paints[shapePaint].stroke.width, 3);
+assert.equal(sharedScaled.definitions.paints.ribbon.stroke.width, 3 * k);
+assert.equal(
+  Object.keys(Descriptor.scale(sharedScaled, k).definitions.paints).length,
+  Object.keys(sharedScaled.definitions.paints).length,
+);
+checks += 6;
 assert.deepEqual(Descriptor.scale(source, 1), canonical);
 for (const factor of [0, -1, NaN, Infinity, "2"])
   assert.throws(() => Descriptor.scale(source, factor), /scale factor/);

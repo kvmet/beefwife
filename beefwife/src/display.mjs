@@ -11,7 +11,7 @@ const discard = (parent, child) => {
   if (child.parent === parent) parent.removeChild(child);
   const geometry = child.geometry ?? null;
   child.destroy();
-  if (geometry) geometry.destroy();
+  if (geometry) geometry.destroy(true);
 };
 
 /* Draw scale is baked into the path rather than left to a transform, so the

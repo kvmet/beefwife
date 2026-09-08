@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>BeefwifeCanvas WebGL regression</title>
+  <style>
+    body {
+      background: #222;
+      color: white;
+      font: 14px monospace;
+    }
+    canvas {
+      width: 800px;
+      height: 600px;
+    }
+  </style>
+  <p>
+    Serve the repository root over HTTP. Add ?min to test the minified
+    bundle.
+  </p>
+  <pre id="results">Running</pre>
+  <canvas id="stage"></canvas>
+  <script src="../../beefwife/node_modules/pixi.js/dist/pixi.js"></script>
+  <script type="module">
+    const output = document.querySelector("#results");
+    const canvas = document.querySelector("#stage");
+    const bundle = new URLSearchParams(location.search).has("min")
+      ? "beefwife-canvas.min.js"
+      : "beefwife-canvas.js";
+    const assert = (condition, message) => {
+      if (!condition) throw new Error(message);
+    };
+    const events = [];
+    canvas.addEventListener("beefwifecanvaserror", (event) =>
+      events.push(event.detail),
+    );
+    const originalInit = PIXI.Application.prototype.init;
+    let application;
+    PIXI.Application.prototype.init = async function (options) {
+      await originalInit.call(this, options);
+      application = this;
+    };
+    let handle;
+    try {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = `../../beefwife-canvas/${bundle}`;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.append(script);
+      });
+      const source = await fetch(
+        "../../beefwife/samples/chevron-guy.json",
+      ).then((response) => response.json());
+      const options = {
+        descriptors: [source],
+        count: 1,
+        resolutionScale: 0.25,
+        pauseOffscreen: false,
+        pauseHidden: false,
+        targetMode: "manual",
+        random: () => 0.5,
+      };
+      const oversized = structuredClone(source);
+      oversized.chain.skin.plates[1].scale = 100;
+      let rejected = null;
+      try {
+        await BeefwifeCanvas.mount(canvas, {
+          ...options,
+          descriptors: [oversized],
+        });
+      } catch (error) {
+        rejected = error;
+      }
+      assert(
+        rejected?.message.includes("past the 2048 limit"),
+        "oversized mount did not reject",
+      );
+      assert(
+        events.length === 1 && events[0].error === rejected,
+        "mount error event missing",
+      );
+      const failedMount = events[0].controller;
+      handle = await BeefwifeCanvas.mount(canvas, options);
+      assert(
+        failedMount.state === "error",
+        "old handle followed the remount",
+      );
+      const actor = handle.getActors()[0];
+      rejected = null;
+      try {
+        actor.setDescriptor(oversized);
+      } catch (error) {
+        rejected = error;
+      }
+      assert(
+        rejected?.message.includes("past the 2048 limit"),
+        "oversized edit did not reject",
+      );
+      assert(
+        handle.state === "running",
+        "rejected edit stopped the valid creature",
+      );
+      let descriptor = source;
+      for (let click = 0; click < 6; click++) {
+        descriptor = BeefwifeCanvas.Descriptor.scale(descriptor, 1.25);
+        actor.setDescriptor(descriptor);
+        await new Promise(requestAnimationFrame);
+      }
+      assert(events.length === 1, "scaling emitted a render error");
+      handle.destroy();
+      const previous = handle;
+      handle = await BeefwifeCanvas.mount(canvas, {
+        ...options,
+        autoStart: false,
+      });
+      assert(
+        previous.state === "destroyed",
+        "destroyed handle followed a new mount",
+      );
+      const renderer = application.renderer;
+      const render = renderer.render;
+      const failure = new Error("injected texture render failure");
+      const failedEvent = new Promise((resolve) => {
+        canvas.addEventListener(
+          "beefwifecanvaserror",
+          (event) => resolve(event.detail),
+          { once: true },
+        );
+      });
+      renderer.render = function (options) {
+        if (options.target) {
+          this.render = render;
+          throw failure;
+        }
+        return render.call(this, options);
+      };
+      handle.start();
+      const detail = await Promise.race([
+        failedEvent,
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error("render error event timed out")),
+            5000,
+          ),
+        ),
+      ]);
+      assert(
+        detail.error === failure,
+        "render error changed during propagation",
+      );
+      assert(
+        handle.state === "error",
+        "render failure left the runtime running",
+      );
+      assert(
+        BeefwifeCanvas.get(canvas) === null,
+        "failed runtime retained its canvas",
+      );
+      const failedRender = handle;
+      handle = await BeefwifeCanvas.mount(canvas, options);
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+      assert(
+        handle.state === "running" && failedRender.state === "error",
+        "remount after render failure failed",
+      );
+      assert(
+        renderer.gl.getError() === renderer.gl.NO_ERROR,
+        "WebGL error after recovery",
+      );
+      output.textContent = `PASS ${bundle}: 12 WebGL lifecycle checks`;
+    } catch (error) {
+      output.textContent = `FAIL: ${error.stack}`;
+      throw error;
+    } finally {
+      handle?.destroy();
+      PIXI.Application.prototype.init = originalInit;
+    }
+  </script>
+</html>

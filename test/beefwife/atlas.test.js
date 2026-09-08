@@ -69,8 +69,7 @@ assert.ok(plan.frames.every((frame) => frame.context === undefined));
 checks += 1;
 
 /* One entry per distinct drawn shape, and every placement points at one. Two
-   plates on chunks that profile alike share a frame; a shape drawn at two
-   sizes does not. */
+   plates with the same shape and paint share their largest required frame. */
 const keys = new Set(sheet.entries.map((entry) => entry.key));
 assert.equal(keys.size, sheet.entries.length);
 assert.equal(keys.size, plan.frames.length);
@@ -91,11 +90,8 @@ plates.forEach((plate, index) => {
   if (plan.plates[index] === null) return;
   const load = 1 + Math.max(0, model.skin.loadScale);
   assert.ok(
-    Math.abs(
-      plateScaleOf(plan.plates[index]) /
-        (plate.scale * model.chunks[plate.chunk].plateScale * load) -
-        1,
-    ) < 1e-9,
+    plateScaleOf(plan.plates[index]) >=
+      plate.scale * model.chunks[plate.chunk].plateScale * load - 1e-9,
     "a plate frame was not baked at the load it reaches",
   );
 });
@@ -298,6 +294,42 @@ assert.throws(
   /past the 2048 limit/,
 );
 checks += 1;
+
+const Descriptor = require("../../beefwife/src/descriptor.mjs");
+const centipede = JSON.parse(
+  fs.readFileSync(
+    path.join(__dirname, "../../beefwife/samples/chevron-guy.json"),
+    "utf8",
+  ),
+);
+const basePlan = planAtlas(Model.compile(centipede), 0.5);
+const baseSheet = packAtlas(basePlan);
+assert.equal(
+  basePlan.frames.length,
+  4,
+  "profile sizes duplicated shape frames",
+);
+let bigger = centipede;
+for (let click = 0; click < 6; click++)
+  bigger = Descriptor.scale(bigger, 1.25);
+const biggerPlan = planAtlas(Model.compile(bigger), 0.5);
+const biggerSheet = packAtlas(biggerPlan);
+for (const entry of baseSheet.entries) {
+  const grown = biggerSheet.entries.find(
+    (other) => other.key === entry.key,
+  );
+  assert.ok(
+    Math.abs(
+      grown.context.bounds.width / entry.context.bounds.width - 1.25 ** 6,
+    ) < 1e-8,
+    "outline grew faster than the shape",
+  );
+}
+assert.ok(biggerSheet.width <= ATLAS_TEXEL_LIMIT);
+assert.ok(biggerSheet.height <= ATLAS_TEXEL_LIMIT);
+for (const entry of [...baseSheet.entries, ...biggerSheet.entries])
+  entry.context.destroy();
+checks += 4;
 
 assert.ok(PIXI.ParticleContainer, "the renderer has no particle container");
 checks += 1;

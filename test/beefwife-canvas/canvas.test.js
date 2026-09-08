@@ -311,8 +311,13 @@ const namedDescriptor = (name) => parseInContext(descriptorJson(name));
     descriptors: [namedDescriptor("again")],
   });
   assert.equal(remounted.getActors()[0].name, "again");
+  assert.equal(runtime.state, "destroyed");
+  remounted.start();
+  intersectionCallback([{ isIntersecting: false }]);
+  assert.equal(remounted.pauseReason, "offscreen");
+  assert.equal(runtime.pauseReason, null);
   remounted.destroy();
-  checks++;
+  checks += 4;
 
   const duplicateCanvas = new Canvas();
   let errored = 0;
@@ -340,6 +345,25 @@ const namedDescriptor = (name) => parseInContext(descriptorJson(name));
   assert.equal(recovered.getActors()[0].name, "ok");
   recovered.destroy();
   checks += 7;
+
+  const renderCanvas = new Canvas();
+  const renderEvents = [];
+  renderCanvas.addEventListener("beefwifecanvaserror", (event) =>
+    renderEvents.push(event.detail),
+  );
+  const renderFailed = await context.BeefwifeCanvas.mount(renderCanvas, {
+    descriptors: [namedDescriptor("render-failure")],
+  });
+  const renderHost = hosts.at(-1);
+  const renderError = new Error("texture render failed");
+  renderHost.options.onError(renderError);
+  assert.equal(renderFailed.state, "error");
+  assert.equal(renderHost.host.destroyed, true);
+  assert.equal(renderEvents.length, 1);
+  assert.equal(renderEvents[0].error, renderError);
+  assert.equal(renderEvents[0].controller, renderFailed);
+  assert.equal(context.BeefwifeCanvas.get(renderCanvas), null);
+  checks += 6;
 
   const invalidCanvas = new Canvas({
     "data-beefwife-canvas": "",

@@ -23,20 +23,14 @@ const PAD_STROKES = 1;
 const MIN_PAD_TEXELS = 1;
 const ATLAS_TEXEL_LIMIT = 2048;
 
-/* Every creature compiles its own model, so shapes and paints sharing a value
-   are separate objects. Frames are named by what they draw, which is what
-   makes one bake serve a whole population. */
-const frameKeyFor = (shape, paint, scale) =>
-  `${shape.path}|${paint.fill}|${paint.stroke}|${paint.strokeWidth}|${scale}`;
+// Matching shape and paint values share a frame at their largest draw scale.
+const frameKeyFor = (shape, paint) =>
+  `${shape.path}|${paint.fill}|${paint.stroke}|${paint.strokeWidth}`;
 
 const baked = new WeakMap();
+const prepared = new WeakMap();
 
-/**
- * Names the frames a model needs, and nothing else. Measuring a frame means
- * building its context, which is most of what an atlas costs, so a plan holds
- * none: a population plans once per creature but bakes once in total, and the
- * creatures that find the bake already done never pay for the measurement.
- */
+// Planning uses descriptor values; measuring and baking need Pixi contexts.
 const planAtlas = (model, renderResolution) => {
   const resolution = renderResolution * BAKE_SUPERSAMPLE;
   const specs = new Map();
@@ -45,8 +39,10 @@ const planAtlas = (model, renderResolution) => {
   const claim = (shape, paint, scale) => {
     // A plate profiled down to nothing draws nothing, and needs no frame.
     if (!(scale > 0)) return null;
-    const key = frameKeyFor(shape, paint, scale);
-    if (!specs.has(key)) specs.set(key, { key, shape, paint, scale });
+    const key = frameKeyFor(shape, paint);
+    const frame = specs.get(key);
+    if (frame) frame.scale = Math.max(frame.scale, scale);
+    else specs.set(key, { key, shape, paint, scale });
     return key;
   };
 
@@ -72,7 +68,10 @@ const planAtlas = (model, renderResolution) => {
   return {
     /* Sorted, so two models that name the same frames in a different order
        still share one bake. */
-    key: `${resolution}\n${[...specs.keys()].sort().join("\n")}`,
+    key: `${resolution}\n${[...specs.values()]
+      .map(({ key, scale }) => `${key}|${scale}`)
+      .sort()
+      .join("\n")}`,
     resolution,
     frames: [...specs.values()],
     feet,
@@ -141,6 +140,20 @@ const packAtlas = (plan) => {
   return { resolution, width, height, entries };
 };
 
+/* Validate before an instance adopts the model. One measurement per shared
+   model and resolution keeps population creation independent of cast size. */
+const prepareAtlas = (model, renderResolution) => {
+  const held = prepared.get(model);
+  if (held?.renderResolution === renderResolution) return held.plan;
+  if (!Number.isFinite(renderResolution) || renderResolution <= 0)
+    throw new RangeError("pixelResolution must be finite and positive");
+  const plan = planAtlas(model, renderResolution);
+  const sheet = packAtlas(plan);
+  for (const entry of sheet.entries) entry.context.destroy();
+  prepared.set(model, { renderResolution, plan });
+  return plan;
+};
+
 const bakeAtlas = (plan, renderer) => {
   const sheet = packAtlas(plan);
   const texel = 1 / sheet.resolution;
@@ -152,39 +165,51 @@ const bakeAtlas = (plan, renderer) => {
     scaleMode: "nearest",
   });
   const frames = new Map();
-  let clear = true;
-  for (const entry of sheet.entries) {
-    const graphics = new PIXI.Graphics(entry.context);
-    renderer.render({
-      container: graphics,
-      target,
-      clear,
-      transform: new PIXI.Matrix(
-        1,
-        0,
-        0,
-        1,
-        (entry.x + entry.originX) * texel,
-        (entry.y + entry.originY) * texel,
-      ),
-    });
-    clear = false;
-    graphics.destroy();
-    entry.context.destroy();
-    frames.set(entry.key, {
-      texture: new PIXI.Texture({
-        source: target.source,
-        frame: new PIXI.Rectangle(
-          entry.x * texel,
-          entry.y * texel,
-          entry.width * texel,
-          entry.height * texel,
-        ),
-      }),
-      scale: entry.scale,
-      anchorX: entry.originX / entry.width,
-      anchorY: entry.originY / entry.height,
-    });
+  let complete = false;
+  try {
+    let clear = true;
+    for (const entry of sheet.entries) {
+      const graphics = new PIXI.Graphics(entry.context);
+      try {
+        renderer.render({
+          container: graphics,
+          target,
+          clear,
+          transform: new PIXI.Matrix(
+            1,
+            0,
+            0,
+            1,
+            (entry.x + entry.originX) * texel,
+            (entry.y + entry.originY) * texel,
+          ),
+        });
+      } finally {
+        graphics.destroy();
+      }
+      clear = false;
+      frames.set(entry.key, {
+        texture: new PIXI.Texture({
+          source: target.source,
+          frame: new PIXI.Rectangle(
+            entry.x * texel,
+            entry.y * texel,
+            entry.width * texel,
+            entry.height * texel,
+          ),
+        }),
+        scale: entry.scale,
+        anchorX: entry.originX / entry.width,
+        anchorY: entry.originY / entry.height,
+      });
+    }
+    complete = true;
+  } finally {
+    for (const entry of sheet.entries) entry.context.destroy();
+    if (!complete) {
+      for (const frame of frames.values()) frame.texture.destroy();
+      target.destroy(true);
+    }
   }
   return { key: plan.key, renderer, target, frames };
 };
@@ -227,6 +252,7 @@ const releaseAtlas = (atlas) => {
 
 export {
   planAtlas,
+  prepareAtlas,
   packAtlas,
   bakeAtlas,
   acquireAtlas,

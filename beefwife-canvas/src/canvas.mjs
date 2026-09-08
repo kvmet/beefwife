@@ -75,6 +75,7 @@ class Controller {
         maxKneeOffset: this.options.maxKneeOffset,
         maxPixelRatio: this.options.maxPixelRatio,
         physicsFps: this.options.simulationFps,
+        onError: (error) => this._fail(error),
         random: this.options.random,
         renderFps: this.options.drawFps,
         resolutionScale: this.options.resolutionScale,
@@ -103,14 +104,18 @@ class Controller {
       return this;
     } catch (error) {
       if (this.destroyed || error.name === "AbortError") return this;
-      this.destroy("error", () =>
-        dispatch(this.canvas, "beefwifecanvaserror", {
-          controller: this.facade,
-          error,
-        }),
-      );
+      this._fail(error);
       throw error;
     }
+  }
+
+  _fail(error) {
+    this.destroy("error", () =>
+      dispatch(this.canvas, "beefwifecanvaserror", {
+        controller: this.facade,
+        error,
+      }),
+    );
   }
 
   start() {
@@ -342,6 +347,8 @@ class Controller {
   }
 
   _state(state, pauseReason = null) {
+    this.state = state;
+    this.pauseReason = pauseReason;
     this.canvas.dataset.beefwifeState = state;
     if (pauseReason) this.canvas.dataset.beefwifePauseReason = pauseReason;
     else delete this.canvas.dataset.beefwifePauseReason;
@@ -354,10 +361,10 @@ const facadeOf = (controller) => {
   const facade = Object.freeze({
     canvas: controller.canvas,
     get state() {
-      return controller.canvas.dataset.beefwifeState;
+      return controller.state;
     },
     get pauseReason() {
-      return controller.canvas.dataset.beefwifePauseReason || null;
+      return controller.pauseReason;
     },
     get ready() {
       return controller.ready;

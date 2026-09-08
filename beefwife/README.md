@@ -210,11 +210,19 @@ JSON value with fixed fields and definition keys in canonical order. Unknown
 keys, omitted fields, non-plain objects, invalid references, and values outside
 their declared bounds are errors.
 
+With Pixi loaded, construction and `setDescriptor` also check that the shapes
+fit a texture sheet at the requested pixel resolution. A rejected edit leaves
+the current creature intact. Texture rendering failures emit `error` on the
+Beefwife; without a listener, the error is thrown. A failed bake is retried
+only after an edit, a resolution change, or a renderer change.
+
 Descriptor px are world pixels, and `scale(descriptor, factor)` is the one way
 to resize a creature. It returns a new descriptor with every
 length-dimensioned field transformed (px multiply, radians-per-px divide), so
 the pose trace scales by the factor with timing and feel unchanged. A product
-outside its field's bounds is an error, not a clamp.
+outside its field's bounds is an error, not a clamp. Shape outlines grow with
+the placement scale. Ribbon and limb outline widths grow directly; a paint
+shared with a shape receives a separate shape entry when scaled.
 
 `bounds(path)` reports what the schema enforces for one field, so an editor can
 read a range from the schema that checks it instead of keeping a second copy.
@@ -255,7 +263,8 @@ Every reference stays inside one descriptor:
 - A shape is one SVG path in chunk-local pixels. Positive x points toward the
   head and positive y points outward.
 - A paint is a nullable fill colour and a nullable `{ colour, width }` stroke.
-  At least one must be visible.
+  At least one must be visible. Stroke width uses local shape units for feet,
+  plates, and ornaments, and world pixels for ribbons and limbs.
 
 Each chain section names one complete material. Sharing a material id links the
 sections; giving the tail different physics means defining another material and

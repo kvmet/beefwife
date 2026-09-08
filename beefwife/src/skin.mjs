@@ -100,6 +100,11 @@ class Skin {
     this.ornaments.forEach((ornament, index) => {
       ornament.spec = model.skin.ornaments[index];
       ornament.coefficientDt = null;
+      const root = rootFor(ornament.spec, body.chain, ornament.root);
+      const cosine = Math.cos(ornament.angle);
+      const sine = Math.sin(ornament.angle);
+      ornament.directionX = root.dx * cosine - root.dy * sine;
+      ornament.directionY = root.dy * cosine + root.dx * sine;
     });
   }
 

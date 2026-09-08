@@ -318,4 +318,25 @@ for (const [section, key, value] of [
   checks++;
 }
 
-console.log(`beefwife skin: ${checks} renderer-neutral state checks passed`);
+const paused = runtimeFor(descriptor);
+const editedOrnaments = JSON.parse(JSON.stringify(descriptor));
+editedOrnaments.chain.skin.ornaments[0].offset.forward += 100;
+editedOrnaments.chain.skin.ornaments[0].angleDegrees += 45;
+const editedModel = Model.compile(editedOrnaments);
+const settledEdit = new Skin(editedModel, paused.body, paused.legs);
+paused.skin.reconfigure(editedModel, paused.body, paused.legs);
+assert.deepEqual(
+  paused.skin.writeRenderState().ornaments,
+  settledEdit.writeRenderState().ornaments,
+);
+paused.skin.update(1 / 60);
+settledEdit.update(1 / 60);
+assert.deepEqual(
+  paused.skin.writeRenderState().ornaments,
+  settledEdit.writeRenderState().ornaments,
+);
+checks += 2;
+
+console.log(
+  `beefwife skin: ${checks} renderer-neutral state checks passed`,
+);

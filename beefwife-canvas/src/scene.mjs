@@ -4,6 +4,7 @@ import { PIXI, available } from "../../beefwife/src/pixi.mjs";
 
 class BeefwifeCanvasScene {
   constructor(options = {}) {
+    this.onError = options.onError || null;
     this.ownsCanvas = !options.canvas;
     this.canvas = options.canvas || null;
     this.reusableApplication = options.application || null;
@@ -135,11 +136,16 @@ class BeefwifeCanvasScene {
   syncDisplays(displays) {
     if (this._displaysUnchanged(displays)) return;
     const currentSet = new Set(displays);
+    const previousSet = new Set(this.displayed);
     for (const beefwife of this.displayed) {
       if (!currentSet.has(beefwife) && !beefwife.destroyed) beefwife.destroy();
     }
-    for (let index = 0; index < displays.length; index++)
-      this.world.addChildAt(displays[index], index);
+    for (let index = 0; index < displays.length; index++) {
+      const display = displays[index];
+      if (this.onError && !previousSet.has(display))
+        display.on("error", this.onError);
+      this.world.addChildAt(display, index);
+    }
     this.displayed = displays.slice();
   }
 

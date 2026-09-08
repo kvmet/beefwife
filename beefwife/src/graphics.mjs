@@ -14,7 +14,7 @@ import {
   writeLimb,
 } from "./geometry.mjs";
 import { discard, meshFor } from "./display.mjs";
-import { planAtlas, acquireAtlas, releaseAtlas } from "./atlas.mjs";
+import { prepareAtlas, acquireAtlas, releaseAtlas } from "./atlas.mjs";
 
 // In draw order, and each band has to stay contiguous to hold that order.
 const BAND_LABELS = ["feet", "ornaments-under", "plates", "ornaments-over"];
@@ -31,6 +31,7 @@ const PARTICLE_PROPERTIES = {
 class HeadlessGraphics {
   static available = false;
   static prepare() {}
+  static prepareAtlas() {}
 }
 
 // The widest a Beefwife world may be, so a knee cannot be pushed outside it.
@@ -76,7 +77,13 @@ class Graphics {
     }
   }
 
+  static prepareAtlas(model, options) {
+    return prepareAtlas(model, options?.pixelResolution ?? 1);
+  }
+
   constructor(host, state, options = null) {
+    this.host = host;
+    this.failedBake = null;
     /* The parts hold a container of their own. Settling their draw order
        re-adds every one of them, which moves each to the end of its parent's
        children, so anything the host added to the Beefwife would sink
@@ -91,7 +98,8 @@ class Graphics {
     this.plateParticles = [];
     this.shapeContainers = [];
     this.atlas = null;
-    this.atlasResolution = 0;
+    this.atlasRenderer = null;
+    this.bakeRenderer = null;
     // Dropped whenever the model moves, which is what makes the frames follow.
     this.plan = null;
     this.legCount = 0;
@@ -117,6 +125,9 @@ class Graphics {
      follow the plan, which every compile drops, because shapes and paints are
      new objects each time and the frames are named by what they draw. */
   adopt(state) {
+    this.nextPlan = Graphics.prepareAtlas(state.model, this.options);
+    this.nextResolution = this.options.pixelResolution ?? 1;
+    this.failedBake = null;
     this.model = state.model;
     this.legCount = state.legs.length / state.layout.legStride;
     /* The plan goes, and with it the particles it named: they hold frames
@@ -139,8 +150,10 @@ class Graphics {
 
   _syncLimbParts(legCount) {
     const paint = this.model.legs.skin.limbPaint;
-    const wantFill = paint.fill !== null;
-    const wantStroke = paint.stroke !== null && paint.strokeWidth > 0;
+    // Pixi treats a zero-count batch as a draw of the entire retained buffer.
+    const wantFill = legCount > 0 && paint.fill !== null;
+    const wantStroke =
+      legCount > 0 && paint.stroke !== null && paint.strokeWidth > 0;
     const resized = legCount !== this.limbCount;
     let changed = false;
     if (resized) {
@@ -267,28 +280,49 @@ class Graphics {
      frames and the creature draws as its meshes alone, for one frame. The
      bake itself waits for the pass to end, so this only books it. */
   _syncAtlas(renderer) {
+    const resolution = this.options.pixelResolution ?? 1;
+    if (resolution !== this.nextResolution) {
+      this.nextPlan = Graphics.prepareAtlas(this.model, this.options);
+      this.nextResolution = resolution;
+    }
+    if (!renderer) return;
+    if (this.plan === this.nextPlan && this.atlasRenderer === renderer)
+      return;
     if (
-      this.plan &&
-      this.atlasResolution === (this.options.pixelResolution ?? 1)
+      this.failedBake?.plan === this.nextPlan &&
+      this.failedBake.renderer === renderer
     )
       return;
-    if (!renderer || this.baking) return;
+    // Particle static buffers and render textures belong to their renderer.
+    if (this.atlasRenderer && this.atlasRenderer !== renderer)
+      for (const container of this.shapeContainers)
+        if (container) container.visible = false;
+    this.bakeRenderer = renderer;
+    if (this.baking) return;
     this.baking = true;
     afterPass(() => {
       this.baking = false;
-      if (!this.parent.destroyed) this._bake(renderer);
+      if (this.parent.destroyed) return;
+      try {
+        this._bake(this.bakeRenderer);
+      } catch (error) {
+        this.failedBake = {
+          plan: this.nextPlan,
+          renderer: this.bakeRenderer,
+        };
+        if (!this.host.emit("error", error)) throw error;
+      }
     });
   }
 
   _bake(renderer) {
-    const resolution = this.options.pixelResolution ?? 1;
-    const plan = planAtlas(this.model, resolution);
+    const plan = this.nextPlan;
     // Acquired before the old one goes, so a shared atlas is never rebuilt.
     const atlas = acquireAtlas(plan, renderer);
     const spent = this.atlas;
     const replaced = this.shapeContainers;
     this.atlas = atlas;
-    this.atlasResolution = resolution;
+    this.atlasRenderer = renderer;
     this.plan = plan;
     this._buildParticles(plan);
     const pixelResolution = this._snapResolution();
