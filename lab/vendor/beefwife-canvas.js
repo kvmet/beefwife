@@ -582,7 +582,29 @@ pixi_js = __toESM(pixi_js, 1);
 	};
 	var scale = (descriptor, factor) => {
 		if (typeof factor !== "number" || !Number.isFinite(factor) || factor <= 0) fail("$", "scale factor must be a finite number greater than 0");
-		return read(scaleNode(schema, read(descriptor), factor));
+		const source = read(descriptor);
+		const scaled = scaleNode(schema, source, factor);
+		const worldPaints = /* @__PURE__ */ new Set([source.chain.skin.ribbon.paint, source.legs.skin.limbPaint]);
+		const placements = [
+			scaled.legs.skin.foot,
+			...scaled.chain.skin.plates,
+			...scaled.chain.skin.ornaments
+		];
+		const shapePaints = new Set(placements.map(({ paint }) => paint));
+		for (const id of shapePaints) {
+			const paint = source.definitions.paints[id];
+			if (!paint.stroke || paint.stroke.width === 0 || factor === 1) continue;
+			let shapeId = id;
+			if (worldPaints.has(id)) {
+				let suffix = 1;
+				do
+					shapeId = `shape-paint-${suffix++}`;
+				while (Object.hasOwn(scaled.definitions.paints, shapeId));
+				for (const placement of placements) if (placement.paint === id) placement.paint = shapeId;
+			}
+			scaled.definitions.paints[shapeId] = paint;
+		}
+		return read(scaled);
 	};
 	var parse = (text) => {
 		if (typeof text !== "string") fail("$", "JSON input must be a string");
@@ -1781,6 +1803,11 @@ pixi_js = __toESM(pixi_js, 1);
 			this.ornaments.forEach((ornament, index) => {
 				ornament.spec = model.skin.ornaments[index];
 				ornament.coefficientDt = null;
+				const root = rootFor(ornament.spec, body.chain, ornament.root);
+				const cosine = Math.cos(ornament.angle);
+				const sine = Math.sin(ornament.angle);
+				ornament.directionX = root.dx * cosine - root.dy * sine;
+				ornament.directionY = root.dy * cosine + root.dx * sine;
 			});
 		}
 		_buildOrnaments() {
@@ -2068,7 +2095,7 @@ pixi_js = __toESM(pixi_js, 1);
 		if (child.parent === parent) parent.removeChild(child);
 		const geometry = child.geometry ?? null;
 		child.destroy();
-		if (geometry) geometry.destroy();
+		if (geometry) geometry.destroy(true);
 	};
 	var contextFor = (shape, paint, scale) => {
 		const path = new PIXI.GraphicsPath(shape.path).transform(new PIXI.Matrix(scale, 0, 0, scale, 0, 0));
@@ -2114,21 +2141,18 @@ pixi_js = __toESM(pixi_js, 1);
 	var PAD_STROKES = 1;
 	var MIN_PAD_TEXELS = 1;
 	var ATLAS_TEXEL_LIMIT = 2048;
-	var frameKeyFor = (shape, paint, scale) => `${shape.path}|${paint.fill}|${paint.stroke}|${paint.strokeWidth}|${scale}`;
+	var frameKeyFor = (shape, paint) => `${shape.path}|${paint.fill}|${paint.stroke}|${paint.strokeWidth}`;
 	var baked = /* @__PURE__ */ new WeakMap();
-	/**
-	* Names the frames a model needs, and nothing else. Measuring a frame means
-	* building its context, which is most of what an atlas costs, so a plan holds
-	* none: a population plans once per creature but bakes once in total, and the
-	* creatures that find the bake already done never pay for the measurement.
-	*/
+	var prepared = /* @__PURE__ */ new WeakMap();
 	var planAtlas = (model, renderResolution) => {
 		const resolution = renderResolution * 4;
 		const specs = /* @__PURE__ */ new Map();
 		const claim = (shape, paint, scale) => {
 			if (!(scale > 0)) return null;
-			const key = frameKeyFor(shape, paint, scale);
-			if (!specs.has(key)) specs.set(key, {
+			const key = frameKeyFor(shape, paint);
+			const frame = specs.get(key);
+			if (frame) frame.scale = Math.max(frame.scale, scale);
+			else specs.set(key, {
 				key,
 				shape,
 				paint,
@@ -2142,7 +2166,7 @@ pixi_js = __toESM(pixi_js, 1);
 		const plates = model.skin.platesTailFirst.map((plate) => claim(plate.shape, plate.paint, plate.scale * model.chunks[plate.chunk].plateScale * load));
 		const ornaments = model.skin.ornaments.map((ornament) => claim(ornament.shape, ornament.paint, ornament.scale));
 		return {
-			key: `${resolution}\n${[...specs.keys()].sort().join("\n")}`,
+			key: `${resolution}\n${[...specs.values()].map(({ key, scale }) => `${key}|${scale}`).sort().join("\n")}`,
 			resolution,
 			frames: [...specs.values()],
 			feet,
@@ -2200,6 +2224,19 @@ pixi_js = __toESM(pixi_js, 1);
 			entries
 		};
 	};
+	var prepareAtlas = (model, renderResolution) => {
+		const held = prepared.get(model);
+		if (held?.renderResolution === renderResolution) return held.plan;
+		if (!Number.isFinite(renderResolution) || renderResolution <= 0) throw new RangeError("pixelResolution must be finite and positive");
+		const plan = planAtlas(model, renderResolution);
+		const sheet = packAtlas(plan);
+		for (const entry of sheet.entries) entry.context.destroy();
+		prepared.set(model, {
+			renderResolution,
+			plan
+		});
+		return plan;
+	};
 	var bakeAtlas = (plan, renderer) => {
 		const sheet = packAtlas(plan);
 		const texel = 1 / sheet.resolution;
@@ -2211,27 +2248,39 @@ pixi_js = __toESM(pixi_js, 1);
 			scaleMode: "nearest"
 		});
 		const frames = /* @__PURE__ */ new Map();
-		let clear = true;
-		for (const entry of sheet.entries) {
-			const graphics = new PIXI.Graphics(entry.context);
-			renderer.render({
-				container: graphics,
-				target,
-				clear,
-				transform: new PIXI.Matrix(1, 0, 0, 1, (entry.x + entry.originX) * texel, (entry.y + entry.originY) * texel)
-			});
-			clear = false;
-			graphics.destroy();
-			entry.context.destroy();
-			frames.set(entry.key, {
-				texture: new PIXI.Texture({
-					source: target.source,
-					frame: new PIXI.Rectangle(entry.x * texel, entry.y * texel, entry.width * texel, entry.height * texel)
-				}),
-				scale: entry.scale,
-				anchorX: entry.originX / entry.width,
-				anchorY: entry.originY / entry.height
-			});
+		let complete = false;
+		try {
+			let clear = true;
+			for (const entry of sheet.entries) {
+				const graphics = new PIXI.Graphics(entry.context);
+				try {
+					renderer.render({
+						container: graphics,
+						target,
+						clear,
+						transform: new PIXI.Matrix(1, 0, 0, 1, (entry.x + entry.originX) * texel, (entry.y + entry.originY) * texel)
+					});
+				} finally {
+					graphics.destroy();
+				}
+				clear = false;
+				frames.set(entry.key, {
+					texture: new PIXI.Texture({
+						source: target.source,
+						frame: new PIXI.Rectangle(entry.x * texel, entry.y * texel, entry.width * texel, entry.height * texel)
+					}),
+					scale: entry.scale,
+					anchorX: entry.originX / entry.width,
+					anchorY: entry.originY / entry.height
+				});
+			}
+			complete = true;
+		} finally {
+			for (const entry of sheet.entries) entry.context.destroy();
+			if (!complete) {
+				for (const frame of frames.values()) frame.texture.destroy();
+				target.destroy(true);
+			}
 		}
 		return {
 			key: plan.key,
@@ -2291,6 +2340,7 @@ pixi_js = __toESM(pixi_js, 1);
 	var HeadlessGraphics = class {
 		static available = false;
 		static prepare() {}
+		static prepareAtlas() {}
 	};
 	var MAX_KNEE_OFFSET = 2e9;
 	/**
@@ -2305,7 +2355,7 @@ pixi_js = __toESM(pixi_js, 1);
 	* work booked here sees a renderer at rest.
 	*/
 	var afterPass = (work) => queueMicrotask(work);
-	var Graphics = class {
+	var Graphics = class Graphics {
 		static available = true;
 		static prepare(model) {
 			for (const [id, shape] of Object.entries(model.descriptor.definitions.shapes)) try {
@@ -2322,7 +2372,12 @@ pixi_js = __toESM(pixi_js, 1);
 				}
 			}
 		}
+		static prepareAtlas(model, options) {
+			return prepareAtlas(model, options?.pixelResolution ?? 1);
+		}
 		constructor(host, state, options = null) {
+			this.host = host;
+			this.failedBake = null;
 			this.parent = host.addChild(new PIXI.Container());
 			this.model = state.model;
 			this.options = options || {};
@@ -2331,7 +2386,8 @@ pixi_js = __toESM(pixi_js, 1);
 			this.plateParticles = [];
 			this.shapeContainers = [];
 			this.atlas = null;
-			this.atlasResolution = 0;
+			this.atlasRenderer = null;
+			this.bakeRenderer = null;
 			this.plan = null;
 			this.legCount = 0;
 			this.limbPositions = null;
@@ -2347,6 +2403,9 @@ pixi_js = __toESM(pixi_js, 1);
 			this.adopt(state);
 		}
 		adopt(state) {
+			this.nextPlan = Graphics.prepareAtlas(state.model, this.options);
+			this.nextResolution = this.options.pixelResolution ?? 1;
+			this.failedBake = null;
 			this.model = state.model;
 			this.legCount = state.legs.length / state.layout.legStride;
 			this.plan = null;
@@ -2363,8 +2422,8 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		_syncLimbParts(legCount) {
 			const paint = this.model.legs.skin.limbPaint;
-			const wantFill = paint.fill !== null;
-			const wantStroke = paint.stroke !== null && paint.strokeWidth > 0;
+			const wantFill = legCount > 0 && paint.fill !== null;
+			const wantStroke = legCount > 0 && paint.stroke !== null && paint.strokeWidth > 0;
 			const resized = legCount !== this.limbCount;
 			let changed = false;
 			if (resized) {
@@ -2466,22 +2525,41 @@ pixi_js = __toESM(pixi_js, 1);
 			this._arrange();
 		}
 		_syncAtlas(renderer) {
-			if (this.plan && this.atlasResolution === (this.options.pixelResolution ?? 1)) return;
-			if (!renderer || this.baking) return;
+			const resolution = this.options.pixelResolution ?? 1;
+			if (resolution !== this.nextResolution) {
+				this.nextPlan = Graphics.prepareAtlas(this.model, this.options);
+				this.nextResolution = resolution;
+			}
+			if (!renderer) return;
+			if (this.plan === this.nextPlan && this.atlasRenderer === renderer) return;
+			if (this.failedBake?.plan === this.nextPlan && this.failedBake.renderer === renderer) return;
+			if (this.atlasRenderer && this.atlasRenderer !== renderer) {
+				for (const container of this.shapeContainers) if (container) container.visible = false;
+			}
+			this.bakeRenderer = renderer;
+			if (this.baking) return;
 			this.baking = true;
 			afterPass(() => {
 				this.baking = false;
-				if (!this.parent.destroyed) this._bake(renderer);
+				if (this.parent.destroyed) return;
+				try {
+					this._bake(this.bakeRenderer);
+				} catch (error) {
+					this.failedBake = {
+						plan: this.nextPlan,
+						renderer: this.bakeRenderer
+					};
+					if (!this.host.emit("error", error)) throw error;
+				}
 			});
 		}
 		_bake(renderer) {
-			const resolution = this.options.pixelResolution ?? 1;
-			const plan = planAtlas(this.model, resolution);
+			const plan = this.nextPlan;
 			const atlas = acquireAtlas(plan, renderer);
 			const spent = this.atlas;
 			const replaced = this.shapeContainers;
 			this.atlas = atlas;
-			this.atlasResolution = resolution;
+			this.atlasRenderer = renderer;
 			this.plan = plan;
 			this._buildParticles(plan);
 			const pixelResolution = this._snapResolution();
@@ -2847,6 +2925,7 @@ pixi_js = __toESM(pixi_js, 1);
 			this.#renderOptions = renderOptionsOf(options.render);
 			this.#requestedDirection = { ...facing };
 			this.#model = modelFor(descriptor);
+			graphics_default.prepareAtlas(this.#model, this.#renderOptions);
 			this.#gait = new Gait(this.#model.gait, phase);
 			const breathingPhase = this.#model.breathing.strain ? TAU * this.#sampleRandom() : this.#gait.phase;
 			this.#body = new Body(this.#model, this.#gait, breathingPhase);
@@ -2889,6 +2968,7 @@ pixi_js = __toESM(pixi_js, 1);
 		setDescriptor(descriptor) {
 			this.#live("setDescriptor");
 			const nextModel = modelFor(descriptor);
+			graphics_default.prepareAtlas(nextModel, this.#renderOptions);
 			const nextGait = new Gait(nextModel.gait, this.#gait.phase);
 			const breathingPhase = !this.#model.breathing.strain && nextModel.breathing.strain ? TAU * this.#sampleRandom() : this.#body.breathingPhase;
 			const compatible = sameTopology(this.#model, nextModel);
@@ -4382,6 +4462,7 @@ pixi_js = __toESM(pixi_js, 1);
 /** Pixi application, stage, canvas sizing, and display ownership. */
 	var BeefwifeCanvasScene = class {
 		constructor(options = {}) {
+			this.onError = options.onError || null;
 			this.ownsCanvas = !options.canvas;
 			this.canvas = options.canvas || null;
 			this.reusableApplication = options.application || null;
@@ -4492,8 +4573,13 @@ pixi_js = __toESM(pixi_js, 1);
 		syncDisplays(displays) {
 			if (this._displaysUnchanged(displays)) return;
 			const currentSet = new Set(displays);
+			const previousSet = new Set(this.displayed);
 			for (const beefwife of this.displayed) if (!currentSet.has(beefwife) && !beefwife.destroyed) beefwife.destroy();
-			for (let index = 0; index < displays.length; index++) this.world.addChildAt(displays[index], index);
+			for (let index = 0; index < displays.length; index++) {
+				const display = displays[index];
+				if (this.onError && !previousSet.has(display)) display.on("error", this.onError);
+				this.world.addChildAt(display, index);
+			}
 			this.displayed = displays.slice();
 		}
 		_displaysUnchanged(displays) {
@@ -4710,6 +4796,7 @@ pixi_js = __toESM(pixi_js, 1);
 			return runtime;
 		}
 		constructor(options = {}) {
+			this.onError = options.onError || null;
 			this.timeScale = timeScaleOf(options.timeScale ?? 1);
 			if (options.random !== void 0 && typeof options.random !== "function") throw new TypeError("random must be a function");
 			const random = options.random || Math.random;
@@ -4748,6 +4835,7 @@ pixi_js = __toESM(pixi_js, 1);
 				kneeProjectionCenter,
 				maxPixelRatio,
 				renderOptions,
+				onError: (error) => this._fail(error),
 				resolutionScale,
 				zIndex: options.zIndex || 9e3
 			});
@@ -5023,7 +5111,19 @@ pixi_js = __toESM(pixi_js, 1);
 			};
 			this._resetMeter(time);
 		}
+		_fail(error) {
+			this.stop();
+			if (this.onError) this.onError(error);
+			else throw error;
+		}
 		_tick = (time) => {
+			try {
+				this._advanceFrame(time);
+			} catch (error) {
+				this._fail(error);
+			}
+		};
+		_advanceFrame(time) {
 			this.frameId = requestAnimationFrame(this._tick);
 			let dt = 0;
 			if (!this.nextPhysicsTime) this.nextPhysicsTime = time + this.physicsInterval;
@@ -5048,7 +5148,7 @@ pixi_js = __toESM(pixi_js, 1);
 				this.meter.draws += 1;
 			}
 			this._meter(time);
-		};
+		}
 		_draw = () => draw({
 			actors: this.population.renderState(),
 			debug: this.debug,
@@ -5120,6 +5220,7 @@ pixi_js = __toESM(pixi_js, 1);
 					maxKneeOffset: this.options.maxKneeOffset,
 					maxPixelRatio: this.options.maxPixelRatio,
 					physicsFps: this.options.simulationFps,
+					onError: (error) => this._fail(error),
 					random: this.options.random,
 					renderFps: this.options.drawFps,
 					resolutionScale: this.options.resolutionScale,
@@ -5141,12 +5242,15 @@ pixi_js = __toESM(pixi_js, 1);
 				return this;
 			} catch (error) {
 				if (this.destroyed || error.name === "AbortError") return this;
-				this.destroy("error", () => dispatch(this.canvas, "beefwifecanvaserror", {
-					controller: this.facade,
-					error
-				}));
+				this._fail(error);
 				throw error;
 			}
+		}
+		_fail(error) {
+			this.destroy("error", () => dispatch(this.canvas, "beefwifecanvaserror", {
+				controller: this.facade,
+				error
+			}));
 		}
 		start() {
 			this._assertActive();
@@ -5346,6 +5450,8 @@ pixi_js = __toESM(pixi_js, 1);
 			if (this.destroyed) throw new Error("BeefwifeCanvas has been destroyed");
 		}
 		_state(state, pauseReason = null) {
+			this.state = state;
+			this.pauseReason = pauseReason;
 			this.canvas.dataset.beefwifeState = state;
 			if (pauseReason) this.canvas.dataset.beefwifePauseReason = pauseReason;
 			else delete this.canvas.dataset.beefwifePauseReason;
@@ -5355,10 +5461,10 @@ pixi_js = __toESM(pixi_js, 1);
 		const facade = Object.freeze({
 			canvas: controller.canvas,
 			get state() {
-				return controller.canvas.dataset.beefwifeState;
+				return controller.state;
 			},
 			get pauseReason() {
-				return controller.canvas.dataset.beefwifePauseReason || null;
+				return controller.pauseReason;
 			},
 			get ready() {
 				return controller.ready;
