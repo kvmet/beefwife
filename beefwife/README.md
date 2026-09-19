@@ -31,18 +31,9 @@ import { Beefwife, Descriptor } from "@kvmet/beefwife";
 
 ## Renderer support
 
-Beefwife supports headless simulation and Pixi's WebGL renderer. WebGPU is
-temporarily unsupported with Pixi 8.19.0 and 8.20.1 because destroying one
-WebGPU renderer can break another. An upstream fix is expected in Pixi 8.20.2.
-Until that release passes the retained reproduction, hosts must select WebGL:
-
-```js
-await app.init({ preference: "webgl" });
-```
-
-The [isolated Pixi reproduction](https://github.com/kvmet/beefwife/blob/main/test/beefwife/pixi-renderer.browser.html)
-is retained for checking Pixi 8.20.2. If it passes, v0.1 can require that version
-and support WebGPU.
+Beefwife supports headless simulation and both Pixi renderers, WebGL and
+WebGPU. The pixi.js peer dependency requires at least 8.21.0: in earlier 8.x
+releases, destroying one WebGPU renderer can break another.
 
 The classic-script build reads `window.PIXI` instead and adds one global,
 `Beefwife`, with the JSON half hanging off it as `Beefwife.Descriptor`. Where
