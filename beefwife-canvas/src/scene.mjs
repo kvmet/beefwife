@@ -53,7 +53,6 @@ class BeefwifeCanvasScene {
     const application = new PIXI.Application();
     await application.init({
       canvas,
-      preference: "webgl",
       backgroundAlpha: 0,
       antialias: this.antialias,
       autoDensity: this.ownsCanvas,

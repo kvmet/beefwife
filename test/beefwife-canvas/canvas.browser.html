@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
   <meta charset="utf-8" />
-  <title>BeefwifeCanvas WebGL regression</title>
+  <title>BeefwifeCanvas renderer regression</title>
   <style>
     body {
       background: #222;
@@ -171,11 +171,12 @@
         handle.state === "running" && failedRender.state === "error",
         "remount after render failure failed",
       );
-      assert(
-        renderer.gl.getError() === renderer.gl.NO_ERROR,
-        "WebGL error after recovery",
-      );
-      output.textContent = `PASS ${bundle}: 13 WebGL lifecycle checks`;
+      if (renderer.gl)
+        assert(
+          renderer.gl.getError() === renderer.gl.NO_ERROR,
+          "WebGL error after recovery",
+        );
+      output.textContent = `PASS ${bundle}: 13 renderer lifecycle checks`;
     } catch (error) {
       output.textContent = `FAIL: ${error.stack}`;
       throw error;

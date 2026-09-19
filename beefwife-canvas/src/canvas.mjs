@@ -302,7 +302,7 @@ class Controller {
 
   _preserveHost() {
     if (!this.host) return;
-    // The WebGL context belongs to the authored canvas. Keep its renderer
+    // The GPU context belongs to the authored canvas. Keep its renderer
     // dormant between mounts because a destroyed context cannot be safely
     // reinitialized on the same element.
     const application = this.host.destroy({ preserveRenderer: true });
