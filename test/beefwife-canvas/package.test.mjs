@@ -25,14 +25,17 @@ const temporary = mkdtempSync(join(tmpdir(), "beefwife-canvas-package-"));
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 
 const run = (command, args, cwd) => {
+  const env = {};
+  // A parent `npm pack --dry-run` exports NPM_CONFIG_DRY_RUN, and a nested
+  // npm inherits it, so the tarball this test installs is never written.
+  for (const [key, value] of Object.entries(process.env))
+    if (!/^npm_config_dry_run$/i.test(key)) env[key] = value;
+  env.npm_config_cache = join(temporary, "npm-cache");
+  env.npm_config_update_notifier = "false";
   const result = spawnSync(command, args, {
     cwd,
     encoding: "utf8",
-    env: {
-      ...process.env,
-      npm_config_cache: join(temporary, "npm-cache"),
-      npm_config_update_notifier: "false",
-    },
+    env,
   });
   if (result.error) throw result.error;
   assert.equal(
