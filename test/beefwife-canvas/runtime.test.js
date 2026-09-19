@@ -12,6 +12,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const { bundleFor } = require("./vm-bundle.js");
+const { PIXI } = require("../beefwife/pixi.js");
 const { default: Terrain } = require("../../terrain/src/terrain.mjs");
 const descriptor = JSON.parse(
   fs.readFileSync(
@@ -145,7 +146,7 @@ const pixiStub = (log) => {
   }
   return {
     Application,
-    Color: class Color {},
+    Color: PIXI.Color,
     Container,
     Graphics,
     GraphicsContext,

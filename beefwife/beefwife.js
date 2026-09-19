@@ -1118,7 +1118,7 @@ pixi_js = __toESM(pixi_js, 1);
 			}
 		}
 		relax(chain, jointCorrectionHalf) {
-			for (let span = Math.min(2, chain.count >> 2); span >= 1; span >>= 1) this.relaxSpan(chain, jointCorrectionHalf, span);
+			for (let span = Math.max(1, Math.min(2, chain.count >> 2)); span >= 1; span >>= 1) this.relaxSpan(chain, jointCorrectionHalf, span);
 		}
 		relaxSpan(chain, jointCorrectionHalf, span) {
 			const count = chain.count;
@@ -1301,15 +1301,16 @@ pixi_js = __toESM(pixi_js, 1);
 			}
 		}
 		step(dt, throttle, direction, afterSubstep) {
-			this.accumulator += dt;
-			let stepped = false;
-			while (this.accumulator >= PHYSICS_STEP) {
-				this.accumulator -= PHYSICS_STEP;
+			const elapsed = this.accumulator + dt;
+			const tolerance = Number.EPSILON * Math.max(1, elapsed);
+			const due = Math.floor((elapsed + tolerance) / PHYSICS_STEP);
+			this.accumulator = elapsed;
+			for (let consumed = 1; consumed <= due; consumed++) {
+				this.accumulator = Math.max(0, elapsed - consumed * PHYSICS_STEP);
 				this._substep(PHYSICS_STEP, throttle, direction);
 				if (afterSubstep) afterSubstep(PHYSICS_STEP);
-				stepped = true;
 			}
-			return stepped;
+			return due > 0;
 		}
 		_substep(dt, throttle, direction) {
 			this.gait.advance(dt, throttle);
@@ -2108,6 +2109,11 @@ pixi_js = __toESM(pixi_js, 1);
 		});
 		return context;
 	};
+	var paintMesh = (mesh, fill) => {
+		const color = new PIXI.Color(fill);
+		mesh.tint = color.toNumber();
+		mesh.alpha = color.alpha;
+	};
 	var meshFor = (positions, indices, color) => {
 		const geometry = new PIXI.MeshGeometry({
 			positions,
@@ -2120,7 +2126,7 @@ pixi_js = __toESM(pixi_js, 1);
 			texture: PIXI.Texture.WHITE,
 			roundPixels: false
 		});
-		mesh.tint = color;
+		paintMesh(mesh, color);
 		mesh.dynamicPositions = positions;
 		mesh.positionBuffer = geometry.getBuffer("aPosition");
 		return mesh;
@@ -2353,6 +2359,13 @@ pixi_js = __toESM(pixi_js, 1);
 	};
 
 //#endregion
+//#region src/limits.mjs
+	var MAX_WORLD_COORDINATE = 1e9;
+	var MIN_PIXEL_RESOLUTION = 1e-6;
+	var MAX_PIXEL_RESOLUTION = 1e6;
+	var MAX_PERSPECTIVE = 1e6;
+
+//#endregion
 //#region src/graphics.mjs
 /** Pixi display ownership for one Beefwife. */
 	var BAND_LABELS = [
@@ -2373,7 +2386,13 @@ pixi_js = __toESM(pixi_js, 1);
 		static prepare() {}
 		static prepareAtlas() {}
 	};
-	var MAX_KNEE_OFFSET = 2e9;
+	var MAX_KNEE_OFFSET = MAX_WORLD_COORDINATE * 2;
+	var pixelResolutionOf = (options) => {
+		const value = options?.pixelResolution;
+		if (value === void 0) return 1;
+		if (!Number.isFinite(value)) throw new RangeError("pixelResolution must be finite and positive");
+		return Math.max(MIN_PIXEL_RESOLUTION, Math.min(MAX_PIXEL_RESOLUTION, value));
+	};
 	/**
 	* Runs work once the renderer is between frames.
 	*
@@ -2386,7 +2405,7 @@ pixi_js = __toESM(pixi_js, 1);
 	* work booked here sees a renderer at rest.
 	*/
 	var afterPass = (work) => queueMicrotask(work);
-	var Graphics = class Graphics {
+	var Graphics = class {
 		static available = true;
 		static prepare(model) {
 			for (const [id, shape] of Object.entries(model.descriptor.definitions.shapes)) try {
@@ -2404,7 +2423,7 @@ pixi_js = __toESM(pixi_js, 1);
 			}
 		}
 		static prepareAtlas(model, options) {
-			return prepareAtlas(model, options?.pixelResolution ?? 1);
+			return prepareAtlas(model, pixelResolutionOf(options));
 		}
 		constructor(host, state, options = null) {
 			this.host = host;
@@ -2434,8 +2453,9 @@ pixi_js = __toESM(pixi_js, 1);
 			this.adopt(state);
 		}
 		adopt(state) {
-			this.nextPlan = Graphics.prepareAtlas(state.model, this.options);
-			this.nextResolution = this.options.pixelResolution ?? 1;
+			const resolution = pixelResolutionOf(this.options);
+			this.nextPlan = prepareAtlas(state.model, resolution);
+			this.nextResolution = resolution;
 			this.failedBake = null;
 			this.model = state.model;
 			this.legCount = state.legs.length / state.layout.legStride;
@@ -2469,7 +2489,7 @@ pixi_js = __toESM(pixi_js, 1);
 			if (wantFill && !this.limbFill) {
 				this.limbFill = meshFor(this.limbPositions, limbIndicesFor(legCount), paint.fill);
 				changed = true;
-			} else if (this.limbFill) this.limbFill.tint = paint.fill;
+			} else if (this.limbFill) paintMesh(this.limbFill, paint.fill);
 			if (this.limbStroke && !wantStroke) {
 				this._drop(this.limbStroke);
 				this.limbStroke = null;
@@ -2499,7 +2519,7 @@ pixi_js = __toESM(pixi_js, 1);
 			if (wantFill && !this.ribbonFill) {
 				this.ribbonFill = meshFor(this.ribbonPositions, ribbonIndicesFor(chunkCount), paint.fill);
 				changed = true;
-			} else if (this.ribbonFill) this.ribbonFill.tint = paint.fill;
+			} else if (this.ribbonFill) paintMesh(this.ribbonFill, paint.fill);
 			if (this.ribbonStroke && !wantStroke) {
 				this._drop(this.ribbonStroke);
 				this.ribbonStroke = null;
@@ -2556,9 +2576,9 @@ pixi_js = __toESM(pixi_js, 1);
 			this._arrange();
 		}
 		_syncAtlas(renderer) {
-			const resolution = this.options.pixelResolution ?? 1;
+			const resolution = pixelResolutionOf(this.options);
 			if (resolution !== this.nextResolution) {
-				this.nextPlan = Graphics.prepareAtlas(this.model, this.options);
+				this.nextPlan = prepareAtlas(this.model, resolution);
 				this.nextResolution = resolution;
 			}
 			if (!renderer) return;
@@ -2619,21 +2639,28 @@ pixi_js = __toESM(pixi_js, 1);
 			}
 			const stride = state.layout.legStride;
 			const projection = this.options.kneeProjection ?? null;
+			let centerX = projection?.centerX;
+			let centerY = projection?.centerY;
+			let perspective = projection?.perspective;
+			if (Number.isFinite(centerX) && Number.isFinite(centerY) && Number.isFinite(perspective)) {
+				centerX = Math.max(-MAX_WORLD_COORDINATE, Math.min(MAX_WORLD_COORDINATE, centerX));
+				centerY = Math.max(-MAX_WORLD_COORDINATE, Math.min(MAX_WORLD_COORDINATE, centerY));
+				perspective = Math.max(0, Math.min(MAX_PERSPECTIVE, perspective));
+			} else perspective = 0;
+			const requestedOffset = projection?.maxOffset;
+			const maxOffset = Number.isFinite(requestedOffset) ? Math.max(0, Math.min(MAX_WORLD_COORDINATE, requestedOffset)) : MAX_KNEE_OFFSET;
 			const jointLean = this.model.legs.jointLean;
 			for (let offset = 0; offset < legs.length; offset += stride) {
 				const vertexOffset = offset / stride * 28;
 				let kneeX = legs[offset + 2];
 				let kneeY = legs[offset + 3];
-				if (projection) {
-					if (Number.isFinite(projection.perspective) && projection.perspective >= 0 && Number.isFinite(projection.centerX) && Number.isFinite(projection.centerY)) {
-						const viewDistance = Math.hypot(kneeX - projection.centerX, kneeY - projection.centerY);
-						if (viewDistance > 0 && projection.perspective > 0) {
-							const elbowHeight = Math.hypot(kneeX - (legs[offset] + legs[offset + 4]) / 2, kneeY - (legs[offset + 1] + legs[offset + 5]) / 2);
-							const maxOffset = Number.isFinite(projection.maxOffset) ? Math.max(0, projection.maxOffset) : MAX_KNEE_OFFSET;
-							const radialOffset = Math.min(maxOffset, viewDistance * elbowHeight * projection.perspective);
-							kneeX += (kneeX - projection.centerX) / viewDistance * radialOffset;
-							kneeY += (kneeY - projection.centerY) / viewDistance * radialOffset;
-						}
+				if (perspective > 0) {
+					const viewDistance = Math.hypot(kneeX - centerX, kneeY - centerY);
+					if (viewDistance > 0) {
+						const elbowHeight = Math.hypot(kneeX - (legs[offset] + legs[offset + 4]) / 2, kneeY - (legs[offset + 1] + legs[offset + 5]) / 2);
+						const radialOffset = Math.min(maxOffset, viewDistance * elbowHeight * perspective);
+						kneeX += (kneeX - centerX) / viewDistance * radialOffset;
+						kneeY += (kneeY - centerY) / viewDistance * radialOffset;
 					}
 				}
 				if (jointLean !== 0) {
@@ -2720,7 +2747,7 @@ pixi_js = __toESM(pixi_js, 1);
 			this._placeParticles(state, pixelResolution, inversePixelResolution);
 		}
 		_snapResolution() {
-			return this.options.roundVertices === true ? this.options.pixelResolution ?? 1 : 0;
+			return this.options.roundVertices === true ? this.nextResolution : 0;
 		}
 		_placeParticles(state, pixelResolution, inversePixelResolution) {
 			const legs = state.legs;
@@ -2766,7 +2793,7 @@ pixi_js = __toESM(pixi_js, 1);
 	var Container = available ? PIXI.Container : HeadlessContainer;
 	var compiled = /* @__PURE__ */ new WeakMap();
 	var freezeDeep = (value) => {
-		if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+		if (!value || typeof value !== "object") return value;
 		Object.values(value).forEach(freezeDeep);
 		return Object.freeze(value);
 	};
@@ -2787,10 +2814,6 @@ pixi_js = __toESM(pixi_js, 1);
 		freezeDeep(descriptor);
 		return model;
 	};
-	var MAX_WORLD_COORDINATE = 1e9;
-	var MIN_PIXEL_RESOLUTION = 1e-6;
-	var MAX_PIXEL_RESOLUTION = 1e6;
-	var MAX_PERSPECTIVE = 1e6;
 	var TAU = Math.PI * 2;
 	var OPTION_KEYS = /* @__PURE__ */ new Set([
 		"position",
@@ -2840,7 +2863,7 @@ pixi_js = __toESM(pixi_js, 1);
 		if (render.pixelResolution !== void 0) {
 			const pixelResolution = finite(render.pixelResolution, "options.render.pixelResolution");
 			if (pixelResolution <= 0) throw new RangeError("options.render.pixelResolution must be positive");
-			if (pixelResolution < MIN_PIXEL_RESOLUTION || pixelResolution > MAX_PIXEL_RESOLUTION) throw new RangeError(`options.render.pixelResolution must be from ${MIN_PIXEL_RESOLUTION} to ${MAX_PIXEL_RESOLUTION}`);
+			if (pixelResolution < 1e-6 || pixelResolution > 1e6) throw new RangeError(`options.render.pixelResolution must be from ${MIN_PIXEL_RESOLUTION} to ${MAX_PIXEL_RESOLUTION}`);
 		}
 		const projection = render.kneeProjection;
 		if (projection !== void 0 && projection !== null) {
@@ -2851,11 +2874,11 @@ pixi_js = __toESM(pixi_js, 1);
 			}, null, "options.render.kneeProjection.center");
 			const perspective = finite(projection.perspective, "options.render.kneeProjection.perspective");
 			if (perspective < 0) throw new RangeError("options.render.kneeProjection.perspective must be nonnegative");
-			if (perspective > MAX_PERSPECTIVE) throw new RangeError(`options.render.kneeProjection.perspective must be at most ${MAX_PERSPECTIVE}`);
+			if (perspective > 1e6) throw new RangeError(`options.render.kneeProjection.perspective must be at most ${MAX_PERSPECTIVE}`);
 			if (projection.maxOffset !== void 0) {
 				const maxOffset = finite(projection.maxOffset, "options.render.kneeProjection.maxOffset");
 				if (maxOffset < 0) throw new RangeError("options.render.kneeProjection.maxOffset must be nonnegative");
-				if (maxOffset > MAX_WORLD_COORDINATE) throw new RangeError(`options.render.kneeProjection.maxOffset must be at most ${MAX_WORLD_COORDINATE}`);
+				if (maxOffset > 1e9) throw new RangeError(`options.render.kneeProjection.maxOffset must be at most ${MAX_WORLD_COORDINATE}`);
 			}
 		}
 		return render;
@@ -2874,7 +2897,7 @@ pixi_js = __toESM(pixi_js, 1);
 	};
 	var worldPoint = (value, fallback, path) => {
 		const result = point(value, fallback, path);
-		if (Math.abs(result.x) > MAX_WORLD_COORDINATE || Math.abs(result.y) > MAX_WORLD_COORDINATE) throw new RangeError(`${path} coordinates must be from -1000000000 to ${MAX_WORLD_COORDINATE}`);
+		if (Math.abs(result.x) > 1e9 || Math.abs(result.y) > 1e9) throw new RangeError(`${path} coordinates must be from ${-MAX_WORLD_COORDINATE} to ${MAX_WORLD_COORDINATE}`);
 		return result;
 	};
 	var directionInto = (value, fallback, path, result) => {
@@ -3050,7 +3073,7 @@ pixi_js = __toESM(pixi_js, 1);
 		translate(rawOffset) {
 			this.#live("translate");
 			const offset = worldPoint(rawOffset, null, "offset");
-			if (!this.#body.chain.fitsTranslation(offset, MAX_WORLD_COORDINATE)) throw new RangeError("offset places the body outside the world");
+			if (!this.#body.chain.fitsTranslation(offset, 1e9)) throw new RangeError("offset places the body outside the world");
 			this.#body.chain.translate(offset);
 			this.#legs.translate(offset);
 			this.#skin.translate(offset);

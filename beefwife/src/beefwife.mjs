@@ -7,6 +7,12 @@ import { Body } from "./body.mjs";
 import { Legs } from "./legs.mjs";
 import { Skin } from "./skin.mjs";
 import Graphics from "./graphics.mjs";
+import {
+  MAX_WORLD_COORDINATE,
+  MIN_PIXEL_RESOLUTION,
+  MAX_PIXEL_RESOLUTION,
+  MAX_PERSPECTIVE,
+} from "./limits.mjs";
 
 export * as Descriptor from "./descriptor.mjs";
 
@@ -29,8 +35,7 @@ const Container = available ? PIXI.Container : HeadlessContainer;
 const compiled = new WeakMap();
 
 const freezeDeep = (value) => {
-  if (!value || typeof value !== "object" || Object.isFrozen(value))
-    return value;
+  if (!value || typeof value !== "object") return value;
   Object.values(value).forEach(freezeDeep);
   return Object.freeze(value);
 };
@@ -55,10 +60,6 @@ const modelFor = (descriptor) => {
   return model;
 };
 
-const MAX_WORLD_COORDINATE = 1e9;
-const MIN_PIXEL_RESOLUTION = 1e-6;
-const MAX_PIXEL_RESOLUTION = 1e6;
-const MAX_PERSPECTIVE = 1e6;
 const TAU = Math.PI * 2;
 const OPTION_KEYS = new Set([
   "position",

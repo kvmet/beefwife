@@ -12,7 +12,13 @@ const path = require("node:path");
 const { Beefwife } = require("../../beefwife/src/beefwife.mjs");
 const Model = require("../../beefwife/src/model.mjs");
 const { Gait } = require("../../beefwife/src/drive.mjs");
-const { Body, MAX_LINK_STRETCH } = require("../../beefwife/src/body.mjs");
+const {
+  Body,
+  PHYSICS_STEP,
+  MAX_LINK_STRETCH,
+} = require("../../beefwife/src/body.mjs");
+const { Legs } = require("../../beefwife/src/legs.mjs");
+const { Skin } = require("../../beefwife/src/skin.mjs");
 
 const source = JSON.parse(
   fs.readFileSync(
@@ -32,6 +38,153 @@ const distance = (before, after) =>
 let checks = 0;
 
 const model = Model.compile(source);
+const forward = { x: 1, y: 0 };
+const countedBody = (bodyModel = model) => {
+  const body = new Body(bodyModel, new Gait(bodyModel.gait));
+  body.place({ x: 0, y: 0 }, forward);
+  body.substeps = 0;
+  body._substep = (dt) => {
+    assert.equal(dt, 1 / 60);
+    body.substeps++;
+  };
+  return body;
+};
+const partitions = [
+  ...[1, 24, 30, 60, 90, 120, 144, 165, 240].map((rate) =>
+    Array(rate).fill(1 / rate),
+  ),
+  [0.013, 0.217, 0.003, 0.267, 0.5],
+];
+for (const [steps, expected] of [
+  ...partitions.map((steps) => [steps, 60]),
+  [[10], 600],
+  [[100], 6000],
+]) {
+  const body = countedBody();
+  let dependents = 0;
+  for (const dt of steps)
+    body.step(dt, 1, forward, (seconds) => {
+      assert.equal(seconds, 1 / 60);
+      assert.equal(body.substeps, ++dependents);
+    });
+  assert.equal(body.substeps, expected, `${steps.length} calls lost time`);
+  assert.equal(dependents, expected);
+  assert.ok(body.accumulator >= 0 && body.accumulator < 1e-12);
+  checks += 3;
+}
+
+const timingSource = copy(source);
+timingSource.legs.pairs = 3;
+timingSource.chain.breathing = 1;
+const timingModel = Model.compile(timingSource);
+const simulate = (steps) => {
+  let seed = 42;
+  const random = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 2 ** 32;
+  };
+  const gait = new Gait(timingModel.gait, 0.7);
+  const body = new Body(timingModel, gait, random() * Math.PI * 2);
+  body.place({ x: 5, y: -7 }, forward);
+  const legs = new Legs(timingModel, body, gait, random);
+  const skin = new Skin(timingModel, body, legs);
+  const poses = [];
+  for (const [throttle, direction] of [
+    [1, forward],
+    [0.35, { x: 0, y: 1 }],
+    [0, { x: -1, y: 0 }],
+    [1, { x: -1, y: 0 }],
+  ]) {
+    for (const dt of steps)
+      body.step(dt, throttle, direction, (seconds) => {
+        legs.update(seconds, throttle);
+        skin.update(seconds);
+      });
+    poses.push(poseOf(body));
+  }
+  return {
+    poses,
+    chain: body.chain,
+    phase: gait.phase,
+    legs: legs.legs,
+    skin: skin.writeRenderState(),
+  };
+};
+const referenceMotion = simulate(Array(60).fill(1 / 60));
+for (const steps of partitions) {
+  assert.deepEqual(simulate(steps), referenceMotion);
+  checks++;
+}
+
+const adjacentStep = Number.EPSILON * PHYSICS_STEP;
+for (const dt of [
+  PHYSICS_STEP - adjacentStep,
+  PHYSICS_STEP,
+  PHYSICS_STEP + adjacentStep,
+]) {
+  const body = countedBody();
+  assert.equal(body.step(dt, 1, forward), true);
+  assert.equal(body.substeps, 1);
+  assert.equal(body.accumulator, Math.max(0, dt - PHYSICS_STEP));
+  checks += 3;
+}
+const shortStep = countedBody();
+assert.equal(shortStep.step(PHYSICS_STEP - 1e-12, 1, forward), false);
+assert.equal(shortStep.substeps, 0);
+assert.equal(shortStep.step(1e-12, 1, forward), true);
+assert.equal(shortStep.substeps, 1);
+const tinyStep = countedBody();
+assert.equal(tinyStep.step(1e-18, 1, forward), false);
+assert.equal(tinyStep.accumulator, 1e-18);
+assert.equal(tinyStep.step(0, 1, forward), false);
+assert.equal(tinyStep.accumulator, 1e-18);
+checks += 8;
+
+const carried = countedBody();
+carried.step(PHYSICS_STEP / 3, 1, forward);
+const pending = carried.accumulator;
+carried.reconfigure(model, new Gait(model.gait));
+assert.equal(carried.accumulator, pending);
+const expanded = copy(source);
+expanded.chain.sections.tail.chunks++;
+const adopted = countedBody(Model.compile(expanded));
+adopted.adopt(carried);
+assert.equal(adopted.chain.count, carried.chain.count + 1);
+assert.equal(adopted.accumulator, pending);
+assert.equal(adopted.step(PHYSICS_STEP - pending, 1, forward), true);
+assert.equal(adopted.substeps, 1);
+carried.place({ x: 0, y: 0 }, forward);
+assert.equal(carried.accumulator, 0);
+assert.equal(carried.step(PHYSICS_STEP - pending, 1, forward), false);
+checks += 7;
+
+for (const failIn of ["body", "dependents"]) {
+  const body = countedBody();
+  const update = body._substep;
+  const failure = new Error(`${failIn} update failed`);
+  let dependents = 0;
+  body._substep = (dt) => {
+    update(dt);
+    if (failIn === "body" && body.substeps === 2) throw failure;
+  };
+  const afterSubstep = () => {
+    dependents++;
+    if (failIn === "dependents" && dependents === 2) throw failure;
+  };
+  const elapsed = PHYSICS_STEP * 4 + PHYSICS_STEP / 3;
+  assert.throws(
+    () => body.step(elapsed, 1, forward, afterSubstep),
+    (error) => error === failure,
+  );
+  assert.equal(body.substeps, 2);
+  assert.ok(Math.abs(body.accumulator - (elapsed - PHYSICS_STEP * 2)) < 1e-16);
+  body.step(0, 1, forward, afterSubstep);
+  assert.equal(body.substeps, 4);
+  assert.equal(dependents, failIn === "body" ? 3 : 4);
+  assert.ok(Math.abs(body.accumulator - PHYSICS_STEP / 3) < 1e-16);
+  checks += 6;
+}
+
 const gait = new Gait(model.gait);
 const body = new Body(model, gait);
 body.place({ x: 0, y: 0 }, { x: 1, y: 0 });

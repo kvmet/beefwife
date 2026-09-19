@@ -138,15 +138,16 @@ class Body {
   }
 
   step(dt, throttle, direction, afterSubstep) {
-    this.accumulator += dt;
-    let stepped = false;
-    while (this.accumulator >= PHYSICS_STEP) {
-      this.accumulator -= PHYSICS_STEP;
+    const elapsed = this.accumulator + dt;
+    const tolerance = Number.EPSILON * Math.max(1, elapsed);
+    const due = Math.floor((elapsed + tolerance) / PHYSICS_STEP);
+    this.accumulator = elapsed;
+    for (let consumed = 1; consumed <= due; consumed++) {
+      this.accumulator = Math.max(0, elapsed - consumed * PHYSICS_STEP);
       this._substep(PHYSICS_STEP, throttle, direction);
       if (afterSubstep) afterSubstep(PHYSICS_STEP);
-      stepped = true;
     }
-    return stepped;
+    return due > 0;
   }
 
   _substep(dt, throttle, direction) {

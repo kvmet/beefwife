@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
   <meta charset="utf-8" />
-  <title>Beefwife WebGL regression</title>
+  <title>Beefwife GPU regression</title>
   <style>
     body {
       background: #222;
@@ -14,14 +14,16 @@
   </style>
   <p>
     Serve the repository root over HTTP and open this page. Add ?min to test the
-    minified bundle.
+    minified bundle. Add ?gpu=webgpu to require WebGPU.
   </p>
   <pre id="results">Running</pre>
   <script src="../../beefwife/node_modules/pixi.js/dist/pixi.js"></script>
   <script type="module">
     const { crowdedDescriptor } = await import("./atlas-fixtures.mjs");
     const output = document.querySelector("#results");
-    const bundle = new URLSearchParams(location.search).has("min")
+    const query = new URLSearchParams(location.search);
+    const preference = query.get("gpu") ?? "webgl";
+    const bundle = query.has("min")
       ? "beefwife.min.js"
       : "beefwife.js";
     await new Promise((resolve, reject) => {
@@ -35,7 +37,23 @@
     const assert = (condition, message) => {
       if (!condition) throw new Error(message);
     };
+    const gpuErrors = [];
+    const observeRenderer = (renderer, label) => {
+      const expected =
+        preference === "webgpu"
+          ? PIXI.RendererType.WEBGPU
+          : PIXI.RendererType.WEBGL;
+      assert(renderer.type === expected, `${label} did not use ${preference}`);
+      if (renderer.type === PIXI.RendererType.WEBGPU)
+        renderer.gpu.device.addEventListener("uncapturederror", (event) => {
+          gpuErrors.push(`${label}: ${event.error.message}`);
+        });
+    };
     try {
+      assert(
+        preference === "webgl" || preference === "webgpu",
+        `unknown GPU preference: ${preference}`,
+      );
       const source = await fetch("../../beefwife/beefwife.example.json").then(
         (response) => response.json(),
       );
@@ -43,10 +61,11 @@
         width: 800,
         height: 600,
         resolution: 0.25,
-        preference: "webgl",
+        preference,
         autoStart: false,
         backgroundAlpha: 0,
       });
+      observeRenderer(app.renderer, "first renderer");
       document.body.append(app.canvas);
       const creature = new Beefwife(source, {
         position: { x: 450, y: 300 },
@@ -78,12 +97,18 @@
         await Promise.resolve();
         app.render();
       };
-      const checkGl = (label, renderer = app.renderer) => {
-        const error = renderer.gl.getError();
-        assert(
-          error === renderer.gl.NO_ERROR,
-          `WebGL error ${error}: ${label}`,
-        );
+      const checkRenderer = async (label, renderer = app.renderer) => {
+        if (renderer.type === PIXI.RendererType.WEBGL) {
+          const error = renderer.gl.getError();
+          assert(
+            error === renderer.gl.NO_ERROR,
+            `WebGL error ${error}: ${label}`,
+          );
+        } else {
+          await renderer.gpu.device.queue.onSubmittedWorkDone();
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          assert(!gpuErrors.length, `${label}: ${gpuErrors.join("; ")}`);
+        }
       };
       let checks = 0;
       for (const pairs of [0, 1, 0, 4, 0]) {
@@ -108,7 +133,7 @@
           checks += 2;
         }
       }
-      checkGl("length changes");
+      await checkRenderer("length changes");
       const centipede = await fetch(
         "../../beefwife/samples/chevron-guy.json",
       ).then((response) => response.json());
@@ -133,7 +158,7 @@
         );
         checks += 2;
       }
-      checkGl("size changes");
+      await checkRenderer("size changes");
       creature.setDescriptor(crowdedDescriptor(source));
       creature.reset({
         position: { x: 450, y: 300 },
@@ -162,7 +187,7 @@
       creature.translate({ x: 100000, y: 0 });
       await draw();
       assert(pixelCount() === 0, "crowded creature left detached pixels");
-      checkGl("crowded atlas");
+      await checkRenderer("crowded atlas");
       checks += 5;
 
       // An off-center triangle exposes anchor errors, clipping and mirrored frames.
@@ -239,7 +264,7 @@
       probe.destroy();
       reference.destroy();
       creature.visible = true;
-      checkGl("bounded frame silhouette");
+      await checkRenderer("bounded frame silhouette");
       creature.setDescriptor(centipede);
       creature.reset({
         position: { x: 450, y: 300 },
@@ -252,13 +277,14 @@
         width: 800,
         height: 600,
         resolution: 0.25,
-        preference: "webgl",
+        preference,
         autoStart: false,
         backgroundAlpha: 0,
       });
       try {
-        checkGl("second renderer init", secondApp.renderer);
-        checkGl("before renderer switch");
+        observeRenderer(secondApp.renderer, "second renderer");
+        await checkRenderer("second renderer init", secondApp.renderer);
+        await checkRenderer("before renderer switch");
         secondApp.stage.addChild(creature);
         secondApp.render();
         await Promise.resolve();
@@ -267,14 +293,14 @@
           pixelCount(secondApp.canvas) === originalPixels,
           "moving a creature to another renderer lost its textures",
         );
-        checkGl("second renderer", secondApp.renderer);
+        await checkRenderer("second renderer", secondApp.renderer);
         app.stage.addChild(creature);
         await draw();
         assert(
           pixelCount() === originalPixels,
           "returning to the first renderer lost textures",
         );
-        checkGl("return to first renderer");
+        await checkRenderer("return to first renderer");
         checks += 2;
       } finally {
         secondApp.destroy({
@@ -282,12 +308,226 @@
           releaseGlobalResources: false,
         });
       }
-      checkGl("second renderer destroyed");
+      await checkRenderer("second renderer destroyed");
       creature.destroy();
       app.render();
       assert(pixelCount() === 0, "destroyed creature left pixels");
-      checkGl("creature destroyed");
-      output.textContent = `PASS ${bundle}: ${checks + 2} WebGL checks`;
+      await checkRenderer("creature destroyed");
+      checks += 2;
+
+      const meshCases = [
+        { part: "ribbon", chunks: 20, pairs: 0, batched: true },
+        { part: "ribbon", chunks: 60, pairs: 0, batched: false },
+        { part: "limb", chunks: 20, pairs: 1, batched: true },
+        { part: "limb", chunks: 20, pairs: 4, batched: false },
+      ];
+      const fills = [
+        "rgba(80, 120, 240, 0)",
+        "#5078f040",
+        "#5078f0",
+      ].map((color) => ({ color, alpha: new PIXI.Color(color).alpha }));
+      const fillDescriptor = ({ chunks, pairs }, color) => {
+        const descriptor = structuredClone(source);
+        descriptor.chain.skin.plates = [];
+        descriptor.chain.skin.ornaments = [];
+        descriptor.chain.sections.head.chunks = 1;
+        descriptor.chain.sections.trunk.chunks = chunks - 1;
+        descriptor.chain.sections.tail.chunks = 0;
+        for (const section of Object.values(descriptor.chain.sections)) {
+          section.spacing = 6;
+          section.profile.ribbonWidth = { start: 12, end: 12 };
+        }
+        descriptor.legs.pairs = pairs;
+        descriptor.legs.reach = 60;
+        descriptor.legs.skin.limbWidth = 16;
+        descriptor.definitions.paints.ribbon = {
+          fill: color,
+          stroke: null,
+        };
+        descriptor.definitions.paints.leg = { fill: color, stroke: null };
+        return descriptor;
+      };
+      const fillReference = ({ part, chunks }, mesh) => {
+        const reference = new PIXI.Graphics();
+        if (part === "ribbon") {
+          const length = (chunks - 1) * 6;
+          reference.roundRect(600 - length - 12, 288, length + 24, 24, 12);
+          reference.fill(0x5078f0);
+        } else {
+          const positions = mesh.geometry.positions;
+          for (let start = 0; start < positions.length; start += 28)
+            reference
+              .poly(Array.from(positions.subarray(start, start + 28)))
+              .fill(0x5078f0);
+        }
+        return reference;
+      };
+      const compareFill = async (painted, mesh, reference, alpha, label) => {
+        painted.visible = true;
+        reference.visible = false;
+        await draw();
+        for (const child of painted.children[0].children)
+          child.visible = child === mesh;
+        app.render();
+        const actual = mask();
+        painted.visible = false;
+        reference.visible = true;
+        reference.alpha = 1;
+        app.render();
+        const opaque = mask();
+        reference.alpha = alpha;
+        app.render();
+        const expected = mask();
+        let intersection = 0;
+        let union = 0;
+        let interior = 0;
+        let different = 0;
+        const samples = [];
+        for (let y = 1; y < snapshot.height - 1; y++) {
+          for (let x = 1; x < snapshot.width - 1; x++) {
+            const pixel = (y * snapshot.width + x) * 4 + 3;
+            if (actual[pixel] && expected[pixel]) intersection++;
+            if (actual[pixel] || expected[pixel]) union++;
+            let inside = true;
+            for (let dy = -1; dy <= 1; dy++)
+              for (let dx = -1; dx <= 1; dx++)
+                if (opaque[pixel + (dy * snapshot.width + dx) * 4] !== 255)
+                  inside = false;
+            if (inside) {
+              interior++;
+              if (Math.abs(actual[pixel] - expected[pixel]) > 1) {
+                different++;
+                if (samples.length < 8)
+                  samples.push({
+                    x,
+                    y,
+                    actual: actual[pixel],
+                    expected: expected[pixel],
+                  });
+              }
+            }
+          }
+        }
+        assert(
+          interior > 10,
+          `${label}: reference has too few interior pixels`,
+        );
+        assert(
+          !different,
+          `${label}: ${different} interior pixels have wrong alpha; ${JSON.stringify({
+            meshAlpha: mesh.alpha,
+            samples,
+          })}`,
+        );
+        // Native curves and the ribbon's polygon caps can disagree at the edge.
+        assert(
+          alpha === 0 ? union === 0 : union > 20 && intersection / union > 0.9,
+          `${label}: fill silhouette differs from its reference`,
+        );
+        checks += 3;
+      };
+      for (const meshCase of meshCases) {
+        for (const fill of fills) {
+          const descriptor = fillDescriptor(meshCase, fill.color);
+          const painted = new Beefwife(descriptor, {
+            position: { x: 600, y: 300 },
+            random: () => 0.5,
+          });
+          app.stage.addChild(painted);
+          await draw();
+          const mesh = painted.children[0].children.find(
+            (child) => child instanceof PIXI.Mesh,
+          );
+          const label = `${meshCase.part}, ${meshCase.batched ? "batched" : "unbatched"}`;
+          assert(
+            mesh.batched === meshCase.batched,
+            `${label}: wrong mesh path`,
+          );
+          checks++;
+          const reference = fillReference(meshCase, mesh);
+          app.stage.addChild(reference);
+          await compareFill(
+            painted,
+            mesh,
+            reference,
+            fill.alpha,
+            `${label}, ${fill.color}`,
+          );
+          if (fill.alpha === 0) {
+            for (const replacement of [fills[2], fills[1], fills[0]]) {
+              const edited = structuredClone(descriptor);
+              const paint = meshCase.part === "ribbon" ? "ribbon" : "leg";
+              edited.definitions.paints[paint].fill = replacement.color;
+              painted.setDescriptor(edited);
+              assert(
+                painted.children[0].children.includes(mesh),
+                `${label}: changing fill alpha replaced the mesh`,
+              );
+              checks++;
+              await compareFill(
+                painted,
+                mesh,
+                reference,
+                replacement.alpha,
+                `${label}, replacement ${replacement.color}`,
+              );
+            }
+          }
+          reference.destroy();
+          painted.destroy();
+        }
+      }
+      await checkRenderer("fill opacity");
+
+      const sharedDescriptor = structuredClone(source);
+      const left = new Beefwife(sharedDescriptor, {
+        position: { x: 350, y: 180 },
+        random: () => 0.5,
+      });
+      const right = new Beefwife(sharedDescriptor, {
+        position: { x: 650, y: 420 },
+        random: () => 0.5,
+      });
+      app.stage.addChild(left, right);
+      const sheetsOf = (owner) =>
+        new Set(
+          owner.children[0].children
+            .filter((child) => child instanceof PIXI.ParticleContainer)
+            .flatMap((band) =>
+              band.particleChildren.map((part) => part.texture.source),
+            ),
+        );
+      await draw();
+      const shared = [...sheetsOf(left)][0];
+      assert(
+        shared && sheetsOf(right).has(shared),
+        "identical owners did not share an atlas",
+      );
+      left.visible = false;
+      await draw();
+      const survivorPixels = mask();
+      left.visible = true;
+      const repainted = structuredClone(sharedDescriptor);
+      repainted.definitions.paints.shell.fill = "#00ff00";
+      left.setDescriptor(repainted);
+      await draw();
+      assert(
+        !shared.destroyed && sheetsOf(right).has(shared),
+        "repainting one owner destroyed the shared atlas",
+      );
+      left.destroy();
+      await draw();
+      assert(
+        mask().every((value, index) => value === survivorPixels[index]),
+        "repainting and destroying one owner changed its survivor's pixels",
+      );
+      right.destroy();
+      await draw();
+      assert(shared.destroyed, "the last owner left its atlas alive");
+      assert(pixelCount() === 0, "destroyed atlas owners left pixels");
+      checks += 5;
+      await checkRenderer("shared atlas owners");
+      output.textContent = `PASS ${bundle}: ${checks} ${preference} checks`;
     } catch (error) {
       output.textContent = `FAIL: ${error.stack}`;
       throw error;

@@ -13,8 +13,14 @@ import {
   writeCap,
   writeLimb,
 } from "./geometry.mjs";
-import { discard, meshFor } from "./display.mjs";
+import { discard, meshFor, paintMesh } from "./display.mjs";
 import { prepareAtlas, acquireAtlas, releaseAtlas } from "./atlas.mjs";
+import {
+  MAX_WORLD_COORDINATE,
+  MIN_PIXEL_RESOLUTION,
+  MAX_PIXEL_RESOLUTION,
+  MAX_PERSPECTIVE,
+} from "./limits.mjs";
 
 // In draw order, and each band has to stay contiguous to hold that order.
 const BAND_LABELS = ["feet", "ornaments-under", "plates", "ornaments-over"];
@@ -34,8 +40,16 @@ class HeadlessGraphics {
   static prepareAtlas() {}
 }
 
-// The widest a Beefwife world may be, so a knee cannot be pushed outside it.
-const MAX_KNEE_OFFSET = 2e9;
+// An omitted cap allows an offset across the full world width.
+const MAX_KNEE_OFFSET = MAX_WORLD_COORDINATE * 2;
+
+const pixelResolutionOf = (options) => {
+  const value = options?.pixelResolution;
+  if (value === undefined) return 1;
+  if (!Number.isFinite(value))
+    throw new RangeError("pixelResolution must be finite and positive");
+  return Math.max(MIN_PIXEL_RESOLUTION, Math.min(MAX_PIXEL_RESOLUTION, value));
+};
 
 /**
  * Runs work once the renderer is between frames.
@@ -78,7 +92,7 @@ class Graphics {
   }
 
   static prepareAtlas(model, options) {
-    return prepareAtlas(model, options?.pixelResolution ?? 1);
+    return prepareAtlas(model, pixelResolutionOf(options));
   }
 
   constructor(host, state, options = null) {
@@ -125,8 +139,9 @@ class Graphics {
      follow the plan, which every compile drops, because shapes and paints are
      new objects each time and the frames are named by what they draw. */
   adopt(state) {
-    this.nextPlan = Graphics.prepareAtlas(state.model, this.options);
-    this.nextResolution = this.options.pixelResolution ?? 1;
+    const resolution = pixelResolutionOf(this.options);
+    this.nextPlan = prepareAtlas(state.model, resolution);
+    this.nextResolution = resolution;
     this.failedBake = null;
     this.model = state.model;
     this.legCount = state.legs.length / state.layout.legStride;
@@ -172,7 +187,7 @@ class Graphics {
         paint.fill,
       );
       changed = true;
-    } else if (this.limbFill) this.limbFill.tint = paint.fill;
+    } else if (this.limbFill) paintMesh(this.limbFill, paint.fill);
     if (this.limbStroke && !wantStroke) {
       this._drop(this.limbStroke);
       this.limbStroke = null;
@@ -207,7 +222,7 @@ class Graphics {
         paint.fill,
       );
       changed = true;
-    } else if (this.ribbonFill) this.ribbonFill.tint = paint.fill;
+    } else if (this.ribbonFill) paintMesh(this.ribbonFill, paint.fill);
     if (this.ribbonStroke && !wantStroke) {
       this._drop(this.ribbonStroke);
       this.ribbonStroke = null;
@@ -279,9 +294,9 @@ class Graphics {
      frames and the creature draws as its meshes alone, for one frame. The
      bake itself waits for the pass to end, so this only books it. */
   _syncAtlas(renderer) {
-    const resolution = this.options.pixelResolution ?? 1;
+    const resolution = pixelResolutionOf(this.options);
     if (resolution !== this.nextResolution) {
-      this.nextPlan = Graphics.prepareAtlas(this.model, this.options);
+      this.nextPlan = prepareAtlas(this.model, resolution);
       this.nextResolution = resolution;
     }
     if (!renderer) return;
@@ -367,44 +382,48 @@ class Graphics {
     }
     const stride = state.layout.legStride;
     const projection = this.options.kneeProjection ?? null;
+    let centerX = projection?.centerX;
+    let centerY = projection?.centerY;
+    let perspective = projection?.perspective;
+    if (
+      Number.isFinite(centerX) &&
+      Number.isFinite(centerY) &&
+      Number.isFinite(perspective)
+    ) {
+      centerX = Math.max(
+        -MAX_WORLD_COORDINATE,
+        Math.min(MAX_WORLD_COORDINATE, centerX),
+      );
+      centerY = Math.max(
+        -MAX_WORLD_COORDINATE,
+        Math.min(MAX_WORLD_COORDINATE, centerY),
+      );
+      perspective = Math.max(0, Math.min(MAX_PERSPECTIVE, perspective));
+    } else perspective = 0;
+    const requestedOffset = projection?.maxOffset;
+    const maxOffset = Number.isFinite(requestedOffset)
+      ? Math.max(0, Math.min(MAX_WORLD_COORDINATE, requestedOffset))
+      : MAX_KNEE_OFFSET;
     const jointLean = this.model.legs.jointLean;
     for (let offset = 0; offset < legs.length; offset += stride) {
       const vertexOffset = (offset / stride) * LIMB_FLOATS;
       let kneeX = legs[offset + 2];
       let kneeY = legs[offset + 3];
-      if (projection) {
+      if (perspective > 0) {
         // Rendering may move only the shared knee; planted endpoints remain
         // simulation-owned and both limb segments must meet at one point.
-        if (
-          Number.isFinite(projection.perspective) &&
-          projection.perspective >= 0 &&
-          Number.isFinite(projection.centerX) &&
-          Number.isFinite(projection.centerY)
-        ) {
-          const viewDistance = Math.hypot(
-            kneeX - projection.centerX,
-            kneeY - projection.centerY,
+        const viewDistance = Math.hypot(kneeX - centerX, kneeY - centerY);
+        if (viewDistance > 0) {
+          const elbowHeight = Math.hypot(
+            kneeX - (legs[offset] + legs[offset + 4]) / 2,
+            kneeY - (legs[offset + 1] + legs[offset + 5]) / 2,
           );
-          if (viewDistance > 0 && projection.perspective > 0) {
-            const elbowHeight = Math.hypot(
-              kneeX - (legs[offset] + legs[offset + 4]) / 2,
-              kneeY - (legs[offset + 1] + legs[offset + 5]) / 2,
-            );
-            /* The policy object is live, so a host may put anything here
-               after construction validated it. An omitted cap is the world's
-               width, never Infinity, or the offset below can be too. */
-            const maxOffset = Number.isFinite(projection.maxOffset)
-              ? Math.max(0, projection.maxOffset)
-              : MAX_KNEE_OFFSET;
-            const radialOffset = Math.min(
-              maxOffset,
-              viewDistance * elbowHeight * projection.perspective,
-            );
-            kneeX +=
-              ((kneeX - projection.centerX) / viewDistance) * radialOffset;
-            kneeY +=
-              ((kneeY - projection.centerY) / viewDistance) * radialOffset;
-          }
+          const radialOffset = Math.min(
+            maxOffset,
+            viewDistance * elbowHeight * perspective,
+          );
+          kneeX += ((kneeX - centerX) / viewDistance) * radialOffset;
+          kneeY += ((kneeY - centerY) / viewDistance) * radialOffset;
         }
       }
       if (jointLean !== 0) {
@@ -568,9 +587,7 @@ class Graphics {
 
   // Zero is what `roundVertices` false means: no snapping at all.
   _snapResolution() {
-    return this.options.roundVertices === true
-      ? (this.options.pixelResolution ?? 1)
-      : 0;
+    return this.options.roundVertices === true ? this.nextResolution : 0;
   }
 
   _placeParticles(state, pixelResolution, inversePixelResolution) {

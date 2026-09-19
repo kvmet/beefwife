@@ -19,6 +19,7 @@ const files = [
   "test/beefwife/geometry.test.js",
   "test/beefwife/triangulation.test.js",
   "test/beefwife/api.test.js",
+  "test/beefwife/package.test.mjs",
 ];
 
 for (const file of files) {

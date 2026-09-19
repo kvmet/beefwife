@@ -66,7 +66,7 @@ class Bend {
 
   relax(chain, jointCorrectionHalf) {
     for (
-      let span = Math.min(MAX_BEND_SPAN, chain.count >> 2);
+      let span = Math.max(1, Math.min(MAX_BEND_SPAN, chain.count >> 2));
       span >= 1;
       span >>= 1
     )

@@ -76,6 +76,7 @@ try {
     "src/global.mjs",
     "src/graphics.mjs",
     "src/legs.mjs",
+    "src/limits.mjs",
     "src/model.mjs",
     "src/pixi.mjs",
     "src/schema.mjs",
@@ -86,8 +87,7 @@ try {
   const consumer = join(temporary, "consumer");
   mkdirSync(consumer);
   writeFileSync(join(consumer, "package.json"), '{"private":true}\n');
-  /* The renderer comes from the copy this repo already installed, so packing
-     stays offline and the peer under test is the version the peer range names. */
+  // Link the installed peer so this smoke test needs no registry access.
   run(
     npm,
     [
@@ -95,6 +95,8 @@ try {
       join(temporary, packed.filename),
       join(packageRoot, "node_modules", "pixi.js"),
       "--ignore-scripts",
+      "--offline",
+      "--install-links=false",
       "--no-audit",
       "--no-fund",
     ],

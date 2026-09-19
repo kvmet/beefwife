@@ -34,6 +34,12 @@ const contextFor = (shape, paint, scale) => {
   return context;
 };
 
+const paintMesh = (mesh, fill) => {
+  const color = new PIXI.Color(fill);
+  mesh.tint = color.toNumber();
+  mesh.alpha = color.alpha;
+};
+
 /* Fill always comes from a mesh and stroke always from a path, so a shape
    that wants both hands the same vertices to each. Stated triangles cannot
    be mistriangulated, which is what a body crossing over itself does to a
@@ -50,10 +56,10 @@ const meshFor = (positions, indices, color) => {
     texture: PIXI.Texture.WHITE,
     roundPixels: false,
   });
-  mesh.tint = color;
+  paintMesh(mesh, color);
   mesh.dynamicPositions = positions;
   mesh.positionBuffer = geometry.getBuffer("aPosition");
   return mesh;
 };
 
-export { discard, contextFor, meshFor };
+export { discard, contextFor, paintMesh, meshFor };

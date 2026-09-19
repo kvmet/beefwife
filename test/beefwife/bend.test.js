@@ -35,6 +35,52 @@ const turnAt = ({ x, y }, index) => {
   return Math.atan2(ax * by - ay * bx, ax * bx + ay * by);
 };
 
+for (const count of [2, 3]) {
+  const descriptor = JSON.parse(
+    JSON.stringify(fixture("undulating").descriptor),
+  );
+  descriptor.chain.sections.head.chunks = 1;
+  descriptor.chain.sections.head.spacing =
+    descriptor.chain.sections.trunk.spacing;
+  descriptor.chain.sections.trunk.chunks = count - 1;
+  descriptor.chain.sections.tail.chunks = 0;
+  descriptor.chain.skin.plates = [];
+  descriptor.chain.skin.ornaments = [];
+  descriptor.legs.pairs = 0;
+  descriptor.gait.bend.amplitude = 0;
+  descriptor.gait.gather.amplitude = 0;
+  descriptor.definitions.materials.body.jointCorrection = 1;
+  const model = compile(descriptor);
+  for (const target of [-0.5, 0.5]) {
+    const body = new Body(model, new Gait(model.gait));
+    body.place({ x: 0, y: 0 }, { x: 1, y: 0 });
+    const beforeX = body.chain.x.slice();
+    const beforeY = body.chain.y.slice();
+    body._updateLinkTargets(1);
+    body.bend.update(
+      model,
+      body.gait,
+      body.tables,
+      body.linkTargets,
+      1,
+      target,
+    );
+    body.bend.relax(body.chain, body.tables.jointCorrectionHalf);
+    if (count === 3) {
+      assert.ok(Math.abs(turnAt(body.chain, 1) - target) < 1e-12);
+      assert.ok(
+        Math.abs(body.bend.response(body.chain)[0].delivered - target) < 1e-12,
+      );
+    } else {
+      assert.deepEqual(body.chain.x, beforeX);
+      assert.deepEqual(body.chain.y, beforeY);
+      assert.deepEqual(body.bend.response(body.chain), []);
+      checks++;
+    }
+    checks += 2;
+  }
+}
+
 /* Correlating the turn against the command and against the same wave a
    quarter cycle later reads off the size and the delay together: the pair is
    the response as a vector, and whatever length is left once it is removed is

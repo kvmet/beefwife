@@ -56,7 +56,7 @@
     "access": "public"
   },
   "devDependencies": {
-    "pixi.js": "^8.19.0",
+    "pixi.js": "^8.21.0",
     "rolldown": "1.2.2"
   }
 }

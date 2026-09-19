@@ -98,6 +98,37 @@ assert.equal(
 for (const creature of [twin, otherTwin, matching]) creature.destroy();
 checks += 12;
 
+for (const freezeParent of [
+  (descriptor) => Object.freeze(descriptor),
+  (descriptor) => Object.freeze(descriptor.chain.sections),
+]) {
+  const shallow = copy(example);
+  freezeParent(shallow);
+  const first = new Beefwife(shallow, { random: () => 0.5 });
+  const second = new Beefwife(shallow, { random: () => 0.5 });
+  assert.equal(first.descriptor, second.descriptor);
+  assert.ok(Object.isFrozen(shallow.chain.sections.head));
+  assert.ok(Object.isFrozen(shallow.chain.skin.plates[0].at));
+  assert.throws(() => {
+    "use strict";
+    shallow.chain.sections.head.spacing = 99;
+  }, TypeError);
+  const replacement = copy(example);
+  replacement.name = "replacement";
+  freezeParent(replacement);
+  first.setDescriptor(replacement);
+  assert.ok(Object.isFrozen(replacement.chain.sections.head));
+  assert.throws(() => {
+    "use strict";
+    replacement.chain.sections.head.spacing = 99;
+  }, TypeError);
+  second.setDescriptor(replacement);
+  assert.equal(first.descriptor, second.descriptor);
+  first.destroy();
+  second.destroy();
+  checks += 7;
+}
+
 const borrowedPose = beefwife.getPose();
 assert.equal(beefwife.getPose(), borrowedPose);
 borrowedPose.head.x = -100;
@@ -553,11 +584,14 @@ assert.deepEqual(
 /* No renderer is on this page, which is the only path where a beefwife
    simulates without building a scene to draw it with. */
 const headless = vm.runInContext(
-  `const creature = new Beefwife(${JSON.stringify(example)});
+  `const descriptor = Beefwife.Descriptor.parse(${JSON.stringify(JSON.stringify(example))});
+   const textAgain = Beefwife.Descriptor.stringify(descriptor);
+   const creature = new Beefwife(Beefwife.Descriptor.parse(textAgain));
    creature.step(1 / 60);
    ({
      name: creature.descriptor.name,
      parse: typeof Beefwife.Descriptor.parse,
+     roundTrip: textAgain === Beefwife.Descriptor.stringify(creature.descriptor),
      onRender: creature.onRender,
      children: creature.children,
      moved: creature.getPose().head.x !== 0,
@@ -570,6 +604,7 @@ assert.deepEqual(
   {
     name: "beefwife",
     parse: "function",
+    roundTrip: true,
     onRender: null,
     children: undefined,
     moved: true,

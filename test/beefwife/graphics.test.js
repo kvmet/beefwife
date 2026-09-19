@@ -47,6 +47,202 @@ const particlesOf = (beefwife, label) =>
   };
   let checks = 0;
 
+  const fillsOf = (creature) =>
+    partsOf(creature).filter((child) => child instanceof Mesh);
+  for (const fill of ["transparent", "rgba(18, 52, 86, 0.25)", "#123456"]) {
+    const painted = copy(source);
+    painted.legs.pairs = 1;
+    painted.definitions.paints.leg.fill = fill;
+    painted.definitions.paints.ribbon.fill = fill;
+    const creature = new Beefwife(painted, { random: () => 0.5 });
+    const expected = new PIXI.Color(fill);
+    const meshes = fillsOf(creature);
+    assert.equal(meshes.length, 2);
+    for (const mesh of meshes) {
+      assert.equal(mesh.tint, expected.toNumber());
+      assert.equal(mesh.alpha, expected.alpha);
+      checks += 2;
+    }
+    for (const alpha of [0, 0.25, 1, 0, 1]) {
+      const next = copy(painted);
+      next.definitions.paints.leg.fill = `rgba(18, 52, 86, ${alpha})`;
+      next.definitions.paints.ribbon.fill = next.definitions.paints.leg.fill;
+      creature.setDescriptor(next);
+      assert.deepEqual(fillsOf(creature), meshes);
+      for (const mesh of meshes) {
+        assert.equal(mesh.tint, 0x123456);
+        assert.equal(mesh.alpha, alpha);
+        checks += 2;
+      }
+      checks++;
+    }
+    creature.destroy();
+    checks++;
+  }
+
+  const meshPositions = (creature) =>
+    fillsOf(creature).map((mesh) => [...mesh.dynamicPositions]);
+  const footPositions = (creature) =>
+    particlesOf(creature, "feet").map(({ x, y }) => [x, y]);
+  const projectionCases = [
+    [{ centerX: Number.MAX_VALUE }, { centerX: 1e9 }],
+    [{ centerX: -Number.MAX_VALUE }, { centerX: -1e9 }],
+    [{ centerY: Number.MAX_VALUE }, { centerY: 1e9 }],
+    [{ centerY: -Number.MAX_VALUE }, { centerY: -1e9 }],
+    [{ perspective: Number.MAX_VALUE }, { perspective: 1e6 }],
+    [{ perspective: -Number.MAX_VALUE }, { perspective: 0 }],
+    [{ maxOffset: Number.MAX_VALUE }, { maxOffset: 1e9 }],
+    [{ maxOffset: -Number.MAX_VALUE }, { maxOffset: 0 }],
+    [
+      {
+        centerX: Number.MAX_VALUE,
+        centerY: -Number.MAX_VALUE,
+        perspective: Number.MAX_VALUE,
+        maxOffset: Number.MAX_VALUE,
+      },
+      { centerX: 1e9, centerY: -1e9, perspective: 1e6, maxOffset: 1e9 },
+    ],
+    [
+      { centerX: Number.MAX_VALUE, centerY: Number.MAX_VALUE },
+      { centerX: 1e9, centerY: 1e9 },
+    ],
+  ];
+  for (const jointBend of [0, 1]) {
+    const descriptor = copy(source);
+    descriptor.legs.pairs = 1;
+    descriptor.legs.jointBend = jointBend;
+    descriptor.legs.jointLean = 0;
+    for (const [extreme, bounded] of projectionCases) {
+      const projection = { centerX: 0, centerY: 0, perspective: 0.002 };
+      const creature = new Beefwife(descriptor, {
+        random: () => 0.5,
+        render: { kneeProjection: projection },
+      });
+      const reference = new Beefwife(descriptor, {
+        random: () => 0.5,
+        render: { kneeProjection: { ...projection, ...bounded } },
+      });
+      await draw(creature);
+      await draw(reference);
+      const pose = copy(creature.getPose());
+      const feet = footPositions(creature);
+      Object.assign(projection, extreme);
+      const policy = { ...projection };
+      await draw(creature);
+      const positions = meshPositions(creature);
+      assert.ok(positions.flat().every(Number.isFinite));
+      assert.deepEqual(positions, meshPositions(reference));
+      assert.deepEqual(creature.getPose(), pose);
+      assert.deepEqual(footPositions(creature), feet);
+      assert.deepEqual(projection, policy);
+      creature.destroy();
+      reference.destroy();
+      checks += 5;
+    }
+  }
+
+  const projectedSource = copy(source);
+  projectedSource.legs.pairs = 1;
+  const projectionPolicy = { centerX: 1e9, centerY: 1e9, perspective: 1e6 };
+  const uncapped = new Beefwife(projectedSource, {
+    random: () => 0.5,
+    render: { kneeProjection: projectionPolicy },
+  });
+  const capped = new Beefwife(projectedSource, {
+    random: () => 0.5,
+    render: { kneeProjection: { ...projectionPolicy, maxOffset: 1e9 } },
+  });
+  assert.notDeepEqual(meshPositions(uncapped), meshPositions(capped));
+  const omittedCap = meshPositions(uncapped);
+  for (const maxOffset of [NaN, Infinity, null]) {
+    projectionPolicy.maxOffset = maxOffset;
+    await draw(uncapped);
+    assert.deepEqual(meshPositions(uncapped), omittedCap);
+    checks++;
+  }
+  const unprojected = new Beefwife(projectedSource, { random: () => 0.5 });
+  for (const key of ["centerX", "centerY", "perspective"]) {
+    const before = projectionPolicy[key];
+    projectionPolicy[key] = Infinity;
+    await draw(uncapped);
+    assert.deepEqual(meshPositions(uncapped), meshPositions(unprojected));
+    projectionPolicy[key] = before;
+    checks++;
+  }
+  uncapped.destroy();
+  capped.destroy();
+  unprojected.destroy();
+  checks++;
+
+  const particleTransforms = (creature) =>
+    [...bandsOf(creature)].map(([label, band]) => [
+      label,
+      band.particleChildren.map(({ x, y, rotation, scaleX, scaleY }) => [
+        x,
+        y,
+        rotation,
+        scaleX,
+        scaleY,
+      ]),
+    ]);
+  for (const [extreme, bounded, equivalent] of [
+    [Number.MAX_VALUE, 1e6, Number.MAX_VALUE / 2],
+    [Number.MIN_VALUE, 1e-6, Number.MIN_VALUE * 2],
+    [0, 1e-6, -Number.MAX_VALUE],
+  ]) {
+    const policy = { roundVertices: true, pixelResolution: 1 };
+    const creature = new Beefwife(source, { random: () => 0.5, render: policy });
+    const reference = new Beefwife(source, {
+      random: () => 0.5,
+      render: { roundVertices: true, pixelResolution: bounded },
+    });
+    await draw(creature);
+    await draw(reference);
+    const pose = copy(creature.getPose());
+    policy.pixelResolution = extreme;
+    await draw(creature);
+    assert.equal(policy.pixelResolution, extreme);
+    const positions = meshPositions(creature);
+    assert.ok(positions.flat().every(Number.isFinite));
+    assert.deepEqual(positions, meshPositions(reference));
+    assert.deepEqual(particleTransforms(creature), particleTransforms(reference));
+    assert.deepEqual(creature.getPose(), pose);
+    const texture = particlesOf(creature, "plates")[0].texture.source;
+    assert.equal(texture, particlesOf(reference, "plates")[0].texture.source);
+    const heldParts = [...partsOf(creature)];
+    policy.pixelResolution = equivalent;
+    await draw(creature);
+    assert.deepEqual(partsOf(creature), heldParts);
+    assert.equal(particlesOf(creature, "plates")[0].texture.source, texture);
+    for (const invalid of [NaN, Infinity, -Infinity, null, "1", true]) {
+      policy.pixelResolution = invalid;
+      assert.throws(
+        () => creature.onRender(stubRenderer),
+        /pixelResolution must be finite and positive/,
+      );
+      assert.deepEqual(partsOf(creature), heldParts);
+      assert.deepEqual(meshPositions(creature), positions);
+      policy.pixelResolution = bounded;
+      await draw(creature);
+      assert.deepEqual(partsOf(creature), heldParts);
+      assert.equal(particlesOf(creature, "plates")[0].texture.source, texture);
+      checks += 5;
+    }
+    delete policy.pixelResolution;
+    await draw(creature);
+    const defaulted = new Beefwife(source, {
+      random: () => 0.5,
+      render: { roundVertices: true },
+    });
+    await draw(defaulted);
+    assert.deepEqual(meshPositions(creature), meshPositions(defaulted));
+    assert.deepEqual(particleTransforms(creature), particleTransforms(defaulted));
+    creature.destroy();
+    reference.destroy();
+    defaulted.destroy();
+    checks += 10;
+  }
+
   const invalidShape = copy(source);
   invalidShape.definitions.shapes.bodyPlate.path = "M 0 0 L 1e309 0 L 0 10 Z";
   assert.throws(() => new Beefwife(invalidShape), /bounds must be finite/);
