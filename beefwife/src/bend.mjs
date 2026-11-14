@@ -96,6 +96,7 @@ class Bend {
       const vx = wantedX[to] - wantedX[pivot];
       const vy = wantedY[to] - wantedY[pivot];
       const target = Math.atan2(wx * vy - wy * vx, wx * vx + wy * vy);
+      // Unwrapped: a joint turns back through straight, never through the fold.
       const correction = (target - turn) * jointCorrectionHalf[pivot];
       const cosine = Math.cos(correction);
       const sine = Math.sin(correction);

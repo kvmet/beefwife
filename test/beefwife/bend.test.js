@@ -15,6 +15,7 @@ const path = require("node:path");
 const { compile } = require("../../beefwife/src/model.mjs");
 const { Body } = require("../../beefwife/src/body.mjs");
 const { Gait } = require("../../beefwife/src/drive.mjs");
+const { Bend } = require("../../beefwife/src/bend.mjs");
 
 let checks = 0;
 const degrees = (radians) => (radians * 180) / Math.PI;
@@ -236,5 +237,26 @@ assert.ok(
   `a smooth commanded curve came out at ${reached.toFixed(3)} of itself`,
 );
 checks++;
+
+/* A joint bent past the fold one way and asked to bend the other way turns
+   through straight, never through the fold: there the chain's two sides would
+   pass through each other. Both angles come from atan2, so their plain
+   difference is that path. `undulating` meets this case under hard steering:
+   135 degrees one way against a target 75 degrees the other. */
+{
+  const radians = (deg) => (deg * Math.PI) / 180;
+  const bend = new Bend(3);
+  const chain = {
+    count: 3,
+    x: new Float64Array([-1, 0, Math.cos(radians(135))]),
+    y: new Float64Array([0, 0, Math.sin(radians(135))]),
+  };
+  bend.wantedX.set([-1, 0, Math.cos(radians(-75))]);
+  bend.wantedY.set([0, 0, Math.sin(radians(-75))]);
+  bend.relaxSpan(chain, new Float64Array([0, 0.25, 0]), 1);
+  // Each half turns a quarter of the 210 degrees back through straight.
+  assert.ok(Math.abs(degrees(turnAt(chain, 1)) - 30) < 1e-9);
+  checks++;
+}
 
 console.log(`beefwife bend: ${checks} wave delivery checks passed`);
