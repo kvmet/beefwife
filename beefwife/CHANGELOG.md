@@ -11,6 +11,9 @@ First release.
 and reports bounds on the portable JSON. Schema v1 is the only descriptor shape
 accepted.
 
+Seven sample descriptors ship under `samples/`, reachable from a CDN by any
+page that wants creatures without designing its own.
+
 Simulation runs headless where no renderer is present: the module builds no
 display children and leaves `onRender` null, so a server gets the pose without
 Pixi. Both Pixi renderers are supported, WebGL and WebGPU.

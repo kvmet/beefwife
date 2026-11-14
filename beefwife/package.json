@@ -42,6 +42,7 @@
     "beefwife.example.json",
     "beefwife.js",
     "beefwife.min.js",
+    "samples",
     "src"
   ],
   "sideEffects": false,

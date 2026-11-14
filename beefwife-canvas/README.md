@@ -29,6 +29,10 @@ Load Pixi 8, then the runtime. Beefwife and Terrain ride inside
 `beefwife-canvas.js`, so the page needs nothing else and gains one global,
 `BeefwifeCanvas`.
 
+Creatures are separate: the canvas draws whichever descriptors it is pointed
+at. `@kvmet/beefwife` ships seven samples under `samples/`, reachable from a
+CDN without installing it.
+
 From a CDN:
 
 ```html

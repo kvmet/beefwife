@@ -9,20 +9,28 @@ Their appearance and behavior can vary significantly and they can be told to avo
 
 ## How do I add `Beefwives` to my website?
 
-Put a canvas on the page, point it at a manifest, and load two scripts:
+Put a canvas on the page, name the creatures it draws from, and load two
+scripts:
 
 ```html
 <canvas
   data-beefwife-canvas
-  data-beefwife-manifest="beefwives/manifest.json"
   data-beefwife-count="6"
+  data-beefwife-sources="
+    https://cdn.jsdelivr.net/npm/@kvmet/beefwife@0.1.0/samples/slow-guy.json,
+    https://cdn.jsdelivr.net/npm/@kvmet/beefwife@0.1.0/samples/long-girl.json"
 ></canvas>
 
 <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.23.0/dist/pixi.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@kvmet/beefwife-canvas@0.1.0/beefwife-canvas.min.js"></script>
 ```
 
-The manifest lists the creatures the canvas draws from, with an optional weight:
+That page works as written. `@kvmet/beefwife` ships seven samples: `bounding`,
+`chevron-guy`, `long-girl`, `peristaltic`, `reticulating`, `slow-guy`, and
+`undulating`.
+
+For a larger cast, or to draw one creature more often than another, point
+`data-beefwife-manifest` at a manifest instead:
 
 ```json
 {
@@ -34,8 +42,7 @@ The manifest lists the creatures the canvas draws from, with an optional weight:
 }
 ```
 
-Each source is a beefwife descriptor, plain JSON. Copy the ones in
-[`beefwife/samples`](beefwife/samples/) to start, or design your own in Beefwife
+Each source is a beefwife descriptor, plain JSON. Design your own in Beefwife
 Lab. [`examples/beefwife-canvas`](examples/beefwife-canvas/) is a working page
 with every option wired up.
 
