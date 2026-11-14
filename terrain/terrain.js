@@ -1,15 +1,14 @@
 /* Terrain v0.2.0. Generated from terrain/src; do not edit. */
 var Terrain = (function() {
 
-//#region \0rolldown/runtime.js
+// \0rolldown/runtime.js
 	var __defProp = Object.defineProperty;
 	var __name = (target, value) => __defProp(target, "name", {
 		value,
 		configurable: true
 	});
 
-//#endregion
-//#region src/support.mjs
+// src/support.mjs
 	var NEXT_VIEW = /* @__PURE__ */ new DataView(/* @__PURE__ */ new ArrayBuffer(8));
 	var nextFloat = (value, up) => {
 		if (value === 0) return up ? Number.MIN_VALUE : -Number.MIN_VALUE;
@@ -106,8 +105,7 @@ var Terrain = (function() {
 		return root;
 	};
 
-//#endregion
-//#region src/mesh.mjs
+// src/mesh.mjs
 	var TerrainMesh = class {
 		constructor(options = {}) {
 			this.options = optionsOf(options);
@@ -167,7 +165,7 @@ var Terrain = (function() {
 				if (includeDistance) result.distance = 0;
 				return result;
 			}
-			let nearD = Infinity;
+			let nearD = 1e400;
 			let nearX = 0;
 			let nearY = 0;
 			for (const slab of this.slabs) {
@@ -195,7 +193,7 @@ var Terrain = (function() {
 					}
 				}
 			}
-			if (nearD === Infinity || nearD === 0) return null;
+			if (nearD === 1e400 || nearD === 0) return null;
 			const distance = above(nearD);
 			const scale = distance / nearD;
 			const dx = nearX * scale;
@@ -392,8 +390,7 @@ var Terrain = (function() {
 		}
 	};
 
-//#endregion
-//#region src/terrain.mjs
+// src/terrain.mjs
 	var Terrain = class extends TerrainMesh {
 		_land(p) {
 			return this._nearest(p.x, p.y, p, true, false);
@@ -418,7 +415,7 @@ var Terrain = (function() {
 				};
 			}
 			let best = null;
-			let bestD = Infinity;
+			let bestD = 1e400;
 			for (const cell of this.cells) {
 				const x = Math.max(cell.left, Math.min(cell.right, p.x));
 				const y = Math.max(cell.lo, Math.min(cell.hi, p.y));
@@ -477,7 +474,7 @@ var Terrain = (function() {
 		/** A* over directed gate crossings, using gate centers for graph costs. */
 		_cross(from, start, to, goal) {
 			const size = 2 * this.gates.length;
-			const cost = new Float64Array(size).fill(Infinity);
+			const cost = new Float64Array(size).fill(1e400);
 			const prev = new Int32Array(size).fill(-1);
 			const done = new Uint8Array(size);
 			const heapNodes = [];
@@ -529,39 +526,43 @@ var Terrain = (function() {
 				const crossing = crossings[i];
 				const gateLeft = crossing ? crossing.forward ? crossing.gate.high : crossing.gate.low : goal;
 				const gateRight = crossing ? crossing.forward ? crossing.gate.low : crossing.gate.high : goal;
-				if (cross2(apex, right, gateRight) <= 0) if (right === apex || cross2(apex, left, gateRight) > 0) {
-					right = gateRight;
-					rightAt = i;
-				} else {
-					out.push({
-						x: left.x,
-						y: left.y
-					});
-					apex = left;
-					apexAt = leftAt;
-					left = apex;
-					right = apex;
-					leftAt = apexAt;
-					rightAt = apexAt;
-					i = apexAt;
-					continue;
+				if (cross2(apex, right, gateRight) <= 0) {
+					if (right === apex || cross2(apex, left, gateRight) > 0) {
+						right = gateRight;
+						rightAt = i;
+					} else {
+						out.push({
+							x: left.x,
+							y: left.y
+						});
+						apex = left;
+						apexAt = leftAt;
+						left = apex;
+						right = apex;
+						leftAt = apexAt;
+						rightAt = apexAt;
+						i = apexAt;
+						continue;
+					}
 				}
-				if (cross2(apex, left, gateLeft) >= 0) if (left === apex || cross2(apex, right, gateLeft) < 0) {
-					left = gateLeft;
-					leftAt = i;
-				} else {
-					out.push({
-						x: right.x,
-						y: right.y
-					});
-					apex = right;
-					apexAt = rightAt;
-					left = apex;
-					right = apex;
-					leftAt = apexAt;
-					rightAt = apexAt;
-					i = apexAt;
-					continue;
+				if (cross2(apex, left, gateLeft) >= 0) {
+					if (left === apex || cross2(apex, right, gateLeft) < 0) {
+						left = gateLeft;
+						leftAt = i;
+					} else {
+						out.push({
+							x: right.x,
+							y: right.y
+						});
+						apex = right;
+						apexAt = rightAt;
+						left = apex;
+						right = apex;
+						leftAt = apexAt;
+						rightAt = apexAt;
+						i = apexAt;
+						continue;
+					}
 				}
 			}
 			out.push(goal);
@@ -619,7 +620,6 @@ var Terrain = (function() {
 		enumerable: true
 	});
 
-//#endregion
 return Terrain;
 })();
 if (typeof module !== "undefined" && module.exports) module.exports = Terrain;

@@ -2,7 +2,7 @@
    Bundles @kvmet/beefwife (MPL-2.0) and @kvmet/terrain (MIT, (c) Kristen Metcalfe). */
 var BeefwifeCanvas = (function(pixi_js) {
 
-//#region \0rolldown/runtime.js
+// \0rolldown/runtime.js
 	var __create = Object.create;
 	var __defProp = Object.defineProperty;
 	var __name = (target, value) => __defProp(target, "name", {
@@ -13,18 +13,18 @@ var BeefwifeCanvas = (function(pixi_js) {
 	var __getOwnPropNames = Object.getOwnPropertyNames;
 	var __getProtoOf = Object.getPrototypeOf;
 	var __hasOwnProp = Object.prototype.hasOwnProperty;
-	var __exportAll = (all, no_symbols) => {
-		let target = {};
+	var __exportAll = (all, flags) => {
+		let target = Object.setPrototypeOf({}, null);
 		for (var name in all) {
 			__defProp(target, name, {
 				get: all[name],
 				enumerable: true
 			});
 		}
-		if (!no_symbols) {
+		if (!(flags & 1)) {
 			__defProp(target, Symbol.toStringTag, { value: "Module" });
 		}
-		return target;
+		return flags & 2 ? target : Object.preventExtensions(target);
 	};
 	var __copyProps = (to, from, except, desc) => {
 		if (from && typeof from === "object" || typeof from === "function") {
@@ -45,10 +45,9 @@ var BeefwifeCanvas = (function(pixi_js) {
 		enumerable: true
 	}) : target, mod));
 
-//#endregion
 pixi_js = __toESM(pixi_js, 1);
 
-//#region ../beefwife/src/pixi.mjs
+// ../beefwife/src/pixi.mjs
 /**
 	* The renderer seam. Pixi is a peer, not a dependency: the module build imports
 	* it and the classic-script build reads the page's global, which may be absent.
@@ -58,8 +57,7 @@ pixi_js = __toESM(pixi_js, 1);
 	var PIXI = pixi_js;
 	var available = typeof PIXI?.Container === "function";
 
-//#endregion
-//#region ../beefwife/src/schema.mjs
+// ../beefwife/src/schema.mjs
 /**
 	* The v1 schema tree: every field a beefwife descriptor may hold, its kind,
 	* and its bounds. Length-dimensioned fields carry `length`, the power of the
@@ -304,8 +302,7 @@ pixi_js = __toESM(pixi_js, 1);
 		})
 	});
 
-//#endregion
-//#region ../beefwife/src/descriptor.mjs
+// ../beefwife/src/descriptor.mjs
 /**
 	* Canonical JSON contract for a beefwife. Definitions are descriptor-local:
 	* sections link physical materials, while visual placements link shapes and
@@ -621,8 +618,7 @@ pixi_js = __toESM(pixi_js, 1);
 		return JSON.stringify(read(value), null, space);
 	};
 
-//#endregion
-//#region ../beefwife/src/model.mjs
+// ../beefwife/src/model.mjs
 /**
 	* Compiles a validated descriptor into immutable runtime topology. This is a
 	* private seam: callers keep the descriptor while physics consumes resolved
@@ -822,8 +818,7 @@ pixi_js = __toESM(pixi_js, 1);
 		});
 	};
 
-//#endregion
-//#region ../beefwife/src/drive.mjs
+// ../beefwife/src/drive.mjs
 /** Schema-v1 gait clock and spatial channels. Private to the Beefwife runtime. */
 	var TAU$2 = Math.PI * 2;
 	var positiveModulo = (value, divisor) => (value % divisor + divisor) % divisor;
@@ -861,8 +856,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region ../beefwife/src/tables.mjs
+// ../beefwife/src/tables.mjs
 /**
 	* The model, flattened for the solver. Every per-chunk and per-link constant
 	* a substep reads, unpacked from the model's nested records into parallel
@@ -936,8 +930,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region ../beefwife/src/chain.mjs
+// ../beefwife/src/chain.mjs
 /**
 	* The chain's mutable state, one typed array per field. The counterpart to
 	* ChainTables: that holds what the model says and never changes, this holds
@@ -989,10 +982,10 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		worldCorrection(limit) {
 			const { x, y, px, py, count } = this;
-			let minimumX = Infinity;
-			let maximumX = -Infinity;
-			let minimumY = Infinity;
-			let maximumY = -Infinity;
+			let minimumX = 1e400;
+			let maximumX = -1e400;
+			let minimumY = 1e400;
+			let maximumY = -1e400;
 			for (let index = 0; index < count; index++) {
 				minimumX = Math.min(minimumX, x[index], px[index]);
 				maximumX = Math.max(maximumX, x[index], px[index]);
@@ -1010,8 +1003,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region ../beefwife/src/carry.mjs
+// ../beefwife/src/carry.mjs
 /**
 	* Moving chunk state onto a chain whose section counts changed. A chunk the
 	* descriptor still names keeps its position and velocity; an added one is
@@ -1071,8 +1063,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region ../beefwife/src/bend.mjs
+// ../beefwife/src/bend.mjs
 /**
 	* The chain's angular constraint. One joint on its own reaches the turn it is
 	* asked for exactly, but a chain of them barely bends: each joint pushes its
@@ -1204,8 +1195,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region ../beefwife/src/body.mjs
+// ../beefwife/src/body.mjs
 /** Schema-v1 Verlet chain. Private state is owned by one Beefwife instance. */
 	var TAU$1 = Math.PI * 2;
 	var PHYSICS_STEP = 1 / 60;
@@ -1543,8 +1533,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region ../beefwife/src/legs.mjs
+// ../beefwife/src/legs.mjs
 /** Schema-v1 planted-foot state. Private to one Beefwife instance. */
 	var lerp = (start, end, amount) => start + (end - start) * amount;
 	var clamp = (value, low, high) => Math.max(low, Math.min(high, value));
@@ -1718,8 +1707,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region ../beefwife/src/skin.mjs
+// ../beefwife/src/skin.mjs
 /** Schema-v1 ornament motion and renderer snapshots. */
 	var RENDER_LAYOUT = Object.freeze({
 		chunkStride: 4,
@@ -1947,8 +1935,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region ../beefwife/src/geometry.mjs
+// ../beefwife/src/geometry.mjs
 /** Vertex math and pixel snapping for a Beefwife's meshes and outlines. */
 	var KNEE_SEGMENTS = 4;
 	var KNEE_POINTS = 5;
@@ -2089,8 +2076,7 @@ pixi_js = __toESM(pixi_js, 1);
 		snapPositions(positions, offset, offset + 28, pixelResolution, inversePixelResolution);
 	};
 
-//#endregion
-//#region ../beefwife/src/display.mjs
+// ../beefwife/src/display.mjs
 /** Pixi resource lifetime and construction for the parts a Beefwife draws. */
 	var discard = (parent, child) => {
 		if (child.parent === parent) parent.removeChild(child);
@@ -2133,8 +2119,7 @@ pixi_js = __toESM(pixi_js, 1);
 		return mesh;
 	};
 
-//#endregion
-//#region ../beefwife/src/atlas.mjs
+// ../beefwife/src/atlas.mjs
 /**
 	* One texture holding every shape a Beefwife places, so its feet, plates and
 	* ornaments draw as particles out of a shared frame instead of a Graphics
@@ -2359,15 +2344,13 @@ pixi_js = __toESM(pixi_js, 1);
 		atlas.target.destroy(true);
 	};
 
-//#endregion
-//#region ../beefwife/src/limits.mjs
+// ../beefwife/src/limits.mjs
 	var MAX_WORLD_COORDINATE = 1e9;
 	var MIN_PIXEL_RESOLUTION = 1e-6;
 	var MAX_PIXEL_RESOLUTION = 1e6;
 	var MAX_PERSPECTIVE = 1e6;
 
-//#endregion
-//#region ../beefwife/src/graphics.mjs
+// ../beefwife/src/graphics.mjs
 /** Pixi display ownership for one Beefwife. */
 	var BAND_LABELS = [
 		"feet",
@@ -2783,8 +2766,7 @@ pixi_js = __toESM(pixi_js, 1);
 	};
 	var graphics_default = available ? Graphics : HeadlessGraphics;
 
-//#endregion
-//#region ../beefwife/src/beefwife.mjs
+// ../beefwife/src/beefwife.mjs
 /** Public lifecycle for one schema-v1 beefwife. */
 	var HeadlessContainer = class {
 		destroy() {
@@ -3124,8 +3106,7 @@ pixi_js = __toESM(pixi_js, 1);
 		enumerable: true
 	});
 
-//#endregion
-//#region src/cast.mjs
+// src/cast.mjs
 /** Descriptor and cast loading for BeefwifeCanvas. */
 	var responseJson = async (url, signal) => {
 		const response = await fetch(url, {
@@ -3204,8 +3185,7 @@ pixi_js = __toESM(pixi_js, 1);
 		};
 	};
 
-//#endregion
-//#region src/mount-options.mjs
+// src/mount-options.mjs
 /** Public mount-option and declarative-attribute validation. */
 	var BOOLEAN = /* @__PURE__ */ new Set(["true", "false"]);
 	var OPTIONS = {
@@ -3386,8 +3366,7 @@ pixi_js = __toESM(pixi_js, 1);
 		return terrain;
 	};
 
-//#endregion
-//#region ../terrain/src/support.mjs
+// ../terrain/src/support.mjs
 	var NEXT_VIEW = /* @__PURE__ */ new DataView(/* @__PURE__ */ new ArrayBuffer(8));
 	var nextFloat = (value, up) => {
 		if (value === 0) return up ? Number.MIN_VALUE : -Number.MIN_VALUE;
@@ -3484,8 +3463,7 @@ pixi_js = __toESM(pixi_js, 1);
 		return root;
 	};
 
-//#endregion
-//#region ../terrain/src/mesh.mjs
+// ../terrain/src/mesh.mjs
 	var TerrainMesh = class {
 		constructor(options = {}) {
 			this.options = optionsOf(options);
@@ -3545,7 +3523,7 @@ pixi_js = __toESM(pixi_js, 1);
 				if (includeDistance) result.distance = 0;
 				return result;
 			}
-			let nearD = Infinity;
+			let nearD = 1e400;
 			let nearX = 0;
 			let nearY = 0;
 			for (const slab of this.slabs) {
@@ -3573,7 +3551,7 @@ pixi_js = __toESM(pixi_js, 1);
 					}
 				}
 			}
-			if (nearD === Infinity || nearD === 0) return null;
+			if (nearD === 1e400 || nearD === 0) return null;
 			const distance = above(nearD);
 			const scale = distance / nearD;
 			const dx = nearX * scale;
@@ -3770,8 +3748,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region ../terrain/src/terrain.mjs
+// ../terrain/src/terrain.mjs
 	var Terrain = class extends TerrainMesh {
 		_land(p) {
 			return this._nearest(p.x, p.y, p, true, false);
@@ -3796,7 +3773,7 @@ pixi_js = __toESM(pixi_js, 1);
 				};
 			}
 			let best = null;
-			let bestD = Infinity;
+			let bestD = 1e400;
 			for (const cell of this.cells) {
 				const x = Math.max(cell.left, Math.min(cell.right, p.x));
 				const y = Math.max(cell.lo, Math.min(cell.hi, p.y));
@@ -3855,7 +3832,7 @@ pixi_js = __toESM(pixi_js, 1);
 		/** A* over directed gate crossings, using gate centers for graph costs. */
 		_cross(from, start, to, goal) {
 			const size = 2 * this.gates.length;
-			const cost = new Float64Array(size).fill(Infinity);
+			const cost = new Float64Array(size).fill(1e400);
 			const prev = new Int32Array(size).fill(-1);
 			const done = new Uint8Array(size);
 			const heapNodes = [];
@@ -3907,39 +3884,43 @@ pixi_js = __toESM(pixi_js, 1);
 				const crossing = crossings[i];
 				const gateLeft = crossing ? crossing.forward ? crossing.gate.high : crossing.gate.low : goal;
 				const gateRight = crossing ? crossing.forward ? crossing.gate.low : crossing.gate.high : goal;
-				if (cross2(apex, right, gateRight) <= 0) if (right === apex || cross2(apex, left, gateRight) > 0) {
-					right = gateRight;
-					rightAt = i;
-				} else {
-					out.push({
-						x: left.x,
-						y: left.y
-					});
-					apex = left;
-					apexAt = leftAt;
-					left = apex;
-					right = apex;
-					leftAt = apexAt;
-					rightAt = apexAt;
-					i = apexAt;
-					continue;
+				if (cross2(apex, right, gateRight) <= 0) {
+					if (right === apex || cross2(apex, left, gateRight) > 0) {
+						right = gateRight;
+						rightAt = i;
+					} else {
+						out.push({
+							x: left.x,
+							y: left.y
+						});
+						apex = left;
+						apexAt = leftAt;
+						left = apex;
+						right = apex;
+						leftAt = apexAt;
+						rightAt = apexAt;
+						i = apexAt;
+						continue;
+					}
 				}
-				if (cross2(apex, left, gateLeft) >= 0) if (left === apex || cross2(apex, right, gateLeft) < 0) {
-					left = gateLeft;
-					leftAt = i;
-				} else {
-					out.push({
-						x: right.x,
-						y: right.y
-					});
-					apex = right;
-					apexAt = rightAt;
-					left = apex;
-					right = apex;
-					leftAt = apexAt;
-					rightAt = apexAt;
-					i = apexAt;
-					continue;
+				if (cross2(apex, left, gateLeft) >= 0) {
+					if (left === apex || cross2(apex, right, gateLeft) < 0) {
+						left = gateLeft;
+						leftAt = i;
+					} else {
+						out.push({
+							x: right.x,
+							y: right.y
+						});
+						apex = right;
+						apexAt = rightAt;
+						left = apex;
+						right = apex;
+						leftAt = apexAt;
+						rightAt = apexAt;
+						i = apexAt;
+						continue;
+					}
 				}
 			}
 			out.push(goal);
@@ -3997,8 +3978,7 @@ pixi_js = __toESM(pixi_js, 1);
 		enumerable: true
 	});
 
-//#endregion
-//#region src/steering.mjs
+// src/steering.mjs
 /**
 	* Where a creature is trying to get to.
 	*
@@ -4125,8 +4105,7 @@ pixi_js = __toESM(pixi_js, 1);
 		return result;
 	};
 
-//#endregion
-//#region src/path.mjs
+// src/path.mjs
 /**
 	* Where to go, and the way there.
 	*
@@ -4188,8 +4167,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region src/actor.mjs
+// src/actor.mjs
 /** Route following and Beefwife control for one host-owned plan. */
 	var BEEFWIFE_CANVAS_ACTOR_LOST_MARGIN = 200;
 	var actorRandomBetween = (random, a, b) => a + random() * (b - a);
@@ -4379,8 +4357,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region src/options.mjs
+// src/options.mjs
 /** Limits and scalar option validation for the BeefwifeCanvasRuntime frame host. */
 	var DEBUG_KEYS = /* @__PURE__ */ new Set([
 		"routes",
@@ -4452,8 +4429,7 @@ pixi_js = __toESM(pixi_js, 1);
 		return weighted[weighted.length - 1].name;
 	};
 
-//#endregion
-//#region src/render.mjs
+// src/render.mjs
 /** Pixi scene synchronization and optional route debugging for BeefwifeCanvasRuntime. */
 	var drawTerrain = (graphics, terrainView, pixel) => {
 		for (const rectangle of terrainView.rectangles) graphics.rect(rectangle.left, rectangle.top, rectangle.right - rectangle.left, rectangle.bottom - rectangle.top);
@@ -4512,8 +4488,7 @@ pixi_js = __toESM(pixi_js, 1);
 		scene.render();
 	};
 
-//#endregion
-//#region src/scene.mjs
+// src/scene.mjs
 /** Pixi application, stage, canvas sizing, and display ownership. */
 	var BeefwifeCanvasScene = class {
 		constructor(options = {}) {
@@ -4610,12 +4585,14 @@ pixi_js = __toESM(pixi_js, 1);
 			this._syncPixelResolution();
 			this.canvas.style.imageRendering = this.imageRendering;
 			const projection = this.renderOptions.kneeProjection;
-			if (projection) if (this.kneeProjectionCenter === "viewport") {
-				projection.centerX = window.innerWidth / 2 - viewport.left;
-				projection.centerY = window.innerHeight / 2 - viewport.top;
-			} else {
-				projection.centerX = viewport.width / 2;
-				projection.centerY = viewport.height / 2;
+			if (projection) {
+				if (this.kneeProjectionCenter === "viewport") {
+					projection.centerX = window.innerWidth / 2 - viewport.left;
+					projection.centerY = window.innerHeight / 2 - viewport.top;
+				} else {
+					projection.centerX = viewport.width / 2;
+					projection.centerY = viewport.height / 2;
+				}
 			}
 			this.application.renderer.resolution = this.dpr;
 			this.application.renderer.resize(viewport.width, viewport.height);
@@ -4663,8 +4640,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region src/targeting.mjs
+// src/targeting.mjs
 /** Destination ownership and satisfaction policy for routed runtime. */
 	var pointOf = (value, path = "target") => {
 		if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${path} must be an object`);
@@ -4724,8 +4700,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region src/population.mjs
+// src/population.mjs
 /** Actor collection, spawn queue, cast selection, and target-policy ownership. */
 	var BeefwifeCanvasPopulation = class {
 		constructor(terrain, router, options = {}) {
@@ -4840,8 +4815,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region src/runtime.mjs
+// src/runtime.mjs
 /** Coordinates scene, population, terrain observation, and frame timing. */
 	var BeefwifeCanvasRuntime = class BeefwifeCanvasRuntime {
 		static async create(options = {}) {
@@ -4861,8 +4835,8 @@ pixi_js = __toESM(pixi_js, 1);
 			if (!this.renderFps || this.renderFps > this.physicsFps) this.renderFps = this.physicsFps;
 			this.renderInterval = 1e3 / this.renderFps;
 			this.physicsInterval = 1e3 / this.physicsFps;
-			const maxPixelRatio = options.maxPixelRatio ?? Infinity;
-			if (maxPixelRatio !== Infinity && (!Number.isFinite(maxPixelRatio) || maxPixelRatio <= 0)) throw new RangeError("maxPixelRatio must be positive");
+			const maxPixelRatio = options.maxPixelRatio ?? 1e400;
+			if (maxPixelRatio !== 1e400 && (!Number.isFinite(maxPixelRatio) || maxPixelRatio <= 0)) throw new RangeError("maxPixelRatio must be positive");
 			const roam = options.roam ? {
 				...BEEFWIFE_CANVAS_ROUTE_DEFAULTS,
 				...options.roam
@@ -5211,8 +5185,7 @@ pixi_js = __toESM(pixi_js, 1);
 		});
 	};
 
-//#endregion
-//#region src/canvas.mjs
+// src/canvas.mjs
 /** Declarative, author-placed canvas host for terrain-routed Beefwives. */
 	var controllers = /* @__PURE__ */ new WeakMap();
 	var renderers = /* @__PURE__ */ new WeakMap();
@@ -5609,7 +5582,6 @@ pixi_js = __toESM(pixi_js, 1);
 		scan: autoMount
 	};
 
-//#endregion
 return BeefwifeCanvas;
 })(globalThis.PIXI);
 if (typeof module !== "undefined" && module.exports) module.exports = BeefwifeCanvas;

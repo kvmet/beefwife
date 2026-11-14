@@ -1,7 +1,7 @@
 /* Beefwife v0.1.0. Generated from beefwife/src; do not edit. */
 var Beefwife = (function(pixi_js) {
 
-//#region \0rolldown/runtime.js
+// \0rolldown/runtime.js
 	var __create = Object.create;
 	var __defProp = Object.defineProperty;
 	var __name = (target, value) => __defProp(target, "name", {
@@ -12,18 +12,18 @@ var Beefwife = (function(pixi_js) {
 	var __getOwnPropNames = Object.getOwnPropertyNames;
 	var __getProtoOf = Object.getPrototypeOf;
 	var __hasOwnProp = Object.prototype.hasOwnProperty;
-	var __exportAll = (all, no_symbols) => {
-		let target = {};
+	var __exportAll = (all, flags) => {
+		let target = Object.setPrototypeOf({}, null);
 		for (var name in all) {
 			__defProp(target, name, {
 				get: all[name],
 				enumerable: true
 			});
 		}
-		if (!no_symbols) {
+		if (!(flags & 1)) {
 			__defProp(target, Symbol.toStringTag, { value: "Module" });
 		}
-		return target;
+		return flags & 2 ? target : Object.preventExtensions(target);
 	};
 	var __copyProps = (to, from, except, desc) => {
 		if (from && typeof from === "object" || typeof from === "function") {
@@ -44,10 +44,9 @@ var Beefwife = (function(pixi_js) {
 		enumerable: true
 	}) : target, mod));
 
-//#endregion
 pixi_js = __toESM(pixi_js, 1);
 
-//#region src/pixi.mjs
+// src/pixi.mjs
 /**
 	* The renderer seam. Pixi is a peer, not a dependency: the module build imports
 	* it and the classic-script build reads the page's global, which may be absent.
@@ -57,8 +56,7 @@ pixi_js = __toESM(pixi_js, 1);
 	var PIXI = pixi_js;
 	var available = typeof PIXI?.Container === "function";
 
-//#endregion
-//#region src/schema.mjs
+// src/schema.mjs
 /**
 	* The v1 schema tree: every field a beefwife descriptor may hold, its kind,
 	* and its bounds. Length-dimensioned fields carry `length`, the power of the
@@ -303,8 +301,7 @@ pixi_js = __toESM(pixi_js, 1);
 		})
 	});
 
-//#endregion
-//#region src/descriptor.mjs
+// src/descriptor.mjs
 /**
 	* Canonical JSON contract for a beefwife. Definitions are descriptor-local:
 	* sections link physical materials, while visual placements link shapes and
@@ -620,8 +617,7 @@ pixi_js = __toESM(pixi_js, 1);
 		return JSON.stringify(read(value), null, space);
 	};
 
-//#endregion
-//#region src/model.mjs
+// src/model.mjs
 /**
 	* Compiles a validated descriptor into immutable runtime topology. This is a
 	* private seam: callers keep the descriptor while physics consumes resolved
@@ -821,8 +817,7 @@ pixi_js = __toESM(pixi_js, 1);
 		});
 	};
 
-//#endregion
-//#region src/drive.mjs
+// src/drive.mjs
 /** Schema-v1 gait clock and spatial channels. Private to the Beefwife runtime. */
 	var TAU$2 = Math.PI * 2;
 	var positiveModulo = (value, divisor) => (value % divisor + divisor) % divisor;
@@ -860,8 +855,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region src/tables.mjs
+// src/tables.mjs
 /**
 	* The model, flattened for the solver. Every per-chunk and per-link constant
 	* a substep reads, unpacked from the model's nested records into parallel
@@ -935,8 +929,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region src/chain.mjs
+// src/chain.mjs
 /**
 	* The chain's mutable state, one typed array per field. The counterpart to
 	* ChainTables: that holds what the model says and never changes, this holds
@@ -988,10 +981,10 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		worldCorrection(limit) {
 			const { x, y, px, py, count } = this;
-			let minimumX = Infinity;
-			let maximumX = -Infinity;
-			let minimumY = Infinity;
-			let maximumY = -Infinity;
+			let minimumX = 1e400;
+			let maximumX = -1e400;
+			let minimumY = 1e400;
+			let maximumY = -1e400;
 			for (let index = 0; index < count; index++) {
 				minimumX = Math.min(minimumX, x[index], px[index]);
 				maximumX = Math.max(maximumX, x[index], px[index]);
@@ -1009,8 +1002,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region src/carry.mjs
+// src/carry.mjs
 /**
 	* Moving chunk state onto a chain whose section counts changed. A chunk the
 	* descriptor still names keeps its position and velocity; an added one is
@@ -1070,8 +1062,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region src/bend.mjs
+// src/bend.mjs
 /**
 	* The chain's angular constraint. One joint on its own reaches the turn it is
 	* asked for exactly, but a chain of them barely bends: each joint pushes its
@@ -1203,8 +1194,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region src/body.mjs
+// src/body.mjs
 /** Schema-v1 Verlet chain. Private state is owned by one Beefwife instance. */
 	var TAU$1 = Math.PI * 2;
 	var PHYSICS_STEP = 1 / 60;
@@ -1542,8 +1532,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region src/legs.mjs
+// src/legs.mjs
 /** Schema-v1 planted-foot state. Private to one Beefwife instance. */
 	var lerp = (start, end, amount) => start + (end - start) * amount;
 	var clamp = (value, low, high) => Math.max(low, Math.min(high, value));
@@ -1717,8 +1706,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region src/skin.mjs
+// src/skin.mjs
 /** Schema-v1 ornament motion and renderer snapshots. */
 	var RENDER_LAYOUT = Object.freeze({
 		chunkStride: 4,
@@ -1946,8 +1934,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region src/geometry.mjs
+// src/geometry.mjs
 /** Vertex math and pixel snapping for a Beefwife's meshes and outlines. */
 	var KNEE_SEGMENTS = 4;
 	var KNEE_POINTS = 5;
@@ -2088,8 +2075,7 @@ pixi_js = __toESM(pixi_js, 1);
 		snapPositions(positions, offset, offset + 28, pixelResolution, inversePixelResolution);
 	};
 
-//#endregion
-//#region src/display.mjs
+// src/display.mjs
 /** Pixi resource lifetime and construction for the parts a Beefwife draws. */
 	var discard = (parent, child) => {
 		if (child.parent === parent) parent.removeChild(child);
@@ -2132,8 +2118,7 @@ pixi_js = __toESM(pixi_js, 1);
 		return mesh;
 	};
 
-//#endregion
-//#region src/atlas.mjs
+// src/atlas.mjs
 /**
 	* One texture holding every shape a Beefwife places, so its feet, plates and
 	* ornaments draw as particles out of a shared frame instead of a Graphics
@@ -2358,15 +2343,13 @@ pixi_js = __toESM(pixi_js, 1);
 		atlas.target.destroy(true);
 	};
 
-//#endregion
-//#region src/limits.mjs
+// src/limits.mjs
 	var MAX_WORLD_COORDINATE = 1e9;
 	var MIN_PIXEL_RESOLUTION = 1e-6;
 	var MAX_PIXEL_RESOLUTION = 1e6;
 	var MAX_PERSPECTIVE = 1e6;
 
-//#endregion
-//#region src/graphics.mjs
+// src/graphics.mjs
 /** Pixi display ownership for one Beefwife. */
 	var BAND_LABELS = [
 		"feet",
@@ -2782,8 +2765,7 @@ pixi_js = __toESM(pixi_js, 1);
 	};
 	var graphics_default = available ? Graphics : HeadlessGraphics;
 
-//#endregion
-//#region src/beefwife.mjs
+// src/beefwife.mjs
 /** Public lifecycle for one schema-v1 beefwife. */
 	var HeadlessContainer = class {
 		destroy() {
@@ -3123,8 +3105,7 @@ pixi_js = __toESM(pixi_js, 1);
 		enumerable: true
 	});
 
-//#endregion
-//#region src/global.mjs
+// src/global.mjs
 /**
 	* Classic-script entry. A page gets one global, `Beefwife`, and reaches the
 	* JSON half through `Beefwife.Descriptor`. Module consumers import both by
@@ -3136,7 +3117,6 @@ pixi_js = __toESM(pixi_js, 1);
 	});
 	var global_default = Beefwife;
 
-//#endregion
 return global_default;
 })(globalThis.PIXI);
 if (typeof module !== "undefined" && module.exports) module.exports = Beefwife;
