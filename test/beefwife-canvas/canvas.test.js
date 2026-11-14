@@ -103,6 +103,19 @@ class UnstyledCanvas extends Canvas {
   }
 }
 
+/* Out of layout, as under display: none. Measures 0 by 0 and computes to
+   whatever size the page authored. */
+class HiddenCanvas extends Canvas {
+  constructor(computed) {
+    super();
+    this.computed = computed;
+  }
+
+  getBoundingClientRect() {
+    return { left: 0, top: 0, width: 0, height: 0 };
+  }
+}
+
 const calls = [];
 const hosts = [];
 let intersectionCallback = null;
@@ -195,6 +208,7 @@ const context = {
     };
     return { ok: true, json: async () => parseInContext(bodies[url]) };
   },
+  getComputedStyle: (element) => element.computed,
   hostFor: async (options) => {
     await hostGate;
     return newHost(options);
@@ -550,6 +564,24 @@ const namedDescriptor = (name) => parseInContext(descriptorJson(name));
   assert.equal(styled.getAttribute("width"), null);
   unpinned.destroy();
   checks += 8;
+
+  /* A hidden canvas cannot be measured, so its authored size decides. */
+  const hiddenUnstyled = new HiddenCanvas({ width: "auto", height: "auto" });
+  const hiddenPinned = await context.BeefwifeCanvas.mount(hiddenUnstyled, {
+    autoStart: false,
+    descriptors: [namedDescriptor("hidden-unstyled")],
+  });
+  assert.equal(hiddenUnstyled.style.width, "300px");
+  assert.equal(hiddenUnstyled.style.height, "150px");
+  hiddenPinned.destroy();
+  const hiddenStyled = new HiddenCanvas({ width: "100%", height: "auto" });
+  const hiddenUnpinned = await context.BeefwifeCanvas.mount(hiddenStyled, {
+    autoStart: false,
+    descriptors: [namedDescriptor("hidden-styled")],
+  });
+  assert.equal(hiddenStyled.style.width, undefined);
+  hiddenUnpinned.destroy();
+  checks += 3;
 
   const scannedCanvas = new Canvas({
     "data-beefwife-canvas": "",

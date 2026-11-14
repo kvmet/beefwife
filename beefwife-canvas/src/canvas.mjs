@@ -314,8 +314,8 @@ class Controller {
 
   /* Pixi writes the buffer size into the width and height attributes, and a
      canvas with no CSS size lays out from them, so each resize would rescale
-     it by the pixel ratio. Doubling the attributes shows whether layout
-     follows them. */
+     it by the pixel ratio. The pin is the attribute size, which is what an
+     unstyled canvas lays out at. */
   _pinUnstyledSize() {
     const canvas = this.canvas;
     const original = {
@@ -324,16 +324,26 @@ class Controller {
       width: canvas.getAttribute("width"),
       height: canvas.getAttribute("height"),
     };
+    if (!this._layoutFollowsAttributes(original)) return;
+    this.originalSize = original;
+    canvas.style.width = `${canvas.width}px`;
+    canvas.style.height = `${canvas.height}px`;
+  }
+
+  _layoutFollowsAttributes(original) {
+    const canvas = this.canvas;
     const shown = canvas.getBoundingClientRect();
+    /* A canvas outside layout (display: none here or on an ancestor) measures
+       0 by 0 either way, but its computed size is still the authored one. */
+    if (shown.width === 0 && shown.height === 0) {
+      const style = getComputedStyle(canvas);
+      return style.width === "auto" && style.height === "auto";
+    }
     canvas.width *= 2;
     canvas.height *= 2;
     const doubled = canvas.getBoundingClientRect();
     this._restoreAttributes(original);
-    if (doubled.width === shown.width && doubled.height === shown.height)
-      return;
-    this.originalSize = original;
-    canvas.style.width = `${shown.width}px`;
-    canvas.style.height = `${shown.height}px`;
+    return doubled.width !== shown.width || doubled.height !== shown.height;
   }
 
   _restoreSize() {

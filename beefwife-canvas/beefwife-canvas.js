@@ -5455,15 +5455,23 @@ pixi_js = __toESM(pixi_js, 1);
 				width: canvas.getAttribute("width"),
 				height: canvas.getAttribute("height")
 			};
+			if (!this._layoutFollowsAttributes(original)) return;
+			this.originalSize = original;
+			canvas.style.width = `${canvas.width}px`;
+			canvas.style.height = `${canvas.height}px`;
+		}
+		_layoutFollowsAttributes(original) {
+			const canvas = this.canvas;
 			const shown = canvas.getBoundingClientRect();
+			if (shown.width === 0 && shown.height === 0) {
+				const style = getComputedStyle(canvas);
+				return style.width === "auto" && style.height === "auto";
+			}
 			canvas.width *= 2;
 			canvas.height *= 2;
 			const doubled = canvas.getBoundingClientRect();
 			this._restoreAttributes(original);
-			if (doubled.width === shown.width && doubled.height === shown.height) return;
-			this.originalSize = original;
-			canvas.style.width = `${shown.width}px`;
-			canvas.style.height = `${shown.height}px`;
+			return doubled.width !== shown.width || doubled.height !== shown.height;
 		}
 		_restoreSize() {
 			const original = this.originalSize;
