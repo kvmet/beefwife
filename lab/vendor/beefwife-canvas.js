@@ -1,8 +1,9 @@
-/* Beefwife Canvas v0.1.0. Generated from beefwife-canvas/src; do not edit.
+/*! Beefwife Canvas v0.1.0. Generated from beefwife-canvas/src; do not edit.
+   (c) Kristen Metcalfe, MPL-2.0.
    Bundles @kvmet/beefwife (MPL-2.0) and @kvmet/terrain (MIT, (c) Kristen Metcalfe). */
 var BeefwifeCanvas = (function(pixi_js) {
 
-//#region \0rolldown/runtime.js
+// \0rolldown/runtime.js
 	var __create = Object.create;
 	var __defProp = Object.defineProperty;
 	var __name = (target, value) => __defProp(target, "name", {
@@ -13,18 +14,18 @@ var BeefwifeCanvas = (function(pixi_js) {
 	var __getOwnPropNames = Object.getOwnPropertyNames;
 	var __getProtoOf = Object.getPrototypeOf;
 	var __hasOwnProp = Object.prototype.hasOwnProperty;
-	var __exportAll = (all, no_symbols) => {
-		let target = {};
+	var __exportAll = (all, flags) => {
+		let target = Object.setPrototypeOf({}, null);
 		for (var name in all) {
 			__defProp(target, name, {
 				get: all[name],
 				enumerable: true
 			});
 		}
-		if (!no_symbols) {
+		if (!(flags & 1)) {
 			__defProp(target, Symbol.toStringTag, { value: "Module" });
 		}
-		return target;
+		return flags & 2 ? target : Object.preventExtensions(target);
 	};
 	var __copyProps = (to, from, except, desc) => {
 		if (from && typeof from === "object" || typeof from === "function") {
@@ -45,10 +46,9 @@ var BeefwifeCanvas = (function(pixi_js) {
 		enumerable: true
 	}) : target, mod));
 
-//#endregion
 pixi_js = __toESM(pixi_js, 1);
 
-//#region ../beefwife/src/pixi.mjs
+// ../beefwife/src/pixi.mjs
 /**
 	* The renderer seam. Pixi is a peer, not a dependency: the module build imports
 	* it and the classic-script build reads the page's global, which may be absent.
@@ -58,8 +58,14 @@ pixi_js = __toESM(pixi_js, 1);
 	var PIXI = pixi_js;
 	var available = typeof PIXI?.Container === "function";
 
-//#endregion
-//#region ../beefwife/src/schema.mjs
+// ../beefwife/src/limits.mjs
+	var MAX_WORLD_COORDINATE = 1e9;
+	var MIN_PIXEL_RESOLUTION = 1e-6;
+	var MAX_PIXEL_RESOLUTION = 1e6;
+	var MAX_PERSPECTIVE = 1e6;
+	var PHYSICS_STEP = 1 / 60;
+
+// ../beefwife/src/schema.mjs
 /**
 	* The v1 schema tree: every field a beefwife descriptor may hold, its kind,
 	* and its bounds. Length-dimensioned fields carry `length`, the power of the
@@ -155,7 +161,7 @@ pixi_js = __toESM(pixi_js, 1);
 	var paint = object({
 		fill: colour,
 		stroke: nullable(object({
-			colour: string(1, 256),
+			colour: nonBlank(string(1, 256)),
 			width: px(0, 1e3)
 		}))
 	});
@@ -226,7 +232,7 @@ pixi_js = __toESM(pixi_js, 1);
 			paints: record(paint, 1)
 		}),
 		gait: object({
-			cyclesPerSecond: number(0, 100),
+			cyclesPerSecond: number(0, 15),
 			phaseLagRadiansPerPixel: perPx(-1e3, 1e3),
 			bend: object({
 				amplitude: number(0, 10),
@@ -304,8 +310,7 @@ pixi_js = __toESM(pixi_js, 1);
 		})
 	});
 
-//#endregion
-//#region ../beefwife/src/descriptor.mjs
+// ../beefwife/src/descriptor.mjs
 /**
 	* Canonical JSON contract for a beefwife. Definitions are descriptor-local:
 	* sections link physical materials, while visual placements link shapes and
@@ -429,7 +434,7 @@ pixi_js = __toESM(pixi_js, 1);
 		return Array.from({ length: count }, (_, i) => base + localStart + direction * i * placement.repeat.step);
 	};
 	var validate = (descriptor) => {
-		const { definitions, chain, legs } = descriptor;
+		const { definitions, chain, gait, legs } = descriptor;
 		const sections = chain.sections;
 		const total = SECTIONS.reduce((sum, name) => sum + sections[name].chunks, 0);
 		if (total < 2 || total > LIMITS.chunks) fail("$.chain.sections", `must contain 2 to ${LIMITS.chunks} chunks`);
@@ -483,6 +488,14 @@ pixi_js = __toESM(pixi_js, 1);
 			reference(definitions.paints, entry.paint, `${path}.paint`);
 			ornamentInstances += resolvedChunks(descriptor, entry, path).length * (entry.side === "both" ? 2 : 1);
 			if (ornamentInstances > LIMITS.instances) fail("$.chain.skin.ornaments", `must expand to at most ${LIMITS.instances} instances`);
+		});
+		[
+			"bend",
+			"thrust",
+			"gather",
+			"contact"
+		].forEach((channel) => {
+			if (gait.cyclesPerSecond * gait[channel].harmonic > 15) fail(`$.gait.${channel}.harmonic`, `times cyclesPerSecond must be at most ${15}`);
 		});
 		if (legs.pairs && !sections[legs.section].chunks) fail("$.legs.section", "cannot attach legs to an empty section");
 		Object.entries(definitions.paints).forEach(([name, entry]) => {
@@ -621,8 +634,7 @@ pixi_js = __toESM(pixi_js, 1);
 		return JSON.stringify(read(value), null, space);
 	};
 
-//#endregion
-//#region ../beefwife/src/model.mjs
+// ../beefwife/src/model.mjs
 /**
 	* Compiles a validated descriptor into immutable runtime topology. This is a
 	* private seam: callers keep the descriptor while physics consumes resolved
@@ -635,6 +647,8 @@ pixi_js = __toESM(pixi_js, 1);
 	];
 	var MAX_BREATHING_STRAIN = .1;
 	var BREATHING_RATE_AT_16_CHUNKS = .15;
+	var MAX_BREATHING_RATE = .4;
+	var BREATH_CATCH_UP_PER_SECOND = 2 * MAX_BREATHING_STRAIN * 2 * Math.PI * MAX_BREATHING_RATE;
 	var LATERAL_SPACINGS_PER_SECOND = 14;
 	var MIN_SWING_RATE = .01;
 	var freeze = (value) => {
@@ -646,7 +660,7 @@ pixi_js = __toESM(pixi_js, 1);
 	var clamp$1 = /* @__PURE__ */ __name((value, low, high) => Math.max(low, Math.min(high, value)), "clamp");
 	var profileAt = (span, index, count) => count === 1 ? (span.start + span.end) / 2 : lerp$1(span.start, span.end, index / (count - 1));
 	var spatialAngle = (gait, channel, distance) => channel.phaseOffset - channel.harmonic * distance * gait.phaseLagRadiansPerPixel;
-	var breathingRateFor = (trunkChunks) => clamp$1(BREATHING_RATE_AT_16_CHUNKS * Math.sqrt(16 / trunkChunks), .1, .4);
+	var breathingRateFor = (trunkChunks) => clamp$1(BREATHING_RATE_AT_16_CHUNKS * Math.sqrt(16 / trunkChunks), .1, MAX_BREATHING_RATE);
 	var placementChunks = (placement, sections, chunkCount) => {
 		const section = placement.at.section;
 		const scope = section ? sections[section] : {
@@ -822,8 +836,7 @@ pixi_js = __toESM(pixi_js, 1);
 		});
 	};
 
-//#endregion
-//#region ../beefwife/src/drive.mjs
+// ../beefwife/src/drive.mjs
 /** Schema-v1 gait clock and spatial channels. Private to the Beefwife runtime. */
 	var TAU$2 = Math.PI * 2;
 	var positiveModulo = (value, divisor) => (value % divisor + divisor) % divisor;
@@ -861,8 +874,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region ../beefwife/src/tables.mjs
+// ../beefwife/src/tables.mjs
 /**
 	* The model, flattened for the solver. Every per-chunk and per-link constant
 	* a substep reads, unpacked from the model's nested records into parallel
@@ -936,8 +948,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region ../beefwife/src/chain.mjs
+// ../beefwife/src/chain.mjs
 /**
 	* The chain's mutable state, one typed array per field. The counterpart to
 	* ChainTables: that holds what the model says and never changes, this holds
@@ -989,10 +1000,10 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		worldCorrection(limit) {
 			const { x, y, px, py, count } = this;
-			let minimumX = Infinity;
-			let maximumX = -Infinity;
-			let minimumY = Infinity;
-			let maximumY = -Infinity;
+			let minimumX = 1e400;
+			let maximumX = -1e400;
+			let minimumY = 1e400;
+			let maximumY = -1e400;
 			for (let index = 0; index < count; index++) {
 				minimumX = Math.min(minimumX, x[index], px[index]);
 				maximumX = Math.max(maximumX, x[index], px[index]);
@@ -1010,8 +1021,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region ../beefwife/src/carry.mjs
+// ../beefwife/src/carry.mjs
 /**
 	* Moving chunk state onto a chain whose section counts changed. A chunk the
 	* descriptor still names keeps its position and velocity; an added one is
@@ -1071,8 +1081,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region ../beefwife/src/bend.mjs
+// ../beefwife/src/bend.mjs
 /**
 	* The chain's angular constraint. One joint on its own reaches the turn it is
 	* asked for exactly, but a chain of them barely bends: each joint pushes its
@@ -1204,11 +1213,9 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region ../beefwife/src/body.mjs
+// ../beefwife/src/body.mjs
 /** Schema-v1 Verlet chain. Private state is owned by one Beefwife instance. */
 	var TAU$1 = Math.PI * 2;
-	var PHYSICS_STEP = 1 / 60;
 	var RELAX_PASSES = 8;
 	var AXIS_RATE = 1.5;
 	var MAX_LINK_STRETCH = 3;
@@ -1283,6 +1290,15 @@ pixi_js = __toESM(pixi_js, 1);
 			this.steeringBias = 0;
 			this.accumulator = 0;
 			this.breathingScale = 0;
+			this._breathe(this._breathingTarget());
+			const offsetX = position.x - x[0];
+			const offsetY = position.y - y[0];
+			for (let index = 0; index < count; index++) {
+				x[index] += offsetX;
+				y[index] += offsetY;
+				px[index] += offsetX;
+				py[index] += offsetY;
+			}
 			this.refreshContacts(1);
 		}
 		adopt(previous) {
@@ -1317,7 +1333,9 @@ pixi_js = __toESM(pixi_js, 1);
 			this.gait.advance(dt, throttle);
 			this.breathingPhase = (this.breathingPhase + TAU$1 * this.model.breathing.cyclesPerSecond * dt) % TAU$1;
 			this._updateTangentsAndAxis(dt);
-			this._applyBreathing();
+			const limit = BREATH_CATCH_UP_PER_SECOND * dt;
+			const change = this._breathingTarget() - this.breathingScale;
+			this._breathe(this.breathingScale + Math.max(-limit, Math.min(limit, change)));
 			this._integrate(dt, throttle);
 			this._updateLinkTargets(throttle);
 			this.bend.update(this.model, this.gait, this.tables, this.linkTargets, throttle, this._steer(direction, dt));
@@ -1326,8 +1344,10 @@ pixi_js = __toESM(pixi_js, 1);
 			this._clampLinks();
 			this._applyAutoLift(dt, throttle);
 		}
-		_applyBreathing() {
-			const nextScale = this.model.breathing.strain * Math.sin(this.breathingPhase);
+		_breathingTarget() {
+			return this.model.breathing.strain * Math.sin(this.breathingPhase);
+		}
+		_breathe(nextScale) {
 			const scaleChange = nextScale - this.breathingScale;
 			this.breathingScale = nextScale;
 			if (Math.abs(scaleChange) < 1e-15) return;
@@ -1543,8 +1563,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region ../beefwife/src/legs.mjs
+// ../beefwife/src/legs.mjs
 /** Schema-v1 planted-foot state. Private to one Beefwife instance. */
 	var lerp = (start, end, amount) => start + (end - start) * amount;
 	var clamp = (value, low, high) => Math.max(low, Math.min(high, value));
@@ -1718,8 +1737,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region ../beefwife/src/skin.mjs
+// ../beefwife/src/skin.mjs
 /** Schema-v1 ornament motion and renderer snapshots. */
 	var RENDER_LAYOUT = Object.freeze({
 		chunkStride: 4,
@@ -1947,8 +1965,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region ../beefwife/src/geometry.mjs
+// ../beefwife/src/geometry.mjs
 /** Vertex math and pixel snapping for a Beefwife's meshes and outlines. */
 	var KNEE_SEGMENTS = 4;
 	var KNEE_POINTS = 5;
@@ -2089,8 +2106,7 @@ pixi_js = __toESM(pixi_js, 1);
 		snapPositions(positions, offset, offset + 28, pixelResolution, inversePixelResolution);
 	};
 
-//#endregion
-//#region ../beefwife/src/display.mjs
+// ../beefwife/src/display.mjs
 /** Pixi resource lifetime and construction for the parts a Beefwife draws. */
 	var discard = (parent, child) => {
 		if (child.parent === parent) parent.removeChild(child);
@@ -2133,8 +2149,7 @@ pixi_js = __toESM(pixi_js, 1);
 		return mesh;
 	};
 
-//#endregion
-//#region ../beefwife/src/atlas.mjs
+// ../beefwife/src/atlas.mjs
 /**
 	* One texture holding every shape a Beefwife places, so its feet, plates and
 	* ornaments draw as particles out of a shared frame instead of a Graphics
@@ -2359,15 +2374,7 @@ pixi_js = __toESM(pixi_js, 1);
 		atlas.target.destroy(true);
 	};
 
-//#endregion
-//#region ../beefwife/src/limits.mjs
-	var MAX_WORLD_COORDINATE = 1e9;
-	var MIN_PIXEL_RESOLUTION = 1e-6;
-	var MAX_PIXEL_RESOLUTION = 1e6;
-	var MAX_PERSPECTIVE = 1e6;
-
-//#endregion
-//#region ../beefwife/src/graphics.mjs
+// ../beefwife/src/graphics.mjs
 /** Pixi display ownership for one Beefwife. */
 	var BAND_LABELS = [
 		"feet",
@@ -2449,25 +2456,42 @@ pixi_js = __toESM(pixi_js, 1);
 			this.ribbonFill = null;
 			this.ribbonStroke = null;
 			this.ribbonCount = -1;
+			this.reportedResolution = null;
 			this.baking = false;
 			this.state = null;
 			this.adopt(state);
 		}
 		adopt(state) {
 			const resolution = pixelResolutionOf(this.options);
-			this.nextPlan = prepareAtlas(state.model, resolution);
+			const nextPlan = prepareAtlas(state.model, resolution);
+			const legCount = state.legs.length / state.layout.legStride;
+			if (this._samePlacements(nextPlan, state.model, legCount)) {
+				if (this._sameFrames(nextPlan)) this.plan = nextPlan;
+			} else {
+				this.plan = null;
+				this.footParticles = [];
+				this.ornamentParticles = [];
+				this.plateParticles = [];
+			}
+			this.nextPlan = nextPlan;
 			this.nextResolution = resolution;
 			this.failedBake = null;
 			this.model = state.model;
-			this.legCount = state.legs.length / state.layout.legStride;
-			this.plan = null;
-			this.footParticles = [];
-			this.ornamentParticles = [];
-			this.plateParticles = [];
+			this.legCount = legCount;
 			let changed = this._syncLimbParts(this.legCount);
 			changed = this._syncRibbonParts() || changed;
 			if (changed) this._arrange();
 			this.sync(state);
+		}
+		_samePlacements(nextPlan, nextModel, legCount) {
+			const plan = this.plan;
+			if (!plan || legCount !== this.legCount) return false;
+			const drawn = (a, b) => a === null === (b === null);
+			return drawn(plan.feet, nextPlan.feet) && plan.plates.length === nextPlan.plates.length && plan.plates.every((key, index) => drawn(key, nextPlan.plates[index])) && plan.ornaments.length === nextPlan.ornaments.length && plan.ornaments.every((key, index) => drawn(key, nextPlan.ornaments[index]) && this.model.skin.ornaments[index].layer === nextModel.skin.ornaments[index].layer);
+		}
+		_sameFrames(nextPlan) {
+			const plan = this.plan;
+			return plan.key === nextPlan.key && plan.feet === nextPlan.feet && plan.plates.every((key, index) => key === nextPlan.plates[index]) && plan.ornaments.every((key, index) => key === nextPlan.ornaments[index]);
 		}
 		_drop(child) {
 			discard(this.parent, child);
@@ -2577,7 +2601,7 @@ pixi_js = __toESM(pixi_js, 1);
 			this._arrange();
 		}
 		_syncAtlas(renderer) {
-			const resolution = pixelResolutionOf(this.options);
+			const resolution = this._liveResolution();
 			if (resolution !== this.nextResolution) {
 				this.nextPlan = prepareAtlas(this.model, resolution);
 				this.nextResolution = resolution;
@@ -2604,6 +2628,25 @@ pixi_js = __toESM(pixi_js, 1);
 					if (!this.host.emit("error", error)) throw error;
 				}
 			});
+		}
+		_liveResolution() {
+			const value = this.options.pixelResolution;
+			try {
+				const resolution = pixelResolutionOf(this.options);
+				this.reportedResolution = null;
+				return resolution;
+			} catch (error) {
+				if (!(error instanceof RangeError)) throw error;
+				const reported = this.reportedResolution;
+				if (!reported || !Object.is(reported.value, value)) {
+					this.reportedResolution = { value };
+					afterPass(() => {
+						if (this.parent.destroyed) return;
+						if (!this.host.emit("error", error)) throw error;
+					});
+				}
+				return this.nextResolution;
+			}
 		}
 		_bake(renderer) {
 			const plan = this.nextPlan;
@@ -2783,8 +2826,7 @@ pixi_js = __toESM(pixi_js, 1);
 	};
 	var graphics_default = available ? Graphics : HeadlessGraphics;
 
-//#endregion
-//#region ../beefwife/src/beefwife.mjs
+// ../beefwife/src/beefwife.mjs
 /** Public lifecycle for one schema-v1 beefwife. */
 	var HeadlessContainer = class {
 		destroy() {
@@ -3124,8 +3166,7 @@ pixi_js = __toESM(pixi_js, 1);
 		enumerable: true
 	});
 
-//#endregion
-//#region src/cast.mjs
+// src/cast.mjs
 /** Descriptor and cast loading for BeefwifeCanvas. */
 	var responseJson = async (url, signal) => {
 		const response = await fetch(url, {
@@ -3204,8 +3245,7 @@ pixi_js = __toESM(pixi_js, 1);
 		};
 	};
 
-//#endregion
-//#region src/mount-options.mjs
+// src/mount-options.mjs
 /** Public mount-option and declarative-attribute validation. */
 	var BOOLEAN = /* @__PURE__ */ new Set(["true", "false"]);
 	var OPTIONS = {
@@ -3317,7 +3357,7 @@ pixi_js = __toESM(pixi_js, 1);
 		const options = {};
 		for (const attribute of canvas.attributes) {
 			if (!attribute.name.startsWith("data-beefwife-")) continue;
-			if (attribute.name === "data-beefwife-canvas" || attribute.name === "data-beefwife-state") continue;
+			if (attribute.name === "data-beefwife-canvas" || attribute.name === "data-beefwife-state" || attribute.name === "data-beefwife-pause-reason") continue;
 			const rule = ATTRIBUTES[attribute.name];
 			if (!rule) throw new TypeError(`${attribute.name} is unknown`);
 			options[rule[0]] = parseAttribute(attribute.value, rule[1], attribute.name);
@@ -3386,8 +3426,7 @@ pixi_js = __toESM(pixi_js, 1);
 		return terrain;
 	};
 
-//#endregion
-//#region ../terrain/src/support.mjs
+// ../terrain/src/support.mjs
 	var NEXT_VIEW = /* @__PURE__ */ new DataView(/* @__PURE__ */ new ArrayBuffer(8));
 	var nextFloat = (value, up) => {
 		if (value === 0) return up ? Number.MIN_VALUE : -Number.MIN_VALUE;
@@ -3484,8 +3523,7 @@ pixi_js = __toESM(pixi_js, 1);
 		return root;
 	};
 
-//#endregion
-//#region ../terrain/src/mesh.mjs
+// ../terrain/src/mesh.mjs
 	var TerrainMesh = class {
 		constructor(options = {}) {
 			this.options = optionsOf(options);
@@ -3545,7 +3583,7 @@ pixi_js = __toESM(pixi_js, 1);
 				if (includeDistance) result.distance = 0;
 				return result;
 			}
-			let nearD = Infinity;
+			let nearD = 1e400;
 			let nearX = 0;
 			let nearY = 0;
 			for (const slab of this.slabs) {
@@ -3573,7 +3611,7 @@ pixi_js = __toESM(pixi_js, 1);
 					}
 				}
 			}
-			if (nearD === Infinity || nearD === 0) return null;
+			if (nearD === 1e400 || nearD === 0) return null;
 			const distance = above(nearD);
 			const scale = distance / nearD;
 			const dx = nearX * scale;
@@ -3770,8 +3808,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region ../terrain/src/terrain.mjs
+// ../terrain/src/terrain.mjs
 	var Terrain = class extends TerrainMesh {
 		_land(p) {
 			return this._nearest(p.x, p.y, p, true, false);
@@ -3796,7 +3833,7 @@ pixi_js = __toESM(pixi_js, 1);
 				};
 			}
 			let best = null;
-			let bestD = Infinity;
+			let bestD = 1e400;
 			for (const cell of this.cells) {
 				const x = Math.max(cell.left, Math.min(cell.right, p.x));
 				const y = Math.max(cell.lo, Math.min(cell.hi, p.y));
@@ -3855,7 +3892,7 @@ pixi_js = __toESM(pixi_js, 1);
 		/** A* over directed gate crossings, using gate centers for graph costs. */
 		_cross(from, start, to, goal) {
 			const size = 2 * this.gates.length;
-			const cost = new Float64Array(size).fill(Infinity);
+			const cost = new Float64Array(size).fill(1e400);
 			const prev = new Int32Array(size).fill(-1);
 			const done = new Uint8Array(size);
 			const heapNodes = [];
@@ -3907,39 +3944,43 @@ pixi_js = __toESM(pixi_js, 1);
 				const crossing = crossings[i];
 				const gateLeft = crossing ? crossing.forward ? crossing.gate.high : crossing.gate.low : goal;
 				const gateRight = crossing ? crossing.forward ? crossing.gate.low : crossing.gate.high : goal;
-				if (cross2(apex, right, gateRight) <= 0) if (right === apex || cross2(apex, left, gateRight) > 0) {
-					right = gateRight;
-					rightAt = i;
-				} else {
-					out.push({
-						x: left.x,
-						y: left.y
-					});
-					apex = left;
-					apexAt = leftAt;
-					left = apex;
-					right = apex;
-					leftAt = apexAt;
-					rightAt = apexAt;
-					i = apexAt;
-					continue;
+				if (cross2(apex, right, gateRight) <= 0) {
+					if (right === apex || cross2(apex, left, gateRight) > 0) {
+						right = gateRight;
+						rightAt = i;
+					} else {
+						out.push({
+							x: left.x,
+							y: left.y
+						});
+						apex = left;
+						apexAt = leftAt;
+						left = apex;
+						right = apex;
+						leftAt = apexAt;
+						rightAt = apexAt;
+						i = apexAt;
+						continue;
+					}
 				}
-				if (cross2(apex, left, gateLeft) >= 0) if (left === apex || cross2(apex, right, gateLeft) < 0) {
-					left = gateLeft;
-					leftAt = i;
-				} else {
-					out.push({
-						x: right.x,
-						y: right.y
-					});
-					apex = right;
-					apexAt = rightAt;
-					left = apex;
-					right = apex;
-					leftAt = apexAt;
-					rightAt = apexAt;
-					i = apexAt;
-					continue;
+				if (cross2(apex, left, gateLeft) >= 0) {
+					if (left === apex || cross2(apex, right, gateLeft) < 0) {
+						left = gateLeft;
+						leftAt = i;
+					} else {
+						out.push({
+							x: right.x,
+							y: right.y
+						});
+						apex = right;
+						apexAt = rightAt;
+						left = apex;
+						right = apex;
+						leftAt = apexAt;
+						rightAt = apexAt;
+						i = apexAt;
+						continue;
+					}
 				}
 			}
 			out.push(goal);
@@ -3997,8 +4038,7 @@ pixi_js = __toESM(pixi_js, 1);
 		enumerable: true
 	});
 
-//#endregion
-//#region src/steering.mjs
+// src/steering.mjs
 /**
 	* Where a creature is trying to get to.
 	*
@@ -4125,8 +4165,7 @@ pixi_js = __toESM(pixi_js, 1);
 		return result;
 	};
 
-//#endregion
-//#region src/path.mjs
+// src/path.mjs
 /**
 	* Where to go, and the way there.
 	*
@@ -4188,8 +4227,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region src/actor.mjs
+// src/actor.mjs
 /** Route following and Beefwife control for one host-owned plan. */
 	var BEEFWIFE_CANVAS_ACTOR_LOST_MARGIN = 200;
 	var actorRandomBetween = (random, a, b) => a + random() * (b - a);
@@ -4379,8 +4417,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region src/options.mjs
+// src/options.mjs
 /** Limits and scalar option validation for the BeefwifeCanvasRuntime frame host. */
 	var DEBUG_KEYS = /* @__PURE__ */ new Set([
 		"routes",
@@ -4391,6 +4428,7 @@ pixi_js = __toESM(pixi_js, 1);
 		MAX_COUNT: 1024,
 		MAX_TIME_SCALE: BeefwifeCanvasActor.MAX_TIME_SCALE,
 		REBUILD_DELAY: 150,
+		MOVE_TOLERANCE: .5,
 		DEFAULT_RENDER_FPS: 24,
 		DEFAULT_PHYSICS_FPS: 60
 	};
@@ -4452,8 +4490,7 @@ pixi_js = __toESM(pixi_js, 1);
 		return weighted[weighted.length - 1].name;
 	};
 
-//#endregion
-//#region src/render.mjs
+// src/render.mjs
 /** Pixi scene synchronization and optional route debugging for BeefwifeCanvasRuntime. */
 	var drawTerrain = (graphics, terrainView, pixel) => {
 		for (const rectangle of terrainView.rectangles) graphics.rect(rectangle.left, rectangle.top, rectangle.right - rectangle.left, rectangle.bottom - rectangle.top);
@@ -4512,9 +4549,12 @@ pixi_js = __toESM(pixi_js, 1);
 		scene.render();
 	};
 
-//#endregion
-//#region src/scene.mjs
+// src/scene.mjs
 /** Pixi application, stage, canvas sizing, and display ownership. */
+	var destroyApplication = (application) => application.destroy({
+		removeView: false,
+		releaseGlobalResources: false
+	});
 	var BeefwifeCanvasScene = class {
 		constructor(options = {}) {
 			this.onError = options.onError || null;
@@ -4610,12 +4650,14 @@ pixi_js = __toESM(pixi_js, 1);
 			this._syncPixelResolution();
 			this.canvas.style.imageRendering = this.imageRendering;
 			const projection = this.renderOptions.kneeProjection;
-			if (projection) if (this.kneeProjectionCenter === "viewport") {
-				projection.centerX = window.innerWidth / 2 - viewport.left;
-				projection.centerY = window.innerHeight / 2 - viewport.top;
-			} else {
-				projection.centerX = viewport.width / 2;
-				projection.centerY = viewport.height / 2;
+			if (projection) {
+				if (this.kneeProjectionCenter === "viewport") {
+					projection.centerX = window.innerWidth / 2 - viewport.left;
+					projection.centerY = window.innerHeight / 2 - viewport.top;
+				} else {
+					projection.centerX = viewport.width / 2;
+					projection.centerY = viewport.height / 2;
+				}
 			}
 			this.application.renderer.resolution = this.dpr;
 			this.application.renderer.resize(viewport.width, viewport.height);
@@ -4654,17 +4696,13 @@ pixi_js = __toESM(pixi_js, 1);
 				this.world.destroy();
 				this.debugOverlay.destroy();
 			} else if (this.ownsCanvas && this.canvas) this.canvas.remove();
-			if (application && !preserveRenderer) application.destroy({
-				removeView: false,
-				releaseGlobalResources: false
-			});
+			if (application && !preserveRenderer) destroyApplication(application);
 			this.application = null;
 			return preserveRenderer ? application : null;
 		}
 	};
 
-//#endregion
-//#region src/targeting.mjs
+// src/targeting.mjs
 /** Destination ownership and satisfaction policy for routed runtime. */
 	var pointOf = (value, path = "target") => {
 		if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${path} must be an object`);
@@ -4724,8 +4762,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region src/population.mjs
+// src/population.mjs
 /** Actor collection, spawn queue, cast selection, and target-policy ownership. */
 	var BeefwifeCanvasPopulation = class {
 		constructor(terrain, router, options = {}) {
@@ -4840,14 +4877,16 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 	};
 
-//#endregion
-//#region src/runtime.mjs
+// src/runtime.mjs
 /** Coordinates scene, population, terrain observation, and frame timing. */
 	var BeefwifeCanvasRuntime = class BeefwifeCanvasRuntime {
 		static async create(options = {}) {
 			const runtime = new BeefwifeCanvasRuntime(options);
 			await runtime.scene.initialize();
 			return runtime;
+		}
+		static releaseRenderer(application) {
+			destroyApplication(application);
 		}
 		constructor(options = {}) {
 			this.onError = options.onError || null;
@@ -4861,8 +4900,8 @@ pixi_js = __toESM(pixi_js, 1);
 			if (!this.renderFps || this.renderFps > this.physicsFps) this.renderFps = this.physicsFps;
 			this.renderInterval = 1e3 / this.renderFps;
 			this.physicsInterval = 1e3 / this.physicsFps;
-			const maxPixelRatio = options.maxPixelRatio ?? Infinity;
-			if (maxPixelRatio !== Infinity && (!Number.isFinite(maxPixelRatio) || maxPixelRatio <= 0)) throw new RangeError("maxPixelRatio must be positive");
+			const maxPixelRatio = options.maxPixelRatio ?? 1e400;
+			if (maxPixelRatio !== 1e400 && (!Number.isFinite(maxPixelRatio) || maxPixelRatio <= 0)) throw new RangeError("maxPixelRatio must be positive");
 			const roam = options.roam ? {
 				...BEEFWIFE_CANVAS_ROUTE_DEFAULTS,
 				...options.roam
@@ -4946,12 +4985,14 @@ pixi_js = __toESM(pixi_js, 1);
 			this.nextPhysicsTime = 0;
 			this.nextDrawTime = 0;
 			this.rebuildTimer = null;
+			this.moveCheckTimer = null;
 			this._onResize = () => {
 				if (!this.destroyed) this.scheduleRebuild();
 			};
 			this._onScroll = () => {
 				if (this.destroyed) return;
-				if (this.scene.ownsCanvas || this.scene.kneeProjectionCenter === "viewport") this.scheduleRebuild();
+				if (this.scene.kneeProjectionCenter === "viewport") this.scheduleRebuild();
+				else this._scheduleMoveCheck();
 			};
 			this.observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(this._onResize);
 		}
@@ -4976,6 +5017,8 @@ pixi_js = __toESM(pixi_js, 1);
 			this._pause();
 			clearTimeout(this.rebuildTimer);
 			this.rebuildTimer = null;
+			clearTimeout(this.moveCheckTimer);
+			this.moveCheckTimer = null;
 			window.removeEventListener("resize", this._onResize);
 			window.removeEventListener("scroll", this._onScroll);
 			if (this.observer) {
@@ -5071,6 +5114,26 @@ pixi_js = __toESM(pixi_js, 1);
 				this.rebuild();
 			}, config.REBUILD_DELAY);
 		}
+		_scheduleMoveCheck() {
+			clearTimeout(this.moveCheckTimer);
+			this.moveCheckTimer = setTimeout(() => {
+				if (!this.running || !this._obstaclesMoved()) return;
+				this.scene.resize();
+				this.rebuild();
+			}, config.REBUILD_DELAY);
+		}
+		_obstaclesMoved() {
+			const elements = [...new Set(this.terrain.avoidElements())];
+			const measured = this.terrainView.rectangles;
+			if (elements.length !== measured.length) return true;
+			const tolerance = config.MOVE_TOLERANCE;
+			return this._rectanglesOf(elements, this.scene.viewportRect()).some((rectangle, index) => [
+				"left",
+				"top",
+				"right",
+				"bottom"
+			].some((side) => Math.abs(rectangle[side] - measured[index][side]) > tolerance));
+		}
 		/**
 		* The page has moved under the actors. It measures the new field and
 		* nothing else: no creature is reseated and no plan is touched. A widget
@@ -5099,7 +5162,6 @@ pixi_js = __toESM(pixi_js, 1);
 		_snapshotTerrain(elements) {
 			const viewport = this.scene.viewport;
 			const margin = this.terrainDebugOptions.edgeMargin;
-			const padding = this.terrainDebugOptions.obstaclePadding;
 			const x0 = Math.min(margin, viewport.width / 2);
 			const y0 = Math.min(margin, viewport.height / 2);
 			this.terrainView.bounds = {
@@ -5108,7 +5170,11 @@ pixi_js = __toESM(pixi_js, 1);
 				right: viewport.width - x0,
 				bottom: viewport.height - y0
 			};
-			this.terrainView.rectangles = elements.map((element) => {
+			this.terrainView.rectangles = this._rectanglesOf(elements, viewport);
+		}
+		_rectanglesOf(elements, viewport) {
+			const padding = this.terrainDebugOptions.obstaclePadding;
+			return elements.map((element) => {
 				const rect = element.getBoundingClientRect();
 				return {
 					left: rect.left - viewport.left - padding,
@@ -5211,17 +5277,47 @@ pixi_js = __toESM(pixi_js, 1);
 		});
 	};
 
-//#endregion
-//#region src/canvas.mjs
+// src/canvas.mjs
 /** Declarative, author-placed canvas host for terrain-routed Beefwives. */
 	var controllers = /* @__PURE__ */ new WeakMap();
-	var renderers = /* @__PURE__ */ new WeakMap();
+	var renderers = /* @__PURE__ */ new Map();
+	var released = /* @__PURE__ */ new WeakSet();
+	var lastReady = /* @__PURE__ */ new WeakMap();
+	var pageObserver = null;
+	var park = (canvas, parked) => {
+		if (!canvas.isConnected) return release(canvas, parked);
+		renderers.set(canvas, parked);
+		if (pageObserver || typeof MutationObserver === "undefined") return;
+		pageObserver = new MutationObserver(releaseDeparted);
+		pageObserver.observe(document, {
+			childList: true,
+			subtree: true
+		});
+	};
+	var unpark = (canvas) => {
+		renderers.delete(canvas);
+		if (renderers.size > 0 || !pageObserver) return;
+		pageObserver.disconnect();
+		pageObserver = null;
+	};
+	var release = (canvas, parked) => {
+		released.add(canvas);
+		BeefwifeCanvasRuntime.releaseRenderer(parked.application);
+	};
+	var releaseDeparted = () => {
+		for (const [canvas, parked] of renderers) {
+			if (canvas.isConnected) continue;
+			unpark(canvas);
+			release(canvas, parked);
+		}
+	};
 	var dispatch = (canvas, type, detail) => canvas.dispatchEvent(new CustomEvent(type, { detail }));
 	var Controller = class {
-		constructor(canvas, supplied) {
+		constructor(canvas, supplied, previousReady) {
 			if (!canvas || canvas.tagName !== "CANVAS") throw new TypeError("BeefwifeCanvas.mount needs a canvas element");
 			this.canvas = canvas;
 			this.supplied = supplied;
+			this.previousReady = previousReady;
 			this.options = null;
 			this.host = null;
 			this.destroyed = false;
@@ -5231,6 +5327,7 @@ pixi_js = __toESM(pixi_js, 1);
 			this.handles = /* @__PURE__ */ new Map();
 			this.nextId = 1;
 			this.originalImageRendering = canvas.style.imageRendering;
+			this.originalSize = null;
 			this._onClick = (event) => {
 				if (this.options?.pointerInput !== "click" || !this.host) return;
 				this.setTarget(this._pointerPoint(event));
@@ -5238,13 +5335,17 @@ pixi_js = __toESM(pixi_js, 1);
 			this._onPointerMove = (event) => {
 				if (this.options?.pointerInput === "move" && this.host) this.setTarget(this._pointerPoint(event));
 			};
-			this._onVisibilityChange = () => this._syncRunning();
+			this._onVisibilityChange = () => this._syncObserved();
 			this.resizeObserver = null;
 			this.intersectionObserver = null;
 			this._state("loading");
 		}
 		async initialize() {
+			await Promise.allSettled([this.previousReady]);
+			this.previousReady = null;
+			if (this.destroyed) return this;
 			try {
+				if (released.has(this.canvas)) throw new Error("canvas lost its renderer when it left the page; mount a new canvas");
 				this.options = optionsOf$1(this.canvas, this.supplied);
 				this.supplied = null;
 				this.wantsToRun = this.options.autoStart;
@@ -5253,6 +5354,7 @@ pixi_js = __toESM(pixi_js, 1);
 				if (this.destroyed) return this;
 				const filters = [...this.options.filters || []];
 				const count = this.options.count ?? Object.keys(cast).length;
+				this._pinUnstyledSize();
 				const reusable = renderers.get(this.canvas);
 				if (reusable && reusable.antialias !== this.options.antialias) throw new Error("antialias cannot change when remounting one canvas");
 				this.host = await BeefwifeCanvasRuntime.create({
@@ -5289,7 +5391,7 @@ pixi_js = __toESM(pixi_js, 1);
 					this._preserveHost();
 					return this;
 				}
-				renderers.delete(this.canvas);
+				unpark(this.canvas);
 				this._state("ready");
 				dispatch(this.canvas, "beefwifecanvasready", { controller: this.facade });
 				this._syncRunning();
@@ -5433,6 +5535,7 @@ pixi_js = __toESM(pixi_js, 1);
 			this._preserveHost();
 			this.handles.clear();
 			this.canvas.style.imageRendering = this.originalImageRendering;
+			this._restoreSize();
 			this._state(finalState);
 			try {
 				if (beforeRelease) beforeRelease();
@@ -5447,8 +5550,8 @@ pixi_js = __toESM(pixi_js, 1);
 			this.resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => this._canvasResized());
 			this.resizeObserver?.observe(this.canvas);
 			this.intersectionObserver = this.options.pauseOffscreen && typeof IntersectionObserver !== "undefined" ? new IntersectionObserver((entries) => {
-				this.inView = entries[0]?.isIntersecting ?? true;
-				this._syncRunning();
+				this.inView = entries.at(-1)?.isIntersecting ?? true;
+				this._syncObserved();
 			}) : null;
 			this.intersectionObserver?.observe(this.canvas);
 		}
@@ -5456,7 +5559,7 @@ pixi_js = __toESM(pixi_js, 1);
 			if (this.destroyed || !this.host) return;
 			const rect = this.canvas.getBoundingClientRect();
 			if (rect.width > 0 && rect.height > 0) this.host.scheduleRebuild();
-			this._syncRunning();
+			this._syncObserved();
 		}
 		_pointerPoint(event) {
 			const rect = this.canvas.getBoundingClientRect();
@@ -5465,14 +5568,59 @@ pixi_js = __toESM(pixi_js, 1);
 				y: event.clientY - rect.top
 			};
 		}
+		_pinUnstyledSize() {
+			const canvas = this.canvas;
+			const original = {
+				styleWidth: canvas.style.width,
+				styleHeight: canvas.style.height,
+				width: canvas.getAttribute("width"),
+				height: canvas.getAttribute("height")
+			};
+			if (!this._layoutFollowsAttributes(original)) return;
+			this.originalSize = original;
+			canvas.style.width = `${canvas.width}px`;
+			canvas.style.height = `${canvas.height}px`;
+		}
+		_layoutFollowsAttributes(original) {
+			const canvas = this.canvas;
+			const shown = canvas.getBoundingClientRect();
+			if (shown.width === 0 && shown.height === 0) {
+				const style = getComputedStyle(canvas);
+				return style.width === "auto" && style.height === "auto";
+			}
+			canvas.width *= 2;
+			canvas.height *= 2;
+			const doubled = canvas.getBoundingClientRect();
+			this._restoreAttributes(original);
+			return doubled.width !== shown.width || doubled.height !== shown.height;
+		}
+		_restoreSize() {
+			const original = this.originalSize;
+			if (!original) return;
+			this.originalSize = null;
+			this.canvas.style.width = original.styleWidth;
+			this.canvas.style.height = original.styleHeight;
+			this._restoreAttributes(original);
+		}
+		_restoreAttributes(original) {
+			for (const name of ["width", "height"]) if (original[name] === null) this.canvas.removeAttribute(name);
+			else this.canvas.setAttribute(name, original[name]);
+		}
 		_preserveHost() {
 			if (!this.host) return;
 			const application = this.host.destroy({ preserveRenderer: true });
-			if (application) renderers.set(this.canvas, {
+			if (application) park(this.canvas, {
 				antialias: this.options.antialias,
 				application
 			});
 			this.host = null;
+		}
+		_syncObserved() {
+			try {
+				this._syncRunning();
+			} catch (error) {
+				this._fail(error);
+			}
 		}
 		_syncRunning() {
 			if (!this.host || this.destroyed) return;
@@ -5586,13 +5734,14 @@ pixi_js = __toESM(pixi_js, 1);
 		if (controllers.has(canvas)) return Promise.reject(/* @__PURE__ */ new Error("canvas already has a BeefwifeCanvas"));
 		let controller;
 		try {
-			controller = new Controller(canvas, options);
+			controller = new Controller(canvas, options, lastReady.get(canvas));
 		} catch (error) {
 			return Promise.reject(error);
 		}
 		controller.facade = facadeOf(controller);
 		controllers.set(canvas, controller);
 		controller.ready = controller.initialize().then(() => controller.facade);
+		lastReady.set(canvas, controller.ready);
 		return controller.ready;
 	};
 	var autoMount = () => {
@@ -5600,8 +5749,10 @@ pixi_js = __toESM(pixi_js, 1);
 			if (!controllers.has(canvas)) mount(canvas).catch(() => {});
 		});
 	};
-	if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", autoMount, { once: true });
-	else queueMicrotask(autoMount);
+	if (typeof document !== "undefined") {
+		if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", autoMount, { once: true });
+		else queueMicrotask(autoMount);
+	}
 	var BeefwifeCanvas = {
 		Descriptor: descriptor_exports,
 		get: (canvas) => controllers.get(canvas)?.facade || null,
@@ -5609,7 +5760,6 @@ pixi_js = __toESM(pixi_js, 1);
 		scan: autoMount
 	};
 
-//#endregion
 return BeefwifeCanvas;
 })(globalThis.PIXI);
 if (typeof module !== "undefined" && module.exports) module.exports = BeefwifeCanvas;

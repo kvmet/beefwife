@@ -1,4 +1,4 @@
-import{R as e,a as t,b as n,i as r,lt as i,tt as a}from"./Geometry-_-Yjl7Ll.js";import{Q as o}from"./RenderTargetSystem-DVjkvL61.js";import{F as s}from"./GCManagedHash-CXpwcnnD.js";var c={name:`local-uniform-bit`,vertex:{header:`
+import{G as e,dt as t,o as n,s as r,w as i,yt as a}from"./CanvasPool-DWOp1kMe.js";import{Q as o}from"./RenderTargetSystem-Bo8d_de3.js";import{F as s}from"./GCManagedHash-D--kPvG6.js";var c={name:`local-uniform-bit`,vertex:{header:`
 
             struct LocalUniforms {
                 uTransformMatrix:mat3x3<f32>,
@@ -54,7 +54,7 @@ import{R as e,a as t,b as n,i as r,lt as i,tt as a}from"./Geometry-_-Yjl7Ll.js";
 
         `,main:`
             outColor = texture(uTexture, vUV);
-        `}};function p(t,n){for(let r in t.attributes){let i=t.attributes[r],a=n[r];a?(i.format??=a.format,i.offset??=a.offset,i.instance??=a.instance):e(`Attribute ${r} is not present in the shader, but is present in the geometry. Unable to infer attribute details.`)}m(t)}function m(e){let{buffers:t,attributes:r}=e,i={},a={};for(let e in t){let n=t[e];i[n.uid]=0,a[n.uid]=0}for(let e in r){let t=r[e];i[t.buffer.uid]+=n(t.format).stride}for(let e in r){let t=r[e];t.stride??=i[t.buffer.uid],t.start??=a[t.buffer.uid],a[t.buffer.uid]+=n(t.format).stride}}var h=[];h[s.NONE]=void 0,h[s.DISABLED]={stencilWriteMask:0,stencilReadMask:0},h[s.RENDERING_MASK_ADD]={stencilFront:{compare:`equal`,passOp:`increment-clamp`},stencilBack:{compare:`equal`,passOp:`increment-clamp`}},h[s.RENDERING_MASK_REMOVE]={stencilFront:{compare:`equal`,passOp:`decrement-clamp`},stencilBack:{compare:`equal`,passOp:`decrement-clamp`}},h[s.MASK_ACTIVE]={stencilWriteMask:0,stencilFront:{compare:`equal`,passOp:`keep`},stencilBack:{compare:`equal`,passOp:`keep`}},h[s.INVERSE_MASK_ACTIVE]={stencilWriteMask:0,stencilFront:{compare:`not-equal`,passOp:`keep`},stencilBack:{compare:`not-equal`,passOp:`keep`}};var g=class{constructor(e){this._syncFunctionHash=Object.create(null),this._adaptor=e,this._systemCheck()}_systemCheck(){if(!o())throw Error(`Current environment does not allow unsafe-eval, please use pixi.js/unsafe-eval module to enable support.`)}ensureUniformGroup(e){let n=this.getUniformGroupData(e);e.buffer||=new r({data:new Float32Array(n.layout.size/4),usage:t.UNIFORM|t.COPY_DST})}getUniformGroupData(e){return this._syncFunctionHash[e._signature]||this._initUniformGroup(e)}_initUniformGroup(e){let t=e._signature,n=this._syncFunctionHash[t];if(!n){let r=Object.keys(e.uniformStructures).map(t=>e.uniformStructures[t]),i=this._adaptor.createUboElements(r),a=this._generateUboSync(i.uboElements);n=this._syncFunctionHash[t]={layout:i,syncFunction:a}}return this._syncFunctionHash[t]}_generateUboSync(e){return this._adaptor.generateUboSync(e)}syncUniformGroup(e,n,i){let a=this.getUniformGroupData(e);e.buffer||=new r({data:new Float32Array(a.layout.size/4),usage:t.UNIFORM|t.COPY_DST});let o=null;return n||(n=e.buffer.data,o=e.buffer.dataInt32),i||=0,a.syncFunction(e.uniforms,n,o,i),!0}updateUniformGroup(e){if(e.isStatic&&!e._dirtyId)return!1;e._dirtyId=0;let t=this.syncUniformGroup(e);return e.buffer.update(),t}destroy(){this._syncFunctionHash=null}},_=[{type:`mat3x3<f32>`,test:e=>e.value.a!==void 0,ubo:`
+        `}};function p(t,n){for(let r in t.attributes){let i=t.attributes[r],a=n[r];a?(i.format??=a.format,i.offset??=a.offset,i.instance??=a.instance):i.format||e(`Attribute ${r} is not present in the shader, but is present in the geometry. Unable to infer attribute details.`)}m(t)}function m(e){let{buffers:t,attributes:n}=e,r={},a={};for(let e in t){let n=t[e];r[n.uid]=0,a[n.uid]=0}for(let e in n){let t=n[e];r[t.buffer.uid]+=i(t.format).stride}for(let e in n){let t=n[e];t.stride??=r[t.buffer.uid],t.start??=a[t.buffer.uid],a[t.buffer.uid]+=i(t.format).stride}}var h=[];h[s.NONE]=void 0,h[s.DISABLED]={stencilWriteMask:0,stencilReadMask:0},h[s.RENDERING_MASK_ADD]={stencilFront:{compare:`equal`,passOp:`increment-clamp`},stencilBack:{compare:`equal`,passOp:`increment-clamp`}},h[s.RENDERING_MASK_REMOVE]={stencilFront:{compare:`equal`,passOp:`decrement-clamp`},stencilBack:{compare:`equal`,passOp:`decrement-clamp`}},h[s.MASK_ACTIVE]={stencilWriteMask:0,stencilFront:{compare:`equal`,passOp:`keep`},stencilBack:{compare:`equal`,passOp:`keep`}},h[s.INVERSE_MASK_ACTIVE]={stencilWriteMask:0,stencilFront:{compare:`not-equal`,passOp:`keep`},stencilBack:{compare:`not-equal`,passOp:`keep`}};var g=class{constructor(e){this._syncFunctionHash=Object.create(null),this._adaptor=e,this._systemCheck()}_systemCheck(){if(!o())throw Error(`Current environment does not allow unsafe-eval, please use pixi.js/unsafe-eval module to enable support.`)}ensureUniformGroup(e){let t=this.getUniformGroupData(e);e.buffer||=new n({data:new Float32Array(t.layout.size/4),usage:r.UNIFORM|r.COPY_DST})}getUniformGroupData(e){return this._syncFunctionHash[e._signature]||this._initUniformGroup(e)}_initUniformGroup(e){let t=e._signature,n=this._syncFunctionHash[t];if(!n){let r=Object.keys(e.uniformStructures).map(t=>e.uniformStructures[t]),i=this._adaptor.createUboElements(r),a=this._generateUboSync(i.uboElements);n=this._syncFunctionHash[t]={layout:i,syncFunction:a}}return this._syncFunctionHash[t]}_generateUboSync(e){return this._adaptor.generateUboSync(e)}syncUniformGroup(e,t,i){let a=this.getUniformGroupData(e);e.buffer||=new n({data:new Float32Array(a.layout.size/4),usage:r.UNIFORM|r.COPY_DST});let o=null;return t||(t=e.buffer.data,o=e.buffer.dataInt32),i||=0,a.syncFunction(e.uniforms,t,o,i),!0}updateUniformGroup(e){if(e.isStatic&&!e._dirtyId)return!1;e._dirtyId=0;let t=this.syncUniformGroup(e);return e.buffer.update(),t}destroy(){this._syncFunctionHash=null}},_=[{type:`mat3x3<f32>`,test:e=>e.value.a!==void 0,ubo:`
             var matrix = uv[name].toArray(true);
             data[offset] = matrix[0];
             data[offset + 1] = matrix[1];
@@ -125,24 +125,25 @@ import{R as e,a as t,b as n,i as r,lt as i,tt as a}from"./Geometry-_-Yjl7Ll.js";
                 cv[2] = v.blue;
                 gl.uniform3f(ud[name].location, v.red, v.green, v.blue);
             }
-        `}];function v(e,t,n,r){let i=[`
+        `}];function v(e,t,n){let r=[`
         var v = null;
         var v2 = null;
         var t = 0;
         var index = 0;
         var name = null;
         var arrayOffset = null;
-    `],a=0;for(let o=0;o<e.length;o++){let s=e[o],c=s.data.name,l=!1,u=0;for(let e=0;e<_.length;e++)if(_[e].test(s.data)){u=s.offset/4,i.push(`name = "${c}";`,`offset += ${u-a};`,_[e][t]||_[e].ubo),l=!0;break}if(!l)if(s.data.size>1)u=s.offset/4,i.push(n(s,u-a));else{let e=r[s.data.type];u=s.offset/4,i.push(`
-                    v = uv.${c};
-                    offset += ${u-a};
+    `],i=0;for(let a=0;a<e.length;a++){let o=e[a],s=o.data.name,c=!1,l=0;for(let e=0;e<_.length;e++)if(_[e].test(o.data)){l=o.offset/4,r.push(`name = "${s}";`,`offset += ${l-i};`,_[e].ubo),c=!0;break}if(!c){if(o.data.size>1)l=o.offset/4,r.push(n(o,l-i));else{let e=t[o.data.type];l=o.offset/4,r.push(`
+                    v = uv.${s};
+                    offset += ${l-i};
                     ${e};
-                `)}a=u}let o=i.join(`
-`);return Function(`uv`,`data`,`dataInt32`,`offset`,o)}function y(e,t){return`
+                `)}}i=l}let a=r.join(`
+`);return Function(`uv`,`data`,`dataInt32`,`offset`,a)}function y(e,t){return`
         for (let i = 0; i < ${e*t}; i++) {
             data[offset + (((i / ${e})|0) * 4) + (i % ${e})] = v[i];
         }
     `}var b={f32:`
         data[offset] = v;`,i32:`
+        dataInt32[offset] = v;`,u32:`
         dataInt32[offset] = v;`,"vec2<f32>":`
         data[offset] = v[0];
         data[offset + 1] = v[1];`,"vec3<f32>":`
@@ -158,6 +159,15 @@ import{R as e,a as t,b as n,i as r,lt as i,tt as a}from"./Geometry-_-Yjl7Ll.js";
         dataInt32[offset] = v[0];
         dataInt32[offset + 1] = v[1];
         dataInt32[offset + 2] = v[2];`,"vec4<i32>":`
+        dataInt32[offset] = v[0];
+        dataInt32[offset + 1] = v[1];
+        dataInt32[offset + 2] = v[2];
+        dataInt32[offset + 3] = v[3];`,"vec2<u32>":`
+        dataInt32[offset] = v[0];
+        dataInt32[offset + 1] = v[1];`,"vec3<u32>":`
+        dataInt32[offset] = v[0];
+        dataInt32[offset + 1] = v[1];
+        dataInt32[offset + 2] = v[2];`,"vec4<u32>":`
         dataInt32[offset] = v[0];
         dataInt32[offset + 1] = v[1];
         dataInt32[offset + 2] = v[2];
@@ -182,4 +192,4 @@ import{R as e,a as t,b as n,i as r,lt as i,tt as a}from"./Geometry-_-Yjl7Ll.js";
         data[offset + 1] = v[1];
         data[offset + 2] = v[2];
         data[offset + 3] = v[3];
-    `},S=class extends i{constructor({buffer:e,offset:t,size:n}){super(),this.uid=a(`buffer`),this._resourceType=`bufferResource`,this._touched=0,this._resourceId=a(`resource`),this._bufferResource=!0,this.destroyed=!1,this.buffer=e,this.offset=t|0,this.size=n,this.buffer.on(`change`,this.onBufferChange,this)}onBufferChange(){this._resourceId=a(`resource`),this.emit(`change`,this)}destroy(e=!1){this.destroyed=!0,e&&this.buffer.destroy(),this.emit(`change`,this),this.buffer=null,this.removeAllListeners()}};export{_ as a,p as c,c as d,u as f,v as i,d as l,b as n,g as o,l as p,x as r,h as s,S as t,f as u};
+    `},S=class extends a{constructor({buffer:e,offset:n,size:r,watch:i=!0}){super(),this.uid=t(`buffer`),this._resourceType=`bufferResource`,this._resourceId=t(`resource`),this._bufferResource=!0,this.destroyed=!1,this.buffer=e,this.offset=n|0,this.size=r,this.watch=i,i&&this.buffer.on(`change`,this.onBufferChange,this)}get _gcLastUsed(){return this.buffer?._gcLastUsed??-1}set _gcLastUsed(e){this.buffer&&(this.buffer._gcLastUsed=e)}onBufferChange(){this._resourceId=t(`resource`),this.emit(`change`,this)}destroy(e=!1){this.destroyed=!0,e&&this.buffer.destroy(),this.emit(`change`,this),this.watch&&this.buffer.off(`change`,this.onBufferChange,this),this.buffer=null,this.removeAllListeners()}};function C(e,t,n,r,i){if(e=Math.max(0,e),t=Math.min(t,n*r),e>=t)return 0;let a=Math.floor(e/n),o=e-a*n,s=Math.floor(t/n),c=t-s*n;if(a===s)return i[0].set(o,a,c-o,1),1;let l=0,u=a;return o>0&&(i[l++].set(o,a,n-o,1),u++),s>u&&i[l++].set(0,u,n,s-u),c>0&&i[l++].set(0,s,c,1),l}export{v as a,h as c,f as d,c as f,x as i,p as l,l as m,S as n,_ as o,u as p,b as r,g as s,C as t,d as u};
