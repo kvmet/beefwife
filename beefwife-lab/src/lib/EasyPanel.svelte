@@ -87,7 +87,7 @@
     $descriptor.gait.cyclesPerSecond = clamp(
       factor > 1 ? Math.max(pace, SLOWEST_PACE) : pace,
       0,
-      100,
+      15,
     );
   }
 

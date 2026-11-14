@@ -138,7 +138,7 @@
       unit="Hz"
       bind:value={$descriptor.gait.cyclesPerSecond}
       reset={1}
-      field={[0, 100, 0.01]}
+      field={[0, 15, 0.01]}
       slider={[0, 10, 0.01]}
     />
     <label class="row">
