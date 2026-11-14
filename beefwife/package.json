@@ -33,6 +33,8 @@
     },
     "./beefwife.js": "./beefwife.js",
     "./beefwife.min.js": "./beefwife.min.js",
+    "./beefwife.example.json": "./beefwife.example.json",
+    "./samples/*": "./samples/*",
     "./package.json": "./package.json"
   },
   "files": [
@@ -47,10 +49,15 @@
   ],
   "sideEffects": false,
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=20.0.0"
   },
   "peerDependencies": {
     "pixi.js": "^8.21.0"
+  },
+  "peerDependenciesMeta": {
+    "pixi.js": {
+      "optional": true
+    }
   },
   "scripts": {
     "build": "rolldown -c rolldown.config.mjs",

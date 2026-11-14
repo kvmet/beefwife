@@ -140,8 +140,19 @@ try {
        throw new Error("the classic-script entry found a renderer it should not have");
      if (beefwife.getPose().head.x === 0) throw new Error("packed Beefwife is inert");`,
   );
+  /* A bundler or Node reads the exports map, so every shipped document has
+     to be named there to be reachable by its package path. */
+  writeFileSync(
+    join(consumer, "documents.mjs"),
+    `import sample from "@kvmet/beefwife/samples/chevron-guy.json" with { type: "json" };
+     import example from "@kvmet/beefwife/beefwife.example.json" with { type: "json" };
+     import { Descriptor } from "@kvmet/beefwife";
+     Descriptor.read(sample);
+     Descriptor.read(example);`,
+  );
   run(process.execPath, ["module.mjs"], consumer);
   run(process.execPath, ["commonjs.cjs"], consumer);
+  run(process.execPath, ["documents.mjs"], consumer);
 
   const installed = JSON.parse(
     readFileSync(join(consumer, "node_modules/@kvmet/beefwife/package.json")),
@@ -149,6 +160,8 @@ try {
   assert.equal(installed.license, "MPL-2.0");
   assert.equal(installed.dependencies, undefined);
   assert.deepEqual(Object.keys(installed.peerDependencies), ["pixi.js"]);
+  // Headless use needs no renderer, so npm must not install one unasked.
+  assert.equal(installed.peerDependenciesMeta["pixi.js"].optional, true);
   console.log(
     `${manifest.name}@${packed.version}: ${packed.size} byte tarball, ` +
       `${packed.unpackedSize} bytes unpacked: safe`,
