@@ -42,8 +42,16 @@ With npm:
 npm install @kvmet/beefwife-canvas pixi.js
 ```
 
-The package ships the classic script only, so serve the files rather than
-importing them:
+With a bundler, import the module entry. Pixi stays external, so the page
+and the runtime share one copy:
+
+```js
+import BeefwifeCanvas from "@kvmet/beefwife-canvas";
+```
+
+The import mounts every marked canvas on its own, the same as the script
+does, so importing for the side effect alone is enough. Without a bundler,
+serve the script instead:
 
 ```html
 <script src="/node_modules/pixi.js/dist/pixi.min.js"></script>
@@ -51,12 +59,14 @@ importing them:
 ```
 
 Pixi 8.21.0 is the minimum: in earlier 8.x releases, destroying one WebGPU
-renderer can break another.
+renderer can break another. The script entry reads `window.PIXI` and the
+module entry imports the peer, so only the script entry runs where no
+renderer is present.
 
-`beefwife-canvas.js` is the readable build and creates the same global.
-`npm run build` writes both from [`src`](src/); both are committed. The
-integrated development example is in
-[`examples/beefwife-canvas`](../examples/beefwife-canvas/).
+`beefwife-canvas.js` is the readable build and creates the same global;
+`beefwife-canvas.mjs` is the module build. `npm run build` writes all three
+from [`src`](src/); all are committed. The integrated development example is
+in [`examples/beefwife-canvas`](../examples/beefwife-canvas/).
 
 The bundle auto-mounts every marked canvas after the DOM is ready.
 Listen for `beefwifecanvasready` or `beefwifecanvaserror`, await the `ready`

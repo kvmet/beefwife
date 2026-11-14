@@ -62,6 +62,7 @@ try {
     "README.md",
     "beefwife-canvas.js",
     "beefwife-canvas.min.js",
+    "beefwife-canvas.mjs",
     "package.json",
   ]);
 
@@ -101,6 +102,41 @@ try {
     ["page.cjs", join(root, "beefwife", "beefwife.example.json")],
     consumer,
   );
+
+  /* The module entry resolves the peer instead of reading a global, so this
+     consumer gets a renderer and the one above deliberately does not. */
+  const moduleConsumer = join(temporary, "consumer-module");
+  mkdirSync(moduleConsumer);
+  writeFileSync(join(moduleConsumer, "package.json"), '{"private":true}\n');
+  run(
+    npm,
+    [
+      "install",
+      join(temporary, packed.filename),
+      join(packageRoot, "node_modules", "pixi.js"),
+      "--ignore-scripts",
+      "--offline",
+      "--install-links=false",
+      "--no-audit",
+      "--no-fund",
+    ],
+    moduleConsumer,
+  );
+  // The stub has to land before the entry evaluates, so the import is dynamic.
+  writeFileSync(
+    join(moduleConsumer, "page.mjs"),
+    `globalThis.document = { readyState: "complete", querySelectorAll: () => [] };
+     const { default: BeefwifeCanvas } = await import("@kvmet/beefwife-canvas");
+     const PIXI = await import("pixi.js");
+     for (const key of ["get", "mount", "scan"])
+       if (typeof BeefwifeCanvas[key] !== "function")
+         throw new Error(\`the module entry is missing \${key}\`);
+     if (BeefwifeCanvas.Descriptor.VERSION !== 1)
+       throw new Error("the module entry did not carry the schema out with it");
+     if (typeof PIXI.Container !== "function")
+       throw new Error("the module entry did not reach the peer renderer");`,
+  );
+  run(process.execPath, ["page.mjs"], moduleConsumer);
 
   const installed = JSON.parse(
     readFileSync(

@@ -21,13 +21,19 @@
     "procedural"
   ],
   "main": "./beefwife-canvas.js",
+  "module": "./beefwife-canvas.mjs",
   "browser": "./beefwife-canvas.js",
   "unpkg": "./beefwife-canvas.min.js",
   "jsdelivr": "./beefwife-canvas.min.js",
   "exports": {
-    ".": "./beefwife-canvas.js",
+    ".": {
+      "import": "./beefwife-canvas.mjs",
+      "require": "./beefwife-canvas.js",
+      "default": "./beefwife-canvas.js"
+    },
     "./beefwife-canvas.js": "./beefwife-canvas.js",
     "./beefwife-canvas.min.js": "./beefwife-canvas.min.js",
+    "./beefwife-canvas.mjs": "./beefwife-canvas.mjs",
     "./package.json": "./package.json"
   },
   "files": [
@@ -35,7 +41,8 @@
     "LICENSE",
     "README.md",
     "beefwife-canvas.js",
-    "beefwife-canvas.min.js"
+    "beefwife-canvas.min.js",
+    "beefwife-canvas.mjs"
   ],
   "engines": {
     "node": ">=20.0.0"

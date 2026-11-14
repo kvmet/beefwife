@@ -17,5 +17,6 @@ A mounted canvas reports through `data-beefwife-state`, the
 sized to zero.
 
 `@kvmet/beefwife` and `@kvmet/terrain` are bundled in, so the page loads Pixi 8
-and this one file. The classic script is the only entry; Pixi is read from the
-page as `window.PIXI`. Pixi 8.21.0 is the minimum.
+and this one file. Two entries carry it: the classic script reads `window.PIXI`
+and runs where no renderer is present, and the module build imports the peer so
+a bundler shares one copy with the page. Pixi 8.21.0 is the minimum.

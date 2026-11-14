@@ -39,4 +39,16 @@ export default defineConfig([
     external: ["pixi.js"],
     output: output("beefwife-canvas.min.js", true),
   },
+  /* The module build keeps `import "pixi.js"` rather than reading a global, so
+     a bundler resolves the peer and shares one renderer with the page. It ships
+     unminified: whoever imports it runs a bundler that minifies downstream. */
+  {
+    input: "src/canvas.mjs",
+    external: ["pixi.js"],
+    output: {
+      file: "beefwife-canvas.mjs",
+      format: "es",
+      banner,
+    },
+  },
 ]);
