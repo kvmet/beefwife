@@ -5,8 +5,11 @@ const { version } = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf8"),
 );
 /* Beefwife and terrain are inlined, so their notices ride in the artifact that
-   carries their code. */
-const banner = `/* Beefwife Canvas v${version}. Generated from beefwife-canvas/src; do not edit.
+   carries their code. The leading ! keeps the notice through minification; a
+   plain block comment is stripped, leaving the CDN artifact with no copyright
+   or license. */
+const banner = `/*! Beefwife Canvas v${version}. Generated from beefwife-canvas/src; do not edit.
+   (c) Kristen Metcalfe, MPL-2.0.
    Bundles @kvmet/beefwife (MPL-2.0) and @kvmet/terrain (MIT, (c) Kristen Metcalfe). */`;
 const footer =
   'if (typeof module !== "undefined" && module.exports) module.exports = BeefwifeCanvas;';

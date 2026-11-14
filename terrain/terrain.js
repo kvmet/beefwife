@@ -1,4 +1,5 @@
-/* Terrain v0.2.0. Generated from terrain/src; do not edit. */
+/*! Terrain v0.2.0. Generated from terrain/src; do not edit.
+   (c) Kristen Metcalfe, MIT. */
 var Terrain = (function() {
 
 // \0rolldown/runtime.js

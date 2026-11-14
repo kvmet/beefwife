@@ -4,7 +4,10 @@ import { readFileSync } from "node:fs";
 const { version } = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf8"),
 );
-const banner = `/* Beefwife v${version}. Generated from beefwife/src; do not edit. */`;
+/* The leading ! keeps the notice through minification; a plain block comment
+   is stripped, leaving the CDN artifact with no copyright or license. */
+const banner = `/*! Beefwife v${version}. Generated from beefwife/src; do not edit.
+   (c) Kristen Metcalfe, MPL-2.0. */`;
 const footer =
   'if (typeof module !== "undefined" && module.exports) module.exports = Beefwife;';
 /* Pixi is read from the page rather than bundled, and a property lookup is

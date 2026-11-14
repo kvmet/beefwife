@@ -1,4 +1,5 @@
-/* Beefwife v0.1.0. Generated from beefwife/src; do not edit. */
+/*! Beefwife v0.1.0. Generated from beefwife/src; do not edit.
+   (c) Kristen Metcalfe, MPL-2.0. */
 var Beefwife = (function(pixi_js) {
 
 // \0rolldown/runtime.js
