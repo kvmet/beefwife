@@ -214,20 +214,39 @@ const particlesOf = (beefwife, label) =>
     await draw(creature);
     assert.deepEqual(partsOf(creature), heldParts);
     assert.equal(particlesOf(creature, "plates")[0].texture.source, texture);
+    /* onRender runs inside Pixi's render pass, which a throw would leave
+       half done. An invalid value draws at the last valid one and reports
+       once, after the pass. */
     for (const invalid of [NaN, Infinity, -Infinity, null, "1", true]) {
+      const errors = [];
+      const listener = (error) => errors.push(error);
+      creature.on("error", listener);
       policy.pixelResolution = invalid;
-      assert.throws(
-        () => creature.onRender(stubRenderer),
-        /pixelResolution must be finite and positive/,
-      );
+      creature.onRender(stubRenderer);
+      assert.equal(errors.length, 0);
+      await Promise.resolve();
+      assert.equal(errors.length, 1);
+      assert.match(errors[0].message, /pixelResolution must be finite/);
+      await draw(creature);
+      assert.equal(errors.length, 1);
+      creature.off("error", listener);
       assert.deepEqual(partsOf(creature), heldParts);
       assert.deepEqual(meshPositions(creature), positions);
       policy.pixelResolution = bounded;
       await draw(creature);
       assert.deepEqual(partsOf(creature), heldParts);
       assert.equal(particlesOf(creature, "plates")[0].texture.source, texture);
-      checks += 5;
+      checks += 8;
     }
+    // With nothing listening, the error still surfaces, after the pass.
+    const uncaught = new Promise((resolve) =>
+      process.once("uncaughtException", resolve),
+    );
+    policy.pixelResolution = NaN;
+    creature.onRender(stubRenderer);
+    assert.match((await uncaught).message, /pixelResolution must be finite/);
+    policy.pixelResolution = bounded;
+    checks++;
     delete policy.pixelResolution;
     await draw(creature);
     const defaulted = new Beefwife(source, {

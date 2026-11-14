@@ -2368,6 +2368,7 @@ var Graphics = class {
 		this.ribbonFill = null;
 		this.ribbonStroke = null;
 		this.ribbonCount = -1;
+		this.reportedResolution = null;
 		this.baking = false;
 		this.state = null;
 		this.adopt(state);
@@ -2512,7 +2513,7 @@ var Graphics = class {
 		this._arrange();
 	}
 	_syncAtlas(renderer) {
-		const resolution = pixelResolutionOf(this.options);
+		const resolution = this._liveResolution();
 		if (resolution !== this.nextResolution) {
 			this.nextPlan = prepareAtlas(this.model, resolution);
 			this.nextResolution = resolution;
@@ -2539,6 +2540,25 @@ var Graphics = class {
 				if (!this.host.emit("error", error)) throw error;
 			}
 		});
+	}
+	_liveResolution() {
+		const value = this.options.pixelResolution;
+		try {
+			const resolution = pixelResolutionOf(this.options);
+			this.reportedResolution = null;
+			return resolution;
+		} catch (error) {
+			if (!(error instanceof RangeError)) throw error;
+			const reported = this.reportedResolution;
+			if (!reported || !Object.is(reported.value, value)) {
+				this.reportedResolution = { value };
+				afterPass(() => {
+					if (this.parent.destroyed) return;
+					if (!this.host.emit("error", error)) throw error;
+				});
+			}
+			return this.nextResolution;
+		}
 	}
 	_bake(renderer) {
 		const plan = this.nextPlan;

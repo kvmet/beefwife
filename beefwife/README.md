@@ -97,7 +97,9 @@ The optional `render` object is a live rendering policy with exactly three
 fields. `roundVertices` is boolean pixel snapping. `pixelResolution` is the
 positive number of output pixels per world pixel from `1e-6` to `1e6`, and
 defaults to one; snapping uses its output-pixel grid, and a host should update
-it when renderer resolution changes. `kneeProjection` is `null` or an object
+it when renderer resolution changes. A live value that is not a finite number
+keeps drawing at the last valid one and is reported once, after the render
+pass, the way texture rendering failures are. `kneeProjection` is `null` or an object
 containing `centerX` and `centerY` within `±Beefwife.MAX_WORLD_COORDINATE` and
 a `perspective` from zero to `1e6`, plus an optional `maxOffset` from zero to
 `Beefwife.MAX_WORLD_COORDINATE`. The ranges are wide enough for any real

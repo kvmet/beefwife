@@ -127,6 +127,8 @@ class Graphics {
     this.ribbonFill = null;
     this.ribbonStroke = null;
     this.ribbonCount = -1;
+    // The invalid live resolution last reported, wrapped so null can be one.
+    this.reportedResolution = null;
     // True between booking a bake and running it. See `afterPass`.
     this.baking = false;
     this.state = null;
@@ -326,7 +328,7 @@ class Graphics {
      frames and the creature draws as its meshes alone, for one frame. The
      bake itself waits for the pass to end, so this only books it. */
   _syncAtlas(renderer) {
-    const resolution = pixelResolutionOf(this.options);
+    const resolution = this._liveResolution();
     if (resolution !== this.nextResolution) {
       this.nextPlan = prepareAtlas(this.model, resolution);
       this.nextResolution = resolution;
@@ -359,6 +361,29 @@ class Graphics {
         if (!this.host.emit("error", error)) throw error;
       }
     });
+  }
+
+  /* Read inside Pixi's render pass, where a throw skips the renderer's own
+     end-of-frame cleanup. An invalid value draws at the last valid one and is
+     reported once, after the pass. */
+  _liveResolution() {
+    const value = this.options.pixelResolution;
+    try {
+      const resolution = pixelResolutionOf(this.options);
+      this.reportedResolution = null;
+      return resolution;
+    } catch (error) {
+      if (!(error instanceof RangeError)) throw error;
+      const reported = this.reportedResolution;
+      if (!reported || !Object.is(reported.value, value)) {
+        this.reportedResolution = { value };
+        afterPass(() => {
+          if (this.parent.destroyed) return;
+          if (!this.host.emit("error", error)) throw error;
+        });
+      }
+      return this.nextResolution;
+    }
   }
 
   _bake(renderer) {
