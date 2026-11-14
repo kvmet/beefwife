@@ -5,6 +5,8 @@
  * tree is beefwife-descriptor.js.
  */
 
+import { MAX_CHANNEL_RATE } from "./limits.mjs";
+
 const VERSION = 1;
 const SECTIONS = ["head", "trunk", "tail"];
 const ID_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
@@ -154,7 +156,7 @@ const schema = object({
     paints: record(paint, 1),
   }),
   gait: object({
-    cyclesPerSecond: number(0, 100),
+    cyclesPerSecond: number(0, MAX_CHANNEL_RATE),
     /* Aliasing depends on lag x spacing x harmonic, so no per-pixel bound
        can express it; this one only keeps the value sane and scalable. */
     phaseLagRadiansPerPixel: perPx(-1000, 1000),

@@ -5,9 +5,9 @@ import { ChainTables } from "./tables.mjs";
 import { ChainState } from "./chain.mjs";
 import { carryChunks } from "./carry.mjs";
 import { Bend } from "./bend.mjs";
+import { PHYSICS_STEP } from "./limits.mjs";
 
 const TAU = Math.PI * 2;
-const PHYSICS_STEP = 1 / 60;
 /* Link relaxation converges on passes per second, so this and the substep
    rate trade against each other: their product is the budget, and 480 a
    second holds the shipped descriptors inside 6.6% link error. A slower

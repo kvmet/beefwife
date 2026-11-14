@@ -14,6 +14,7 @@ import {
   NAME_PATTERN,
   schema,
 } from "./schema.mjs";
+import { MAX_CHANNEL_RATE } from "./limits.mjs";
 
 const fail = (path, message) => {
   throw new Error(`${path}: ${message}`);
@@ -167,7 +168,7 @@ const resolvedChunks = (descriptor, placement, path) => {
 };
 
 const validate = (descriptor) => {
-  const { definitions, chain, legs } = descriptor;
+  const { definitions, chain, gait, legs } = descriptor;
   const sections = chain.sections;
   const total = SECTIONS.reduce((sum, name) => sum + sections[name].chunks, 0);
   if (total < 2 || total > LIMITS.chunks)
@@ -232,6 +233,14 @@ const validate = (descriptor) => {
       fail(
         "$.chain.skin.ornaments",
         `must expand to at most ${LIMITS.instances} instances`,
+      );
+  });
+
+  ["bend", "thrust", "gather", "contact"].forEach((channel) => {
+    if (gait.cyclesPerSecond * gait[channel].harmonic > MAX_CHANNEL_RATE)
+      fail(
+        `$.gait.${channel}.harmonic`,
+        `times cyclesPerSecond must be at most ${MAX_CHANNEL_RATE}`,
       );
   });
 

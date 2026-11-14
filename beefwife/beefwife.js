@@ -57,6 +57,13 @@ pixi_js = __toESM(pixi_js, 1);
 	var PIXI = pixi_js;
 	var available = typeof PIXI?.Container === "function";
 
+// src/limits.mjs
+	var MAX_WORLD_COORDINATE = 1e9;
+	var MIN_PIXEL_RESOLUTION = 1e-6;
+	var MAX_PIXEL_RESOLUTION = 1e6;
+	var MAX_PERSPECTIVE = 1e6;
+	var PHYSICS_STEP = 1 / 60;
+
 // src/schema.mjs
 /**
 	* The v1 schema tree: every field a beefwife descriptor may hold, its kind,
@@ -224,7 +231,7 @@ pixi_js = __toESM(pixi_js, 1);
 			paints: record(paint, 1)
 		}),
 		gait: object({
-			cyclesPerSecond: number(0, 100),
+			cyclesPerSecond: number(0, 15),
 			phaseLagRadiansPerPixel: perPx(-1e3, 1e3),
 			bend: object({
 				amplitude: number(0, 10),
@@ -426,7 +433,7 @@ pixi_js = __toESM(pixi_js, 1);
 		return Array.from({ length: count }, (_, i) => base + localStart + direction * i * placement.repeat.step);
 	};
 	var validate = (descriptor) => {
-		const { definitions, chain, legs } = descriptor;
+		const { definitions, chain, gait, legs } = descriptor;
 		const sections = chain.sections;
 		const total = SECTIONS.reduce((sum, name) => sum + sections[name].chunks, 0);
 		if (total < 2 || total > LIMITS.chunks) fail("$.chain.sections", `must contain 2 to ${LIMITS.chunks} chunks`);
@@ -480,6 +487,14 @@ pixi_js = __toESM(pixi_js, 1);
 			reference(definitions.paints, entry.paint, `${path}.paint`);
 			ornamentInstances += resolvedChunks(descriptor, entry, path).length * (entry.side === "both" ? 2 : 1);
 			if (ornamentInstances > LIMITS.instances) fail("$.chain.skin.ornaments", `must expand to at most ${LIMITS.instances} instances`);
+		});
+		[
+			"bend",
+			"thrust",
+			"gather",
+			"contact"
+		].forEach((channel) => {
+			if (gait.cyclesPerSecond * gait[channel].harmonic > 15) fail(`$.gait.${channel}.harmonic`, `times cyclesPerSecond must be at most ${15}`);
 		});
 		if (legs.pairs && !sections[legs.section].chunks) fail("$.legs.section", "cannot attach legs to an empty section");
 		Object.entries(definitions.paints).forEach(([name, entry]) => {
@@ -1198,7 +1213,6 @@ pixi_js = __toESM(pixi_js, 1);
 // src/body.mjs
 /** Schema-v1 Verlet chain. Private state is owned by one Beefwife instance. */
 	var TAU$1 = Math.PI * 2;
-	var PHYSICS_STEP = 1 / 60;
 	var RELAX_PASSES = 8;
 	var AXIS_RATE = 1.5;
 	var MAX_LINK_STRETCH = 3;
@@ -2343,12 +2357,6 @@ pixi_js = __toESM(pixi_js, 1);
 		atlas.target.source.removeAllListeners("change");
 		atlas.target.destroy(true);
 	};
-
-// src/limits.mjs
-	var MAX_WORLD_COORDINATE = 1e9;
-	var MIN_PIXEL_RESOLUTION = 1e-6;
-	var MAX_PIXEL_RESOLUTION = 1e6;
-	var MAX_PERSPECTIVE = 1e6;
 
 // src/graphics.mjs
 /** Pixi display ownership for one Beefwife. */

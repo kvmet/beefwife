@@ -263,11 +263,12 @@ add `minLength`, `maxLength`, `pattern`, and `blankAllowed`; choices add
 
 A few fields answer to more than themselves, and no per-field bound can say so:
 the three section chunk counts must total from 2 to 256, a placement's anchor
-must land on a chunk in scope that no other plate claims, and the contact and
+must land on a chunk in scope that no other plate claims, the contact and
 gather amplitudes are rejected where their section scale and the gait channel
-together would drive a link or a footfall negative. A path the schema does not define is an error. A consumer may
-narrow a range to suit its own users, but a value outside the reported bound is
-one `read` rejects.
+together would drive a link or a footfall negative, and each gait channel's
+harmonic times `cyclesPerSecond` must be at most 15. A path the schema does
+not define is an error. A consumer may narrow a range to suit its own users,
+but a value outside the reported bound is one `read` rejects.
 
 See [beefwife.example.json](beefwife.example.json) for the complete shape.
 
@@ -346,7 +347,10 @@ instead of pivoting at the neck. Throttle scales it.
 
 All channels read one phase clock and one spatial lag:
 
-- `cyclesPerSecond` advances the shared clock.
+- `cyclesPerSecond` advances the shared clock. The gait is sampled once per
+  1/60 s physics step, so each channel's rate, `cyclesPerSecond * harmonic`,
+  must be at most 15: four steps a cycle. Faster waves alias into slower or
+  reversed ones.
 - `phaseLagRadiansPerPixel` controls wavelength and direction along resting
   chain distance. Positive values travel from head to tail.
 - Bend is a signed sine. Its amplitude is radians of curvature at the trunk's

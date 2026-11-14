@@ -236,15 +236,25 @@ const everyNumber = numericPaths(Schema.schema);
 assert.ok(everyNumber.length > 80, `only ${everyNumber.length} numeric fields`);
 
 /* Some fields answer to more than themselves: section counts are capped as a
-   total, the contact and gather amplitudes share a cutoff with the gait, and a
-   placement's anchor has to land on a chunk nothing else claims. No
-   single-field edit can sit at those edges, so they are swept by name
-   elsewhere. Listing them explicitly keeps a new field from joining silently. */
+   total, the contact and gather amplitudes share a cutoff with the gait, each
+   channel's harmonic shares a rate cap with the clock, and a placement's
+   anchor has to land on a chunk nothing else claims. No single-field edit can
+   sit at those edges, so they are swept by name elsewhere. Listing them
+   explicitly keeps a new field from joining silently. */
 const crossChecked = (path) =>
   /^chain\.sections\.(head|trunk|tail)\.(chunks|motionScale\.(contact|gather))$/.test(
     path,
-  ) || /^chain\.skin\.(plates|ornaments)\[\]\.(at|repeat)\./.test(path);
+  ) ||
+  /^gait\.(cyclesPerSecond|(bend|thrust|gather|contact)\.harmonic)$/.test(
+    path,
+  ) ||
+  /^chain\.skin\.(plates|ornaments)\[\]\.(at|repeat)\./.test(path);
 assert.deepEqual(everyNumber.filter(crossChecked), [
+  "gait.cyclesPerSecond",
+  "gait.bend.harmonic",
+  "gait.thrust.harmonic",
+  "gait.gather.harmonic",
+  "gait.contact.harmonic",
   "chain.sections.head.chunks",
   "chain.sections.head.motionScale.gather",
   "chain.sections.head.motionScale.contact",
@@ -287,8 +297,32 @@ for (const path of everyNumber) {
     swept++;
   }
 }
-assert.equal(swept, (everyNumber.length - 15) * 2);
+assert.equal(swept, (everyNumber.length - 20) * 2);
 assert.ok(swept > 140, `only ${swept} edges swept`);
 checks += 2;
+
+/* The gait is sampled once per physics step, so a channel's own rate,
+   cyclesPerSecond x harmonic, is what aliases. Each channel is swept to the
+   cap with every other channel at harmonic 1. */
+const rateCap = Descriptor.bounds("gait.cyclesPerSecond").max;
+assert.equal(rateCap, 15);
+for (const channel of ["bend", "thrust", "gather", "contact"])
+  for (const harmonic of [1, 2, 8]) {
+    const atCap = copy(source);
+    for (const other of ["bend", "thrust", "gather", "contact"])
+      atCap.gait[other].harmonic = 1;
+    atCap.gait[channel].harmonic = harmonic;
+    atCap.gait.cyclesPerSecond = rateCap / harmonic;
+    Descriptor.read(atCap);
+    const pastCap = copy(atCap);
+    pastCap.gait.cyclesPerSecond = rateCap / harmonic + 1e-6;
+    // At harmonic 1 the field's own bound is the cap, and it rejects first.
+    const reason =
+      harmonic === 1
+        ? /gait\.cyclesPerSecond: must be between 0 and 15/
+        : new RegExp(`gait\\.${channel}\\.harmonic: .*at most 15`);
+    rejected(`${channel} x${harmonic} past the rate cap`, pastCap, reason);
+  }
+checks += 1;
 
 console.log(`descriptor schema: ${checks} field checks passed`);
