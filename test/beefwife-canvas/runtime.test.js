@@ -167,12 +167,13 @@ const sceneBoundary = async () => {
     style: {},
     remove: () => log.push(["remove"]),
   };
+  let pageScroll = 0;
   const obstacle = {
     getBoundingClientRect: () => ({
       left: 500,
-      top: 100,
+      top: 100 - pageScroll,
       right: 520,
-      bottom: 120,
+      bottom: 120 - pageScroll,
     }),
   };
   const browser = {
@@ -330,23 +331,41 @@ const sceneBoundary = async () => {
   assert.equal(browser.embeddedLayer.router.viewport().width, 300);
   assert.equal(browser.embeddedLayer.router.viewport().height, 200);
 
-  /* A layer of its own is fixed over the viewport, so the page scrolling
-     under it moves every obstacle it measured. An embedded canvas scrolls
-     with those obstacles and keeps its measurement, unless its knee field is
-     centred on the viewport, which the scroll moves. */
-  const scrolls = (layer) => {
-    layer.rebuildTimer = null;
-    layer._onScroll();
-    return layer.rebuildTimer !== null;
+  /* Terrain is measured in canvas coordinates, so a scroll matters only
+     when it moves an obstacle relative to the canvas: a layer of its own is
+     fixed over the page, and an embedded canvas may be fixed too. A knee
+     field centred on the viewport moves with every scroll. */
+  const runTimers = () => {
+    const due = [...scheduledTimers];
+    scheduledTimers.clear();
+    due.forEach((callback) => callback());
   };
-  assert.ok(scrolls(browser.layer), "a fixed layer ignored a scroll");
+  const buildsOf = (layer) => {
+    const build = layer.terrain.build.bind(layer.terrain);
+    const counter = { builds: 0 };
+    layer.terrain.build = () => {
+      counter.builds += 1;
+      return build();
+    };
+    return counter;
+  };
   assert.ok(
-    scrolls(browser.embeddedLayer),
+    (() => {
+      browser.embeddedLayer.rebuildTimer = null;
+      browser.embeddedLayer._onScroll();
+      return browser.embeddedLayer.rebuildTimer !== null;
+    })(),
     "a viewport-centred knee field ignored a scroll",
   );
+  let stillCanvasTop = 0;
   browser.stillCanvas = {
     style: {},
-    getBoundingClientRect: () => ({ left: 0, top: 0, width: 300, height: 200 }),
+    getBoundingClientRect: () => ({
+      left: 0,
+      top: stillCanvasTop,
+      width: 300,
+      height: 200,
+    }),
     remove() {},
   };
   browser.stillLayer = await vm.runInContext(
@@ -357,11 +376,33 @@ const sceneBoundary = async () => {
     })`,
     browser,
   );
+  browser.stillLayer.start();
+  scheduledTimers.clear();
+  const layerBuilds = buildsOf(browser.layer);
+  const stillBuilds = buildsOf(browser.stillLayer);
+  const scroll = (by, canvasScrolls) => {
+    pageScroll += by;
+    if (canvasScrolls) stillCanvasTop -= by;
+    browser.layer._onScroll();
+    browser.stillLayer._onScroll();
+    runTimers();
+  };
+  scroll(50, true);
+  assert.equal(layerBuilds.builds, 1, "a fixed layer ignored a scroll");
+  assert.equal(browser.layer.terrainView.rectangles[0].top, 50);
   assert.equal(
-    scrolls(browser.stillLayer),
-    false,
+    stillBuilds.builds,
+    0,
     "an embedded layer re-measured a scroll that moved nothing",
   );
+  scroll(50, false);
+  assert.equal(
+    stillBuilds.builds,
+    1,
+    "a fixed embedded layer ignored a scroll that moved its obstacles",
+  );
+  assert.equal(browser.stillLayer.terrainView.rectangles[0].top, 50);
+  pageScroll = 0;
   browser.stillLayer.destroy();
   browser.embeddedLayer.destroy();
   assert.ok(!log.some(([operation]) => operation === "embedded-remove"));

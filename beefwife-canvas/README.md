@@ -235,10 +235,12 @@ closely an intermediate corner must be followed, while `arrivalRadius`
 controls final-target satisfaction; both default to 10 CSS pixels.
 `wanderDelay` defaults to 4 seconds and may be zero.
 `avoid` defaults to `.beefwife-avoid`, `edgeMargin` defaults to 25, and
-`obstaclePadding` defaults to zero CSS pixels. Call
-`refreshTerrain()` after transform-only obstacle movement because a
-`ResizeObserver` cannot see it. `pauseHidden` and `pauseOffscreen` default to
-true.
+`obstaclePadding` defaults to zero CSS pixels. Terrain is re-measured when the
+window resizes, an obstacle or the canvas resizes, or a window scroll moves an
+obstacle relative to the canvas, as with a fixed canvas or a sticky obstacle.
+Call `refreshTerrain()` after transform-only obstacle movement, or a scroll
+inside a nested scroll container, because the runtime cannot see either.
+`pauseHidden` and `pauseOffscreen` default to true.
 
 Avoidance and visual occlusion are independent. `avoid` changes routing. To
 make beefwives appear to walk behind a widget, place that DOM element above the

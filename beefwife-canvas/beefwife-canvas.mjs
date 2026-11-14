@@ -4330,6 +4330,7 @@ const config = {
 	MAX_COUNT: 1024,
 	MAX_TIME_SCALE: BeefwifeCanvasActor.MAX_TIME_SCALE,
 	REBUILD_DELAY: 150,
+	MOVE_TOLERANCE: .5,
 	DEFAULT_RENDER_FPS: 24,
 	DEFAULT_PHYSICS_FPS: 60
 };
@@ -4877,12 +4878,14 @@ var BeefwifeCanvasRuntime = class BeefwifeCanvasRuntime {
 		this.nextPhysicsTime = 0;
 		this.nextDrawTime = 0;
 		this.rebuildTimer = null;
+		this.moveCheckTimer = null;
 		this._onResize = () => {
 			if (!this.destroyed) this.scheduleRebuild();
 		};
 		this._onScroll = () => {
 			if (this.destroyed) return;
-			if (this.scene.ownsCanvas || this.scene.kneeProjectionCenter === "viewport") this.scheduleRebuild();
+			if (this.scene.kneeProjectionCenter === "viewport") this.scheduleRebuild();
+			else this._scheduleMoveCheck();
 		};
 		this.observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(this._onResize);
 	}
@@ -4907,6 +4910,8 @@ var BeefwifeCanvasRuntime = class BeefwifeCanvasRuntime {
 		this._pause();
 		clearTimeout(this.rebuildTimer);
 		this.rebuildTimer = null;
+		clearTimeout(this.moveCheckTimer);
+		this.moveCheckTimer = null;
 		window.removeEventListener("resize", this._onResize);
 		window.removeEventListener("scroll", this._onScroll);
 		if (this.observer) {
@@ -5002,6 +5007,26 @@ var BeefwifeCanvasRuntime = class BeefwifeCanvasRuntime {
 			this.rebuild();
 		}, config.REBUILD_DELAY);
 	}
+	_scheduleMoveCheck() {
+		clearTimeout(this.moveCheckTimer);
+		this.moveCheckTimer = setTimeout(() => {
+			if (!this.running || !this._obstaclesMoved()) return;
+			this.scene.resize();
+			this.rebuild();
+		}, config.REBUILD_DELAY);
+	}
+	_obstaclesMoved() {
+		const elements = [...new Set(this.terrain.avoidElements())];
+		const measured = this.terrainView.rectangles;
+		if (elements.length !== measured.length) return true;
+		const tolerance = config.MOVE_TOLERANCE;
+		return this._rectanglesOf(elements, this.scene.viewportRect()).some((rectangle, index) => [
+			"left",
+			"top",
+			"right",
+			"bottom"
+		].some((side) => Math.abs(rectangle[side] - measured[index][side]) > tolerance));
+	}
 	/**
 	* The page has moved under the actors. It measures the new field and
 	* nothing else: no creature is reseated and no plan is touched. A widget
@@ -5030,7 +5055,6 @@ var BeefwifeCanvasRuntime = class BeefwifeCanvasRuntime {
 	_snapshotTerrain(elements) {
 		const viewport = this.scene.viewport;
 		const margin = this.terrainDebugOptions.edgeMargin;
-		const padding = this.terrainDebugOptions.obstaclePadding;
 		const x0 = Math.min(margin, viewport.width / 2);
 		const y0 = Math.min(margin, viewport.height / 2);
 		this.terrainView.bounds = {
@@ -5039,7 +5063,11 @@ var BeefwifeCanvasRuntime = class BeefwifeCanvasRuntime {
 			right: viewport.width - x0,
 			bottom: viewport.height - y0
 		};
-		this.terrainView.rectangles = elements.map((element) => {
+		this.terrainView.rectangles = this._rectanglesOf(elements, viewport);
+	}
+	_rectanglesOf(elements, viewport) {
+		const padding = this.terrainDebugOptions.obstaclePadding;
+		return elements.map((element) => {
 			const rect = element.getBoundingClientRect();
 			return {
 				left: rect.left - viewport.left - padding,

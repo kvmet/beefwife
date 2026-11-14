@@ -13,6 +13,7 @@ const config = {
   MAX_COUNT: 1024,
   MAX_TIME_SCALE: ActorClass.MAX_TIME_SCALE,
   REBUILD_DELAY: 150, // ms debounce for terrain measurements
+  MOVE_TOLERANCE: 0.5, // px an obstacle may drift before a scroll re-measures
   /* The frame rates live here because this layer owns them, and are stated
      once so a mount and a direct construction cannot drift apart. A draw
      landing between two physics updates repeats the frame before it, so
