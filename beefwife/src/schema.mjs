@@ -78,7 +78,7 @@ const paint = object({
   fill: colour,
   stroke: nullable(
     object({
-      colour: string(1, 256),
+      colour: nonBlank(string(1, 256)),
       width: px(0, 1000),
     }),
   ),

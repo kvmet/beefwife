@@ -153,7 +153,7 @@ pixi_js = __toESM(pixi_js, 1);
 	var paint = object({
 		fill: colour,
 		stroke: nullable(object({
-			colour: string(1, 256),
+			colour: nonBlank(string(1, 256)),
 			width: px(0, 1e3)
 		}))
 	});

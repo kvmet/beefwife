@@ -188,11 +188,15 @@ assert.equal(
   Descriptor.bounds("definitions.paints.*.fill").blankAllowed,
   false,
 );
+assert.equal(
+  Descriptor.bounds("definitions.paints.*.stroke.colour").blankAllowed,
+  false,
+);
 assert.equal(Descriptor.bounds("name").blankAllowed, true);
 const blankFill = copy(source);
 blankFill.definitions.paints.shell.fill = " ";
 rejected("blank fill", blankFill, /must not be blank/);
-checks += 3;
+checks += 4;
 for (const path of ["legs.nope", "chain.skin.plates.side", "legs..pairs"])
   assert.throws(() => Descriptor.bounds(path), /not a field/);
 assert.throws(() => Descriptor.bounds(""), /non-empty string/);
