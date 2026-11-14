@@ -546,6 +546,34 @@ const particlesOf = (beefwife, label) =>
   );
   checks += 2;
 
+  /* A slider drag edits every frame, and each frame must draw the shapes
+     where the body is now. An edit that keeps every frame keeps the shapes
+     themselves; one that changes frames moves the old shapes with the body
+     until the bake replaces them. */
+  const plateSpots = () =>
+    particlesOf(beefwife, "plates").map(({ x, y }) => [x, y]);
+  const editAndDraw = async (next) => {
+    beefwife.step(1 / 60);
+    beefwife.setDescriptor(next);
+    beefwife.onRender(stubRenderer);
+    const drawn = plateSpots();
+    await Promise.resolve();
+    return drawn;
+  };
+  const bandsBeforePace = [...bandsOf(beefwife).values()];
+  const paced = copy(rescaled);
+  paced.gait.cyclesPerSecond += 0.5;
+  const drawnPaced = await editAndDraw(paced);
+  assert.deepEqual([...bandsOf(beefwife).values()], bandsBeforePace);
+  assert.deepEqual(drawnPaced, plateSpots());
+  const platesBeforePaint = bandsOf(beefwife).get("plates");
+  const repainted = copy(paced);
+  repainted.definitions.paints.shell.fill = "#654321";
+  const drawnPainted = await editAndDraw(repainted);
+  assert.ok(platesBeforePaint.destroyed);
+  assert.deepEqual(drawnPainted, plateSpots());
+  checks += 4;
+
   /* Overlap order is the whole promise of the retained scene, and half of it is
      invisible in a scene with no stroke and no under-layer ornament. This one
      carries every kind at once, so a swap anywhere in `_arrange` moves a band

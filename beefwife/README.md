@@ -156,11 +156,14 @@ eases in over at most 0.2 s rather than resizing the trunk at once.
 
 Display objects are retained on the same terms, one at a time rather than all
 together. A replacement repaints the children it can and changes only what the
-new descriptor disagrees with: feet, plates, and ornaments are added or dropped
-by count, and a limb or ribbon mesh is rebuilt only when its vertex count moves
-or its paint gains or loses a fill or a visible stroke. Adding a leg pair
-rebuilds the limb mesh; adding a chunk rebuilds the ribbon mesh. Nothing else
-in the scene is discarded, so no edit restarts the creature.
+new descriptor disagrees with. Feet, plates, and ornaments draw from baked
+frames, so they are rebuilt only when a frame changes (a shape, paint, or
+scale) or a placement does (a count or a layer); until the new frames are
+baked, the old shapes keep moving with the body. A limb or ribbon mesh is
+rebuilt only when its vertex count moves or its paint gains or loses a fill or
+a visible stroke. Adding a leg pair rebuilds the limb mesh; adding a chunk
+rebuilds the ribbon mesh. Nothing else in the scene is discarded, so no edit
+restarts the creature.
 
 `reset(options)` deliberately clears physical and secondary state and samples a
 new breathing phase when breathing is enabled. Its optional position defaults

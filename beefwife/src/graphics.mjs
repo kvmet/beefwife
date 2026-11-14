@@ -135,28 +135,60 @@ class Graphics {
 
   /* Takes on a model by changing only what it disagrees with: a mesh is
      rebuilt only when its vertex count moves or its paint gains or loses a
-     pass, and the order is settled only when the cast changed. The shapes
-     follow the plan, which every compile drops, because shapes and paints are
-     new objects each time and the frames are named by what they draw. */
+     pass, the shapes only when a frame or a placement changes, and the order
+     only when the cast changed. */
   adopt(state) {
     const resolution = pixelResolutionOf(this.options);
-    this.nextPlan = prepareAtlas(state.model, resolution);
+    const nextPlan = prepareAtlas(state.model, resolution);
+    const legCount = state.legs.length / state.layout.legStride;
+    /* Particles answer to placements by index. While every placement keeps
+       its index the particles go on tracking the body, and they keep their
+       frames until a bake replaces them. */
+    if (this._samePlacements(nextPlan, state.model, legCount)) {
+      if (this._sameFrames(nextPlan)) this.plan = nextPlan;
+    } else {
+      this.plan = null;
+      this.footParticles = [];
+      this.ornamentParticles = [];
+      this.plateParticles = [];
+    }
+    this.nextPlan = nextPlan;
     this.nextResolution = resolution;
     this.failedBake = null;
     this.model = state.model;
-    this.legCount = state.legs.length / state.layout.legStride;
-    /* The plan goes, and with it the particles it named: they hold frames
-       baked for the model being replaced, and the state arriving now is
-       written for the new one. They draw where they last stood until the
-       bake lands. */
-    this.plan = null;
-    this.footParticles = [];
-    this.ornamentParticles = [];
-    this.plateParticles = [];
+    this.legCount = legCount;
     let changed = this._syncLimbParts(this.legCount);
     changed = this._syncRibbonParts() || changed;
     if (changed) this._arrange();
     this.sync(state);
+  }
+
+  _samePlacements(nextPlan, nextModel, legCount) {
+    const plan = this.plan;
+    if (!plan || legCount !== this.legCount) return false;
+    const drawn = (a, b) => (a === null) === (b === null);
+    return (
+      drawn(plan.feet, nextPlan.feet) &&
+      plan.plates.length === nextPlan.plates.length &&
+      plan.plates.every((key, index) => drawn(key, nextPlan.plates[index])) &&
+      plan.ornaments.length === nextPlan.ornaments.length &&
+      plan.ornaments.every(
+        (key, index) =>
+          drawn(key, nextPlan.ornaments[index]) &&
+          this.model.skin.ornaments[index].layer ===
+            nextModel.skin.ornaments[index].layer,
+      )
+    );
+  }
+
+  _sameFrames(nextPlan) {
+    const plan = this.plan;
+    return (
+      plan.key === nextPlan.key &&
+      plan.feet === nextPlan.feet &&
+      plan.plates.every((key, index) => key === nextPlan.plates[index]) &&
+      plan.ornaments.every((key, index) => key === nextPlan.ornaments[index])
+    );
   }
 
   _drop(child) {
