@@ -119,10 +119,15 @@
 
 (defn- failed [results] (filter #(= :fail (:status %)) results))
 
+;; A banner may run several lines before the marker, and reading only the first
+;; turns a reordered banner into a false SPLIT on a file nobody edits by hand.
+(def ^:private banner-depth 5)
+
 (defn- generated? [path]
   (try
     (with-open [reader (io/reader (str path))]
-      (str/includes? (or (.readLine reader) "") "Generated from"))
+      (boolean (some #(str/includes? % "Generated from")
+                     (take banner-depth (line-seq reader)))))
     (catch Exception _ false)))
 
 (let [args           *command-line-args*
