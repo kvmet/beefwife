@@ -10,8 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      # pixi.js 8 dereferences a bare `navigator` when it loads, and that
+      # global arrived in Node 21, so anything importing the peer needs 22.
       matrix:
-        node: ["20", "22", "24"]
+        node: ["22", "24"]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -29,6 +31,21 @@ jobs:
       # The browser artifacts are committed, so a stale one is a defect.
       - name: committed artifacts match source
         run: git diff --exit-code
+
+  # Terrain depends on nothing, so its floor sits below the matrix above and
+  # needs its own job to stay honest.
+  terrain-floor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+      - uses: DeLaGuardo/setup-clojure@13
+        with:
+          bb: latest
+      - run: npm ci --prefix terrain
+      - run: bb terrain
 
   lab:
     runs-on: ubuntu-latest

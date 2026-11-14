@@ -12,6 +12,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -24,6 +25,7 @@ const manifest = JSON.parse(readFileSync(join(packageRoot, "package.json")));
 const example = JSON.stringify(
   JSON.parse(readFileSync(join(packageRoot, "beefwife.example.json"))),
 );
+const peer = join(packageRoot, "node_modules", "pixi.js");
 const temporary = mkdtempSync(join(tmpdir(), "beefwife-package-"));
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 
@@ -98,21 +100,24 @@ try {
   const consumer = join(temporary, "consumer");
   mkdirSync(consumer);
   writeFileSync(join(consumer, "package.json"), '{"private":true}\n');
-  // Link the installed peer so this smoke test needs no registry access.
   run(
     npm,
     [
       "install",
       join(temporary, packed.filename),
-      join(packageRoot, "node_modules", "pixi.js"),
       "--ignore-scripts",
       "--offline",
-      "--install-links=false",
+      "--legacy-peer-deps",
       "--no-audit",
       "--no-fund",
     ],
     consumer,
   );
+  /* The peer is symlinked rather than installed, so this smoke test needs no
+     registry access. npm runs a local directory dependency's prepare script
+     even under --ignore-scripts, and pixi ships `prepare: husky install`,
+     which fails wherever husky is absent. */
+  symlinkSync(peer, join(consumer, "node_modules", "pixi.js"), "dir");
 
   writeFileSync(
     join(consumer, "module.mjs"),

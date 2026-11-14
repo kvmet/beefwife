@@ -12,6 +12,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -113,14 +114,22 @@ try {
     [
       "install",
       join(temporary, packed.filename),
-      join(packageRoot, "node_modules", "pixi.js"),
       "--ignore-scripts",
       "--offline",
-      "--install-links=false",
+      "--legacy-peer-deps",
       "--no-audit",
       "--no-fund",
     ],
     moduleConsumer,
+  );
+  /* The peer is symlinked rather than installed, so this smoke test needs no
+     registry access. npm runs a local directory dependency's prepare script
+     even under --ignore-scripts, and pixi ships `prepare: husky install`,
+     which fails wherever husky is absent. */
+  symlinkSync(
+    join(packageRoot, "node_modules", "pixi.js"),
+    join(moduleConsumer, "node_modules", "pixi.js"),
+    "dir",
   );
   // The stub has to land before the entry evaluates, so the import is dynamic.
   writeFileSync(
