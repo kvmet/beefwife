@@ -41,6 +41,10 @@ that global is missing a beefwife still simulates: it builds no display children
 and leaves `onRender` null, so a headless page or a server gets the pose without
 a renderer.
 
+In Node, `require` loads the classic-script build and `import` loads the module
+entry. The two are separate copies with separate `Beefwife` classes, so
+`instanceof` fails across them. Use one form throughout a program.
+
 ## Public runtime contract
 
 The library exposes `Beefwife` for one live Pixi display object and `Descriptor`

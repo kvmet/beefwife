@@ -14,9 +14,10 @@ accepted.
 Seven sample descriptors ship under `samples/`, reachable from a CDN by any
 page that wants creatures without designing its own.
 
-Simulation runs headless where no renderer is present: the module builds no
-display children and leaves `onRender` null, so a server gets the pose without
-Pixi. Both Pixi renderers are supported, WebGL and WebGPU.
+Simulation runs headless where no renderer is present: the classic-script
+build, loaded or required without `window.PIXI`, builds no display children and
+leaves `onRender` null, so a server gets the pose without Pixi. The module entry
+imports pixi.js. Both Pixi renderers are supported, WebGL and WebGPU.
 
 The pixi.js peer dependency requires at least 8.21.0, because destroying one
 WebGPU renderer can break another in earlier 8.x releases.
