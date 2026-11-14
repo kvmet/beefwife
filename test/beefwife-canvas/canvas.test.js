@@ -33,6 +33,7 @@ class Canvas {
     this.dataset = {};
     this.style = { imageRendering: "crisp-edges" };
     this.listeners = new Map();
+    this.isConnected = true;
   }
 
   /* As on a real canvas, the size properties reflect the attributes and
@@ -120,6 +121,8 @@ const calls = [];
 const hosts = [];
 let intersectionCallback = null;
 let hostGate = null;
+let pageObserver = null;
+const releasedRenderers = [];
 const newHost = (options) => {
   const application = options.application ?? { id: hosts.length };
   const actor = {
@@ -158,7 +161,7 @@ const newHost = (options) => {
       calls.push(["stop"]);
     },
   };
-  hosts.push({ host, options });
+  hosts.push({ host, options, application });
   return host;
 };
 
@@ -220,7 +223,21 @@ const context = {
     observe() {}
     disconnect() {}
   },
+  MutationObserver: class MutationObserver {
+    constructor(callback) {
+      this.callback = callback;
+      this.observing = false;
+      pageObserver = this;
+    }
+    observe() {
+      this.observing = true;
+    }
+    disconnect() {
+      this.observing = false;
+    }
+  },
   queueMicrotask,
+  releasedRenderers,
   ResizeObserver: undefined,
   setTimeout,
   URL,
@@ -618,6 +635,53 @@ const namedDescriptor = (name) => parseInContext(descriptorJson(name));
   );
   additive.destroy();
   checks += 2;
+
+  /* Pixi's own listeners keep a parked renderer, and so its canvas, alive.
+     A canvas that leaves the page gives it up, and releasing loses the
+     context, so that element cannot be mounted again. */
+  const leavingCanvas = new Canvas();
+  const leaving = await context.BeefwifeCanvas.mount(leavingCanvas, {
+    autoStart: false,
+    descriptors: [namedDescriptor("leaving")],
+  });
+  const leavingApplication = hosts.at(-1).application;
+  leaving.destroy();
+  assert.ok(pageObserver?.observing, "nothing watches a parked canvas");
+  pageObserver.callback([]);
+  assert.equal(
+    releasedRenderers.length,
+    0,
+    "a parked canvas still in the page lost its renderer",
+  );
+  leavingCanvas.isConnected = false;
+  pageObserver.callback([]);
+  assert.equal(
+    releasedRenderers.at(-1),
+    leavingApplication,
+    "a parked canvas that left the page kept its renderer",
+  );
+  await assert.rejects(
+    context.BeefwifeCanvas.mount(leavingCanvas, {
+      descriptors: [namedDescriptor("leaving")],
+    }),
+    /left the page/,
+  );
+  assert.equal(leavingCanvas.dataset.beefwifeState, "error");
+
+  const removedCanvas = new Canvas();
+  const removed = await context.BeefwifeCanvas.mount(removedCanvas, {
+    autoStart: false,
+    descriptors: [namedDescriptor("removed")],
+  });
+  const removedApplication = hosts.at(-1).application;
+  removedCanvas.isConnected = false;
+  removed.destroy();
+  assert.equal(
+    releasedRenderers.at(-1),
+    removedApplication,
+    "a canvas destroyed after leaving the page parked its renderer",
+  );
+  checks += 6;
 
   console.log(`BeefwifeCanvas: ${checks} public-boundary checks passed`);
 })().catch((error) => {

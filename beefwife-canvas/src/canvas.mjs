@@ -6,8 +6,43 @@ import { optionsOf, roamOf, terrainOf } from "./mount-options.mjs";
 import { BeefwifeCanvasRuntime } from "./runtime.mjs";
 
 const controllers = new WeakMap();
-const renderers = new WeakMap();
+const renderers = new Map();
+const released = new WeakSet();
 const lastReady = new WeakMap();
+let pageObserver = null;
+
+/* A destroyed mount parks its renderer so the same element can be mounted
+   again without a second GPU context. Pixi's own global listeners keep a
+   parked renderer, and so its canvas, alive, so a canvas that leaves the page
+   releases it. Releasing loses the context, so that element cannot be
+   mounted again. */
+const park = (canvas, parked) => {
+  if (!canvas.isConnected) return release(canvas, parked);
+  renderers.set(canvas, parked);
+  if (pageObserver || typeof MutationObserver === "undefined") return;
+  pageObserver = new MutationObserver(releaseDeparted);
+  pageObserver.observe(document, { childList: true, subtree: true });
+};
+
+const unpark = (canvas) => {
+  renderers.delete(canvas);
+  if (renderers.size > 0 || !pageObserver) return;
+  pageObserver.disconnect();
+  pageObserver = null;
+};
+
+const release = (canvas, parked) => {
+  released.add(canvas);
+  BeefwifeCanvasRuntime.releaseRenderer(parked.application);
+};
+
+const releaseDeparted = () => {
+  for (const [canvas, parked] of renderers) {
+    if (canvas.isConnected) continue;
+    unpark(canvas);
+    release(canvas, parked);
+  }
+};
 
 const dispatch = (canvas, type, detail) =>
   canvas.dispatchEvent(new CustomEvent(type, { detail }));
@@ -52,6 +87,10 @@ class Controller {
     this.previousReady = null;
     if (this.destroyed) return this;
     try {
+      if (released.has(this.canvas))
+        throw new Error(
+          "canvas lost its renderer when it left the page; mount a new canvas",
+        );
       this.options = optionsOf(this.canvas, this.supplied);
       this.supplied = null;
       this.wantsToRun = this.options.autoStart;
@@ -106,7 +145,7 @@ class Controller {
         this._preserveHost();
         return this;
       }
-      renderers.delete(this.canvas);
+      unpark(this.canvas);
       this._state("ready");
       dispatch(this.canvas, "beefwifecanvasready", {
         controller: this.facade,
@@ -364,15 +403,9 @@ class Controller {
 
   _preserveHost() {
     if (!this.host) return;
-    // The GPU context belongs to the authored canvas. Keep its renderer
-    // dormant between mounts because a destroyed context cannot be safely
-    // reinitialized on the same element.
     const application = this.host.destroy({ preserveRenderer: true });
     if (application)
-      renderers.set(this.canvas, {
-        antialias: this.options.antialias,
-        application,
-      });
+      park(this.canvas, { antialias: this.options.antialias, application });
     this.host = null;
   }
 

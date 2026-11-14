@@ -13,7 +13,10 @@ import {
   timeScaleOf,
 } from "./options.mjs";
 import * as RuntimeBeefwifeCanvasRender from "./render.mjs";
-import { BeefwifeCanvasScene as RuntimeBeefwifeCanvasScene } from "./scene.mjs";
+import {
+  BeefwifeCanvasScene as RuntimeBeefwifeCanvasScene,
+  destroyApplication,
+} from "./scene.mjs";
 import { BeefwifeCanvasPopulation as RuntimeBeefwifeCanvasPopulation } from "./population.mjs";
 
 class BeefwifeCanvasRuntime {
@@ -21,6 +24,11 @@ class BeefwifeCanvasRuntime {
     const runtime = new BeefwifeCanvasRuntime(options);
     await runtime.scene.initialize();
     return runtime;
+  }
+
+  /* For a renderer kept by `destroy({ preserveRenderer: true })`. */
+  static releaseRenderer(application) {
+    destroyApplication(application);
   }
 
   constructor(options = {}) {

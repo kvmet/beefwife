@@ -4551,6 +4551,10 @@ pixi_js = __toESM(pixi_js, 1);
 
 // src/scene.mjs
 /** Pixi application, stage, canvas sizing, and display ownership. */
+	var destroyApplication = (application) => application.destroy({
+		removeView: false,
+		releaseGlobalResources: false
+	});
 	var BeefwifeCanvasScene = class {
 		constructor(options = {}) {
 			this.onError = options.onError || null;
@@ -4692,10 +4696,7 @@ pixi_js = __toESM(pixi_js, 1);
 				this.world.destroy();
 				this.debugOverlay.destroy();
 			} else if (this.ownsCanvas && this.canvas) this.canvas.remove();
-			if (application && !preserveRenderer) application.destroy({
-				removeView: false,
-				releaseGlobalResources: false
-			});
+			if (application && !preserveRenderer) destroyApplication(application);
 			this.application = null;
 			return preserveRenderer ? application : null;
 		}
@@ -4883,6 +4884,9 @@ pixi_js = __toESM(pixi_js, 1);
 			const runtime = new BeefwifeCanvasRuntime(options);
 			await runtime.scene.initialize();
 			return runtime;
+		}
+		static releaseRenderer(application) {
+			destroyApplication(application);
 		}
 		constructor(options = {}) {
 			this.onError = options.onError || null;
@@ -5276,8 +5280,37 @@ pixi_js = __toESM(pixi_js, 1);
 // src/canvas.mjs
 /** Declarative, author-placed canvas host for terrain-routed Beefwives. */
 	var controllers = /* @__PURE__ */ new WeakMap();
-	var renderers = /* @__PURE__ */ new WeakMap();
+	var renderers = /* @__PURE__ */ new Map();
+	var released = /* @__PURE__ */ new WeakSet();
 	var lastReady = /* @__PURE__ */ new WeakMap();
+	var pageObserver = null;
+	var park = (canvas, parked) => {
+		if (!canvas.isConnected) return release(canvas, parked);
+		renderers.set(canvas, parked);
+		if (pageObserver || typeof MutationObserver === "undefined") return;
+		pageObserver = new MutationObserver(releaseDeparted);
+		pageObserver.observe(document, {
+			childList: true,
+			subtree: true
+		});
+	};
+	var unpark = (canvas) => {
+		renderers.delete(canvas);
+		if (renderers.size > 0 || !pageObserver) return;
+		pageObserver.disconnect();
+		pageObserver = null;
+	};
+	var release = (canvas, parked) => {
+		released.add(canvas);
+		BeefwifeCanvasRuntime.releaseRenderer(parked.application);
+	};
+	var releaseDeparted = () => {
+		for (const [canvas, parked] of renderers) {
+			if (canvas.isConnected) continue;
+			unpark(canvas);
+			release(canvas, parked);
+		}
+	};
 	var dispatch = (canvas, type, detail) => canvas.dispatchEvent(new CustomEvent(type, { detail }));
 	var Controller = class {
 		constructor(canvas, supplied, previousReady) {
@@ -5312,6 +5345,7 @@ pixi_js = __toESM(pixi_js, 1);
 			this.previousReady = null;
 			if (this.destroyed) return this;
 			try {
+				if (released.has(this.canvas)) throw new Error("canvas lost its renderer when it left the page; mount a new canvas");
 				this.options = optionsOf$1(this.canvas, this.supplied);
 				this.supplied = null;
 				this.wantsToRun = this.options.autoStart;
@@ -5357,7 +5391,7 @@ pixi_js = __toESM(pixi_js, 1);
 					this._preserveHost();
 					return this;
 				}
-				renderers.delete(this.canvas);
+				unpark(this.canvas);
 				this._state("ready");
 				dispatch(this.canvas, "beefwifecanvasready", { controller: this.facade });
 				this._syncRunning();
@@ -5575,7 +5609,7 @@ pixi_js = __toESM(pixi_js, 1);
 		_preserveHost() {
 			if (!this.host) return;
 			const application = this.host.destroy({ preserveRenderer: true });
-			if (application) renderers.set(this.canvas, {
+			if (application) park(this.canvas, {
 				antialias: this.options.antialias,
 				application
 			});

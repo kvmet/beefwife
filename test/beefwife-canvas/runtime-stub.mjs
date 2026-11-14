@@ -6,6 +6,8 @@
 
 const BeefwifeCanvasRuntime = {
   create: (options) => globalThis.hostFor(options),
+  releaseRenderer: (application) =>
+    globalThis.releasedRenderers.push(application),
 };
 
 export { BeefwifeCanvasRuntime };

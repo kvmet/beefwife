@@ -150,10 +150,14 @@ Beefwife only receives its usual direction and throttle controls. Attribute
 values are read once. Use the methods for live changes.
 
 `destroy()` removes the scene and runtime listeners but leaves the author's
-canvas in place. One dormant Pixi renderer is retained weakly per canvas so the
-same element can be remounted without tearing down and recreating its GPU
-context. The renderer becomes collectible with the canvas. `antialias` is fixed
-for the life of that renderer, so a remount cannot change it.
+canvas in place. While the canvas stays in the page, its Pixi renderer is kept
+dormant so the same element can be mounted again without a second GPU context.
+`antialias` is fixed for the life of that renderer, so a remount cannot change
+it. When a destroyed canvas leaves the page, its renderer and GPU context are
+released and the canvas can be garbage collected; mounting that element again
+fails, so mount a new canvas instead. A canvas removed without `destroy()`
+keeps its renderer and GPU context for the life of the page, so call
+`destroy()` when you remove one, before or after removing it.
 
 Performance and appearance options are `resolutionScale`, `roundVertices`,
 `antialias`, `simulationFps`, `drawFps`, `maxPixelRatio`, `imageRendering`,

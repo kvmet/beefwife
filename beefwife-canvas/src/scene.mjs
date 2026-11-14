@@ -2,6 +2,14 @@
 
 import { PIXI, available } from "../../beefwife/src/pixi.mjs";
 
+/* The canvas belongs to its author, so destroying the renderer leaves it in
+   place. Pixi loses the GPU context doing so. */
+const destroyApplication = (application) =>
+  application.destroy({
+    removeView: false,
+    releaseGlobalResources: false,
+  });
+
 class BeefwifeCanvasScene {
   constructor(options = {}) {
     this.onError = options.onError || null;
@@ -172,14 +180,10 @@ class BeefwifeCanvasScene {
     } else if (this.ownsCanvas && this.canvas) {
       this.canvas.remove();
     }
-    if (application && !preserveRenderer)
-      application.destroy({
-        removeView: false,
-        releaseGlobalResources: false,
-      });
+    if (application && !preserveRenderer) destroyApplication(application);
     this.application = null;
     return preserveRenderer ? application : null;
   }
 }
 
-export { BeefwifeCanvasScene };
+export { BeefwifeCanvasScene, destroyApplication };

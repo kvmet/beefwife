@@ -4451,6 +4451,10 @@ const draw = ({ actors, debug, scene, terrainView }) => {
 };
 // src/scene.mjs
 /** Pixi application, stage, canvas sizing, and display ownership. */
+const destroyApplication = (application) => application.destroy({
+	removeView: false,
+	releaseGlobalResources: false
+});
 var BeefwifeCanvasScene = class {
 	constructor(options = {}) {
 		this.onError = options.onError || null;
@@ -4592,10 +4596,7 @@ var BeefwifeCanvasScene = class {
 			this.world.destroy();
 			this.debugOverlay.destroy();
 		} else if (this.ownsCanvas && this.canvas) this.canvas.remove();
-		if (application && !preserveRenderer) application.destroy({
-			removeView: false,
-			releaseGlobalResources: false
-		});
+		if (application && !preserveRenderer) destroyApplication(application);
 		this.application = null;
 		return preserveRenderer ? application : null;
 	}
@@ -4780,6 +4781,9 @@ var BeefwifeCanvasRuntime = class BeefwifeCanvasRuntime {
 		const runtime = new BeefwifeCanvasRuntime(options);
 		await runtime.scene.initialize();
 		return runtime;
+	}
+	static releaseRenderer(application) {
+		destroyApplication(application);
 	}
 	constructor(options = {}) {
 		this.onError = options.onError || null;
@@ -5172,8 +5176,37 @@ var BeefwifeCanvasRuntime = class BeefwifeCanvasRuntime {
 // src/canvas.mjs
 /** Declarative, author-placed canvas host for terrain-routed Beefwives. */
 const controllers = /* @__PURE__ */ new WeakMap();
-const renderers = /* @__PURE__ */ new WeakMap();
+const renderers = /* @__PURE__ */ new Map();
+const released = /* @__PURE__ */ new WeakSet();
 const lastReady = /* @__PURE__ */ new WeakMap();
+let pageObserver = null;
+const park = (canvas, parked) => {
+	if (!canvas.isConnected) return release(canvas, parked);
+	renderers.set(canvas, parked);
+	if (pageObserver || typeof MutationObserver === "undefined") return;
+	pageObserver = new MutationObserver(releaseDeparted);
+	pageObserver.observe(document, {
+		childList: true,
+		subtree: true
+	});
+};
+const unpark = (canvas) => {
+	renderers.delete(canvas);
+	if (renderers.size > 0 || !pageObserver) return;
+	pageObserver.disconnect();
+	pageObserver = null;
+};
+const release = (canvas, parked) => {
+	released.add(canvas);
+	BeefwifeCanvasRuntime.releaseRenderer(parked.application);
+};
+const releaseDeparted = () => {
+	for (const [canvas, parked] of renderers) {
+		if (canvas.isConnected) continue;
+		unpark(canvas);
+		release(canvas, parked);
+	}
+};
 const dispatch = (canvas, type, detail) => canvas.dispatchEvent(new CustomEvent(type, { detail }));
 var Controller = class {
 	constructor(canvas, supplied, previousReady) {
@@ -5208,6 +5241,7 @@ var Controller = class {
 		this.previousReady = null;
 		if (this.destroyed) return this;
 		try {
+			if (released.has(this.canvas)) throw new Error("canvas lost its renderer when it left the page; mount a new canvas");
 			this.options = optionsOf$1(this.canvas, this.supplied);
 			this.supplied = null;
 			this.wantsToRun = this.options.autoStart;
@@ -5253,7 +5287,7 @@ var Controller = class {
 				this._preserveHost();
 				return this;
 			}
-			renderers.delete(this.canvas);
+			unpark(this.canvas);
 			this._state("ready");
 			dispatch(this.canvas, "beefwifecanvasready", { controller: this.facade });
 			this._syncRunning();
@@ -5471,7 +5505,7 @@ var Controller = class {
 	_preserveHost() {
 		if (!this.host) return;
 		const application = this.host.destroy({ preserveRenderer: true });
-		if (application) renderers.set(this.canvas, {
+		if (application) park(this.canvas, {
 			antialias: this.options.antialias,
 			application
 		});
