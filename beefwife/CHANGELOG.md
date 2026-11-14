@@ -3,7 +3,7 @@
 Notable changes to `@kvmet/beefwife`, newest first. This package follows
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-11-14)
 
 First release.
 

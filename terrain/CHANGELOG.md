@@ -3,6 +3,17 @@
 Notable changes to `@kvmet/terrain`, newest first. This package follows
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.1 (2026-11-14)
+
+Packaging only; the routing and query behaviour is unchanged.
+
+`terrain.min.js` carries the copyright and license. The banner was a plain
+block comment, which the minifier stripped, so the file the CDN serves named
+neither.
+
+This changelog ships with the package, and the artifacts are rebuilt under
+rolldown 1.3.2.
+
 ## 0.2.0 (2026-08-05)
 
 Breaking: `at(x, y)` is replaced by two queries. `nearest(x, y)` returns the

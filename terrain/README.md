@@ -21,7 +21,7 @@ Load the standalone production build:
 
 ```html
 <div data-terrain-avoid>Terrain routes around me.</div>
-<script src="https://cdn.jsdelivr.net/npm/@kvmet/terrain@0.2.0/terrain.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@kvmet/terrain@0.2.1/terrain.min.js"></script>
 <script>
   const terrain = new Terrain().build();
 </script>
@@ -40,7 +40,7 @@ import Terrain from "@kvmet/terrain";
 // const Terrain = require("@kvmet/terrain");
 ```
 
-[Open the dependency-free demo](https://unpkg.com/@kvmet/terrain@0.2.0/demo.html)
+[Open the dependency-free demo](https://unpkg.com/@kvmet/terrain@0.2.1/demo.html)
 or run `demo.html` directly.
 
 ## API
