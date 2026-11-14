@@ -9,7 +9,46 @@ Their appearance and behavior can vary significantly and they can be told to avo
 
 ## How do I add `Beefwives` to my website?
 
-Instructions coming soon(TM)!
+Put a canvas on the page, point it at a manifest, and load two scripts:
+
+```html
+<canvas
+  data-beefwife-canvas
+  data-beefwife-manifest="beefwives/manifest.json"
+  data-beefwife-count="6"
+></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/pixi.js@8.23.0/dist/pixi.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@kvmet/beefwife-canvas@0.1.0/beefwife-canvas.min.js"></script>
+```
+
+The manifest lists the creatures the canvas draws from, with an optional weight:
+
+```json
+{
+  "schemaVersion": 1,
+  "sources": [
+    { "src": "slow-guy.json", "weight": 3 },
+    "long-girl.json"
+  ]
+}
+```
+
+Each source is a beefwife descriptor, plain JSON. Copy the ones in
+[`beefwife/samples`](beefwife/samples/) to start, or design your own in Beefwife
+Lab. [`examples/beefwife-canvas`](examples/beefwife-canvas/) is a working page
+with every option wired up.
+
+## What are the pieces?
+
+| Package | What it does |
+| --- | --- |
+| [`@kvmet/beefwife-canvas`](beefwife-canvas/) | Drop-in canvas runtime. Start here. |
+| [`@kvmet/beefwife`](beefwife/) | The creature library, for your own Pixi scene. |
+| [`@kvmet/terrain`](terrain/) | Standalone DOM free-space queries and routing. |
+| [`beefwife-lab`](beefwife-lab/) | Local editor for designing beefwives. |
+
+Pixi 8.21.0 or newer is required wherever a beefwife is drawn.
 
 ## Why are they called `Beefwives`?
 

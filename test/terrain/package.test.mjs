@@ -47,6 +47,7 @@ try {
   assert.equal(packed.name, manifest.name);
   assert.equal(packed.version, manifest.version);
   assert.deepEqual(packed.files.map((file) => file.path).sort(), [
+    "CHANGELOG.md",
     "LICENSE",
     "README.md",
     "demo.html",

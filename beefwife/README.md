@@ -202,7 +202,7 @@ trails the head by up to this distance, so a viewport test without it reads a
 long creature as gone while it is still on screen.
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/pixi.js@8.19.0/dist/pixi.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pixi.js@8.23.0/dist/pixi.min.js"></script>
 <script src="beefwife.js"></script>
 ```
 

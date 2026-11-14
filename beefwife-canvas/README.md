@@ -23,16 +23,39 @@ looks for `data-beefwife-canvas` when auto-mounting.
 ></canvas>
 ```
 
+## Install
+
 Load Pixi 8, then the runtime. Beefwife and Terrain ride inside
-`beefwife-canvas.js`, so the page needs nothing else and gains one global:
+`beefwife-canvas.js`, so the page needs nothing else and gains one global,
+`BeefwifeCanvas`.
+
+From a CDN:
 
 ```html
-<script src="pixi.min.js"></script>
-<script src="beefwife-canvas/beefwife-canvas.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pixi.js@8.23.0/dist/pixi.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@kvmet/beefwife-canvas@0.1.0/beefwife-canvas.min.js"></script>
 ```
 
-`npm run build` writes that file and its minified twin from
-[`src`](src/); both are committed. The integrated development example is in
+With npm:
+
+```sh
+npm install @kvmet/beefwife-canvas pixi.js
+```
+
+The package ships the classic script only, so serve the files rather than
+importing them:
+
+```html
+<script src="/node_modules/pixi.js/dist/pixi.min.js"></script>
+<script src="/node_modules/@kvmet/beefwife-canvas/beefwife-canvas.min.js"></script>
+```
+
+Pixi 8.21.0 is the minimum: in earlier 8.x releases, destroying one WebGPU
+renderer can break another.
+
+`beefwife-canvas.js` is the readable build and creates the same global.
+`npm run build` writes both from [`src`](src/); both are committed. The
+integrated development example is in
 [`examples/beefwife-canvas`](../examples/beefwife-canvas/).
 
 The bundle auto-mounts every marked canvas after the DOM is ready.
