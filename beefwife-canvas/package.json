@@ -37,6 +37,9 @@
     "beefwife-canvas.js",
     "beefwife-canvas.min.js"
   ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "peerDependencies": {
     "pixi.js": "^8.21.0"
   },

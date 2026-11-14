@@ -1,0 +1,41 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  library:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["20", "22", "24"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: DeLaGuardo/setup-clojure@13
+        with:
+          bb: latest
+      - run: npm ci --prefix beefwife
+      - run: npm ci --prefix beefwife-canvas
+      - run: npm ci --prefix terrain
+      - run: bb test
+      - run: bb terrain
+      - run: bb beefwife-build
+      # The browser artifacts are committed, so a stale one is a defect.
+      - name: committed artifacts match source
+        run: git diff --exit-code
+
+  lab:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - run: npm ci --prefix beefwife-lab
+      - run: npm --prefix beefwife-lab run check
