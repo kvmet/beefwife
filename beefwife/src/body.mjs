@@ -6,6 +6,7 @@ import { ChainState } from "./chain.mjs";
 import { carryChunks } from "./carry.mjs";
 import { Bend } from "./bend.mjs";
 import { PHYSICS_STEP } from "./limits.mjs";
+import { BREATH_CATCH_UP_PER_SECOND } from "./model.mjs";
 
 const TAU = Math.PI * 2;
 /* Link relaxation converges on passes per second, so this and the substep
@@ -168,7 +169,13 @@ class Body {
       (this.breathingPhase + TAU * this.model.breathing.cyclesPerSecond * dt) %
       TAU;
     this._updateTangentsAndAxis(dt);
-    this._breathe(this._breathingTarget());
+    /* An edit to breathing strength moves the target at once; the chain eases
+       to it instead of jumping. */
+    const limit = BREATH_CATCH_UP_PER_SECOND * dt;
+    const change = this._breathingTarget() - this.breathingScale;
+    this._breathe(
+      this.breathingScale + Math.max(-limit, Math.min(limit, change)),
+    );
     this._integrate(dt, throttle);
     this._updateLinkTargets(throttle);
     this.bend.update(

@@ -448,6 +448,31 @@ for (const draw of [0, 0.125, 0.25, 0.4, 0.7]) {
   }
 }
 
+/* Turning breathing on mid-run moves the target breath at once; the chain
+   eases there over several substeps and then breathes as usual. */
+const editedBreather = new Beefwife(example, { random: () => 0.25 });
+substepShifts(editedBreather);
+editedBreather.setDescriptor(breathingExample);
+const editShifts = [
+  ...substepShifts(editedBreather),
+  ...substepShifts(editedBreather),
+];
+/* Both sample the same breathing phase, so once the ease is over the edited
+   creature moves step for step like one that always breathed. */
+const steadyBreather = new Beefwife(breathingExample, { random: () => 0.25 });
+const steadyShifts = [
+  ...substepShifts(steadyBreather),
+  ...substepShifts(steadyBreather),
+];
+assert.ok(
+  Math.max(...editShifts) <= 2,
+  `breathing edit moved ${Math.max(...editShifts)}px in one substep`,
+);
+editShifts.slice(30).forEach((shift, index) =>
+  assert.ok(near(shift, steadyShifts[30 + index], 0.01)),
+);
+checks += 2;
+
 /* `#private` fields are invisible to `in` whatever the implementation, so
    naming ones this code never had proves nothing. Enumerate what is actually
    reachable instead: what a beefwife adds over a bare container, and the

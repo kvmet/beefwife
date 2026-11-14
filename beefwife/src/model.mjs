@@ -9,6 +9,11 @@ import * as Descriptor from "./descriptor.mjs";
 const SECTION_NAMES = ["head", "trunk", "tail"];
 const MAX_BREATHING_STRAIN = 0.1;
 const BREATHING_RATE_AT_16_CHUNKS = 0.15;
+const MAX_BREATHING_RATE = 0.4;
+/* Twice the fastest a breath can change on its own, so a live breath is never
+   held back and the gap an edit opens closes within 0.2 s. */
+const BREATH_CATCH_UP_PER_SECOND =
+  2 * MAX_BREATHING_STRAIN * 2 * Math.PI * MAX_BREATHING_RATE;
 /* Full ornament deflection at 14 trunk spacings per second of lateral root
    speed. Per-segment, not whole-body: a root's lateral speed tracks segment
    size, so measuring against total length would quiet every ornament on the
@@ -38,7 +43,11 @@ const spatialAngle = (gait, channel, distance) =>
 
 /* Chunk count, not px length: breathing timing must survive a resize. */
 const breathingRateFor = (trunkChunks) =>
-  clamp(BREATHING_RATE_AT_16_CHUNKS * Math.sqrt(16 / trunkChunks), 0.1, 0.4);
+  clamp(
+    BREATHING_RATE_AT_16_CHUNKS * Math.sqrt(16 / trunkChunks),
+    0.1,
+    MAX_BREATHING_RATE,
+  );
 
 const placementChunks = (placement, sections, chunkCount) => {
   const section = placement.at.section;
@@ -255,4 +264,4 @@ const compile = (value) => {
   });
 };
 
-export { compile };
+export { compile, BREATH_CATCH_UP_PER_SECOND };

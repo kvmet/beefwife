@@ -600,6 +600,8 @@ const SECTION_NAMES = [
 ];
 const MAX_BREATHING_STRAIN = .1;
 const BREATHING_RATE_AT_16_CHUNKS = .15;
+const MAX_BREATHING_RATE = .4;
+const BREATH_CATCH_UP_PER_SECOND = 2 * MAX_BREATHING_STRAIN * 2 * Math.PI * MAX_BREATHING_RATE;
 const LATERAL_SPACINGS_PER_SECOND = 14;
 const MIN_SWING_RATE = .01;
 const freeze = (value) => {
@@ -611,7 +613,7 @@ const lerp$1 = (start, end, t) => start + (end - start) * t;
 const clamp$1 = (value, low, high) => Math.max(low, Math.min(high, value));
 const profileAt = (span, index, count) => count === 1 ? (span.start + span.end) / 2 : lerp$1(span.start, span.end, index / (count - 1));
 const spatialAngle = (gait, channel, distance) => channel.phaseOffset - channel.harmonic * distance * gait.phaseLagRadiansPerPixel;
-const breathingRateFor = (trunkChunks) => clamp$1(BREATHING_RATE_AT_16_CHUNKS * Math.sqrt(16 / trunkChunks), .1, .4);
+const breathingRateFor = (trunkChunks) => clamp$1(BREATHING_RATE_AT_16_CHUNKS * Math.sqrt(16 / trunkChunks), .1, MAX_BREATHING_RATE);
 const placementChunks = (placement, sections, chunkCount) => {
 	const section = placement.at.section;
 	const scope = section ? sections[section] : {
@@ -1264,7 +1266,9 @@ var Body = class {
 		this.gait.advance(dt, throttle);
 		this.breathingPhase = (this.breathingPhase + TAU$1 * this.model.breathing.cyclesPerSecond * dt) % TAU$1;
 		this._updateTangentsAndAxis(dt);
-		this._breathe(this._breathingTarget());
+		const limit = BREATH_CATCH_UP_PER_SECOND * dt;
+		const change = this._breathingTarget() - this.breathingScale;
+		this._breathe(this.breathingScale + Math.max(-limit, Math.min(limit, change)));
 		this._integrate(dt, throttle);
 		this._updateLinkTargets(throttle);
 		this.bend.update(this.model, this.gait, this.tables, this.linkTargets, throttle, this._steer(direction, dt));

@@ -647,6 +647,8 @@ pixi_js = __toESM(pixi_js, 1);
 	];
 	var MAX_BREATHING_STRAIN = .1;
 	var BREATHING_RATE_AT_16_CHUNKS = .15;
+	var MAX_BREATHING_RATE = .4;
+	var BREATH_CATCH_UP_PER_SECOND = 2 * MAX_BREATHING_STRAIN * 2 * Math.PI * MAX_BREATHING_RATE;
 	var LATERAL_SPACINGS_PER_SECOND = 14;
 	var MIN_SWING_RATE = .01;
 	var freeze = (value) => {
@@ -658,7 +660,7 @@ pixi_js = __toESM(pixi_js, 1);
 	var clamp$1 = /* @__PURE__ */ __name((value, low, high) => Math.max(low, Math.min(high, value)), "clamp");
 	var profileAt = (span, index, count) => count === 1 ? (span.start + span.end) / 2 : lerp$1(span.start, span.end, index / (count - 1));
 	var spatialAngle = (gait, channel, distance) => channel.phaseOffset - channel.harmonic * distance * gait.phaseLagRadiansPerPixel;
-	var breathingRateFor = (trunkChunks) => clamp$1(BREATHING_RATE_AT_16_CHUNKS * Math.sqrt(16 / trunkChunks), .1, .4);
+	var breathingRateFor = (trunkChunks) => clamp$1(BREATHING_RATE_AT_16_CHUNKS * Math.sqrt(16 / trunkChunks), .1, MAX_BREATHING_RATE);
 	var placementChunks = (placement, sections, chunkCount) => {
 		const section = placement.at.section;
 		const scope = section ? sections[section] : {
@@ -1331,7 +1333,9 @@ pixi_js = __toESM(pixi_js, 1);
 			this.gait.advance(dt, throttle);
 			this.breathingPhase = (this.breathingPhase + TAU$1 * this.model.breathing.cyclesPerSecond * dt) % TAU$1;
 			this._updateTangentsAndAxis(dt);
-			this._breathe(this._breathingTarget());
+			const limit = BREATH_CATCH_UP_PER_SECOND * dt;
+			const change = this._breathingTarget() - this.breathingScale;
+			this._breathe(this.breathingScale + Math.max(-limit, Math.min(limit, change)));
 			this._integrate(dt, throttle);
 			this._updateLinkTargets(throttle);
 			this.bend.update(this.model, this.gait, this.tables, this.linkTargets, throttle, this._steer(direction, dt));

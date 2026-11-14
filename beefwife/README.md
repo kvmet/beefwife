@@ -151,7 +151,8 @@ Only the number of leg pairs rebuilds foot state, and only a change to the
 expanded ornament list rebuilds ornament swing. Everything else those parts
 read comes from the model each step, so a foot stays planted and a swing stays
 mid-flight while its stance, anchor, colour, or spring settings change under
-it. Enabling breathing samples a starting phase.
+it. Enabling breathing samples a starting phase. A change in breathing strength
+eases in over at most 0.2 s rather than resizing the trunk at once.
 
 Display objects are retained on the same terms, one at a time rather than all
 together. A replacement repaints the children it can and changes only what the
