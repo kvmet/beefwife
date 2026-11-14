@@ -103,7 +103,19 @@ class Body {
     this.axis = { ...direction };
     this.steeringBias = 0;
     this.accumulator = 0;
+    /* The breathing phase starts anywhere in its cycle, so the chain is laid
+       out mid-breath; from rest, the first substep would apply the whole
+       breath at once. The head then goes back to the requested point. */
     this.breathingScale = 0;
+    this._breathe(this._breathingTarget());
+    const offsetX = position.x - x[0];
+    const offsetY = position.y - y[0];
+    for (let index = 0; index < count; index++) {
+      x[index] += offsetX;
+      y[index] += offsetY;
+      px[index] += offsetX;
+      py[index] += offsetY;
+    }
     this.refreshContacts(1);
   }
 
@@ -156,7 +168,7 @@ class Body {
       (this.breathingPhase + TAU * this.model.breathing.cyclesPerSecond * dt) %
       TAU;
     this._updateTangentsAndAxis(dt);
-    this._applyBreathing();
+    this._breathe(this._breathingTarget());
     this._integrate(dt, throttle);
     this._updateLinkTargets(throttle);
     this.bend.update(
@@ -173,9 +185,11 @@ class Body {
     this._applyAutoLift(dt, throttle);
   }
 
-  _applyBreathing() {
-    const nextScale =
-      this.model.breathing.strain * Math.sin(this.breathingPhase);
+  _breathingTarget() {
+    return this.model.breathing.strain * Math.sin(this.breathingPhase);
+  }
+
+  _breathe(nextScale) {
     const scaleChange = nextScale - this.breathingScale;
     this.breathingScale = nextScale;
     if (Math.abs(scaleChange) < 1e-15) return;

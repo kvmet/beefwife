@@ -1287,6 +1287,15 @@ pixi_js = __toESM(pixi_js, 1);
 			this.steeringBias = 0;
 			this.accumulator = 0;
 			this.breathingScale = 0;
+			this._breathe(this._breathingTarget());
+			const offsetX = position.x - x[0];
+			const offsetY = position.y - y[0];
+			for (let index = 0; index < count; index++) {
+				x[index] += offsetX;
+				y[index] += offsetY;
+				px[index] += offsetX;
+				py[index] += offsetY;
+			}
 			this.refreshContacts(1);
 		}
 		adopt(previous) {
@@ -1321,7 +1330,7 @@ pixi_js = __toESM(pixi_js, 1);
 			this.gait.advance(dt, throttle);
 			this.breathingPhase = (this.breathingPhase + TAU$1 * this.model.breathing.cyclesPerSecond * dt) % TAU$1;
 			this._updateTangentsAndAxis(dt);
-			this._applyBreathing();
+			this._breathe(this._breathingTarget());
 			this._integrate(dt, throttle);
 			this._updateLinkTargets(throttle);
 			this.bend.update(this.model, this.gait, this.tables, this.linkTargets, throttle, this._steer(direction, dt));
@@ -1330,8 +1339,10 @@ pixi_js = __toESM(pixi_js, 1);
 			this._clampLinks();
 			this._applyAutoLift(dt, throttle);
 		}
-		_applyBreathing() {
-			const nextScale = this.model.breathing.strain * Math.sin(this.breathingPhase);
+		_breathingTarget() {
+			return this.model.breathing.strain * Math.sin(this.breathingPhase);
+		}
+		_breathe(nextScale) {
 			const scaleChange = nextScale - this.breathingScale;
 			this.breathingScale = nextScale;
 			if (Math.abs(scaleChange) < 1e-15) return;

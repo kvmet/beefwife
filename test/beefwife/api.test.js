@@ -412,6 +412,42 @@ assert.ok(!samePose(breathAtZero.getPose(), breathAtQuarter.getPose()));
 assert.ok(samePose(breathAtQuarter.getPose(), matchingBreath.getPose()));
 checks += 2;
 
+/* A creature placed anywhere in its breathing cycle starts mid-breath, so its
+   first substep moves it no more than any later one does. */
+const poseShift = (before, after) =>
+  Math.max(
+    ...Object.keys(before).map((key) =>
+      Math.hypot(after[key].x - before[key].x, after[key].y - before[key].y),
+    ),
+  );
+const substepShifts = (breather) => {
+  const shifts = [];
+  let previous = copy(breather.getPose());
+  for (let index = 0; index < 30; index++) {
+    breather.step(1 / 60, { throttle: 0 });
+    const pose = copy(breather.getPose());
+    shifts.push(poseShift(previous, pose));
+    previous = pose;
+  }
+  return shifts;
+};
+for (const draw of [0, 0.125, 0.25, 0.4, 0.7]) {
+  const breather = new Beefwife(breathingExample, {
+    position: { x: 200, y: 150 },
+    random: () => draw,
+  });
+  for (const placed of ["constructed", "reset"]) {
+    if (placed === "reset") breather.reset({ position: { x: 200, y: 150 } });
+    assert.deepEqual(breather.getPose().head, { x: 200, y: 150 });
+    const [first, ...later] = substepShifts(breather);
+    assert.ok(
+      first <= Math.max(...later) * 1.5,
+      `${placed} at draw ${draw}: first substep moved ${first}px`,
+    );
+    checks += 2;
+  }
+}
+
 /* `#private` fields are invisible to `in` whatever the implementation, so
    naming ones this code never had proves nothing. Enumerate what is actually
    reachable instead: what a beefwife adds over a bare container, and the
