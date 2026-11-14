@@ -35,6 +35,40 @@ class Canvas {
     this.listeners = new Map();
   }
 
+  /* As on a real canvas, the size properties reflect the attributes and
+     default to 300 by 150. */
+  get width() {
+    return Number(this.getAttribute("width") ?? 300);
+  }
+
+  set width(value) {
+    this.setAttribute("width", value);
+  }
+
+  get height() {
+    return Number(this.getAttribute("height") ?? 150);
+  }
+
+  set height(value) {
+    this.setAttribute("height", value);
+  }
+
+  getAttribute(name) {
+    const found = this.attributes.find((attribute) => attribute.name === name);
+    return found ? found.value : null;
+  }
+
+  setAttribute(name, value) {
+    this.removeAttribute(name);
+    this.attributes.push({ name, value: String(value) });
+  }
+
+  removeAttribute(name) {
+    this.attributes = this.attributes.filter(
+      (attribute) => attribute.name !== name,
+    );
+  }
+
   addEventListener(type, listener) {
     const listeners = this.listeners.get(type) || [];
     listeners.push(listener);
@@ -59,10 +93,22 @@ class Canvas {
   }
 }
 
+/* Lays out from its buffer size until CSS gives it one, as a canvas with no
+   width or height in any stylesheet does. */
+class UnstyledCanvas extends Canvas {
+  getBoundingClientRect() {
+    const width = parseFloat(this.style.width) || this.width;
+    const height = parseFloat(this.style.height) || this.height;
+    return { left: 0, top: 0, width, height };
+  }
+}
+
 const calls = [];
 const hosts = [];
 let intersectionCallback = null;
+let hostGate = null;
 const newHost = (options) => {
+  const application = options.application ?? { id: hosts.length };
   const actor = {
     name: Object.keys(options.cast)[0],
     beefwife: { getPose: () => ({ head: { x: 4, y: 5 } }) },
@@ -75,9 +121,10 @@ const newHost = (options) => {
     destroyed: false,
     running: false,
     clearTarget: (one) => calls.push(["clearTarget", one]),
-    destroy() {
+    destroy(how) {
       this.destroyed = true;
       calls.push(["destroy"]);
+      return how?.preserveRenderer ? application : undefined;
     },
     getStats: () => ({ actors: 1, steps: 60, draws: 24, stepMs: 2, drawMs: 3 }),
     getTerrainView: () => ({ bounds: { left: 1 }, rectangles: [{ left: 2 }] }),
@@ -148,7 +195,10 @@ const context = {
     };
     return { ok: true, json: async () => parseInContext(bodies[url]) };
   },
-  hostFor: async (options) => newHost(options),
+  hostFor: async (options) => {
+    await hostGate;
+    return newHost(options);
+  },
   IntersectionObserver: class IntersectionObserver {
     constructor(callback) {
       intersectionCallback = callback;
@@ -370,8 +420,10 @@ const namedDescriptor = (name) => parseInContext(descriptorJson(name));
     "data-beefwife-antialias": "sometimes",
   });
   let invalidEvent = null;
+  let invalidReady = null;
   invalidCanvas.addEventListener("beefwifecanvaserror", (event) => {
     invalidEvent = event;
+    invalidReady = event.detail.controller.ready;
     assert.equal(
       context.BeefwifeCanvas.get(invalidCanvas),
       event.detail.controller,
@@ -383,6 +435,7 @@ const namedDescriptor = (name) => parseInContext(descriptorJson(name));
   );
   assert.equal(invalidCanvas.dataset.beefwifeState, "error");
   assert.equal(invalidEvent.detail.error.name, "TypeError");
+  assert.equal(typeof invalidReady?.then, "function");
   assert.equal(Object.isFrozen(invalidEvent.detail.controller), true);
   assert.equal(context.BeefwifeCanvas.get(invalidCanvas), null);
   invalidCanvas.attributes.find(
@@ -394,7 +447,109 @@ const namedDescriptor = (name) => parseInContext(descriptorJson(name));
   });
   assert.equal(corrected.getActors()[0].name, "corrected");
   corrected.destroy();
-  checks += 7;
+  checks += 8;
+
+  /* A mount that finishes paused starts later from an observer callback,
+     which has no caller to throw to. */
+  const pausedCanvas = new Canvas();
+  const pausedEvents = [];
+  pausedCanvas.addEventListener("beefwifecanvaserror", (event) =>
+    pausedEvents.push(event.detail),
+  );
+  document.hidden = true;
+  const paused = await context.BeefwifeCanvas.mount(pausedCanvas, {
+    descriptors: [namedDescriptor("paused")],
+  });
+  assert.equal(paused.pauseReason, "hidden");
+  const startError = new Error("bad avoid selector");
+  hosts.at(-1).host.start = () => {
+    throw startError;
+  };
+  document.hidden = false;
+  document.dispatchEvent({ type: "visibilitychange" });
+  assert.equal(paused.state, "error");
+  assert.equal(pausedEvents.length, 1);
+  assert.equal(pausedEvents[0].error, startError);
+  assert.equal(document.listeners.get("visibilitychange").length, 0);
+  checks += 4;
+
+  /* One batch can hold an old and a new entry for the canvas. */
+  const batchCanvas = new Canvas();
+  const batched = await context.BeefwifeCanvas.mount(batchCanvas, {
+    descriptors: [namedDescriptor("batched")],
+  });
+  intersectionCallback([{ isIntersecting: false }, { isIntersecting: true }]);
+  assert.equal(batched.state, "running");
+  batched.destroy();
+  checks += 1;
+
+  /* A canvas copied while paused carries the runtime's own attributes. */
+  const clonedCanvas = new Canvas({
+    "data-beefwife-state": "paused",
+    "data-beefwife-pause-reason": "offscreen",
+  });
+  const cloned = await context.BeefwifeCanvas.mount(clonedCanvas, {
+    autoStart: false,
+    descriptors: [namedDescriptor("cloned")],
+  });
+  cloned.destroy();
+  checks += 1;
+
+  /* Destroyed while Pixi is still starting, then remounted: the second mount
+     reuses the first renderer instead of opening another on the element. */
+  const pendingCanvas = new Canvas();
+  let openGate;
+  hostGate = new Promise((resolve) => (openGate = resolve));
+  const firstMount = context.BeefwifeCanvas.mount(pendingCanvas, {
+    autoStart: false,
+    descriptors: [namedDescriptor("first")],
+  });
+  const firstFacade = context.BeefwifeCanvas.get(pendingCanvas);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  firstFacade.destroy();
+  const hostsBefore = hosts.length;
+  const secondMount = context.BeefwifeCanvas.mount(pendingCanvas, {
+    autoStart: false,
+    descriptors: [namedDescriptor("second")],
+  });
+  hostGate = null;
+  openGate();
+  await firstMount;
+  const second = await secondMount;
+  const firstApplication = { id: hostsBefore };
+  assert.equal(hosts.length, hostsBefore + 2);
+  assert.deepEqual(
+    hosts[hostsBefore + 1].options.application,
+    firstApplication,
+  );
+  second.destroy();
+  checks += 2;
+
+  /* The renderer resizes the buffer once mounted; an unstyled canvas must keep
+     the size it showed before mount, and get its own attributes back. */
+  const unstyled = new UnstyledCanvas();
+  const pinned = await context.BeefwifeCanvas.mount(unstyled, {
+    autoStart: false,
+    descriptors: [namedDescriptor("unstyled")],
+  });
+  assert.equal(unstyled.style.width, "300px");
+  assert.equal(unstyled.style.height, "150px");
+  unstyled.width = 75;
+  unstyled.height = 38;
+  assert.equal(unstyled.getBoundingClientRect().width, 300);
+  pinned.destroy();
+  assert.equal(unstyled.style.width, undefined);
+  assert.equal(unstyled.getAttribute("width"), null);
+  assert.equal(unstyled.getBoundingClientRect().width, 300);
+  const styled = new Canvas();
+  const unpinned = await context.BeefwifeCanvas.mount(styled, {
+    autoStart: false,
+    descriptors: [namedDescriptor("styled")],
+  });
+  assert.equal(styled.style.width, undefined);
+  assert.equal(styled.getAttribute("width"), null);
+  unpinned.destroy();
+  checks += 8;
 
   const scannedCanvas = new Canvas({
     "data-beefwife-canvas": "",

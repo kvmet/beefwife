@@ -7,16 +7,18 @@ import { BeefwifeCanvasRuntime } from "./runtime.mjs";
 
 const controllers = new WeakMap();
 const renderers = new WeakMap();
+const lastReady = new WeakMap();
 
 const dispatch = (canvas, type, detail) =>
   canvas.dispatchEvent(new CustomEvent(type, { detail }));
 
 class Controller {
-  constructor(canvas, supplied) {
+  constructor(canvas, supplied, previousReady) {
     if (!canvas || canvas.tagName !== "CANVAS")
       throw new TypeError("BeefwifeCanvas.mount needs a canvas element");
     this.canvas = canvas;
     this.supplied = supplied;
+    this.previousReady = previousReady;
     this.options = null;
     this.host = null;
     this.destroyed = false;
@@ -26,6 +28,7 @@ class Controller {
     this.handles = new Map();
     this.nextId = 1;
     this.originalImageRendering = canvas.style.imageRendering;
+    this.originalSize = null;
     this._onClick = (event) => {
       if (this.options?.pointerInput !== "click" || !this.host) return;
       this.setTarget(this._pointerPoint(event));
@@ -34,13 +37,20 @@ class Controller {
       if (this.options?.pointerInput === "move" && this.host)
         this.setTarget(this._pointerPoint(event));
     };
-    this._onVisibilityChange = () => this._syncRunning();
+    this._onVisibilityChange = () => this._syncObserved();
     this.resizeObserver = null;
     this.intersectionObserver = null;
     this._state("loading");
   }
 
   async initialize() {
+    /* A mount destroyed while Pixi was still starting parks its renderer when
+       init settles, so this mount waits to reuse it rather than open a second
+       context on the element. The await also defers any error event until
+       mount has assigned `ready`. */
+    await Promise.allSettled([this.previousReady]);
+    this.previousReady = null;
+    if (this.destroyed) return this;
     try {
       this.options = optionsOf(this.canvas, this.supplied);
       this.supplied = null;
@@ -53,6 +63,7 @@ class Controller {
       if (this.destroyed) return this;
       const filters = [...(this.options.filters || [])];
       const count = this.options.count ?? Object.keys(cast).length;
+      this._pinUnstyledSize();
       const reusable = renderers.get(this.canvas);
       if (reusable && reusable.antialias !== this.options.antialias)
         throw new Error("antialias cannot change when remounting one canvas");
@@ -260,6 +271,7 @@ class Controller {
     this._preserveHost();
     this.handles.clear();
     this.canvas.style.imageRendering = this.originalImageRendering;
+    this._restoreSize();
     this._state(finalState);
     try {
       if (beforeRelease) beforeRelease();
@@ -281,8 +293,8 @@ class Controller {
     this.intersectionObserver =
       this.options.pauseOffscreen && typeof IntersectionObserver !== "undefined"
         ? new IntersectionObserver((entries) => {
-            this.inView = entries[0]?.isIntersecting ?? true;
-            this._syncRunning();
+            this.inView = entries.at(-1)?.isIntersecting ?? true;
+            this._syncObserved();
           })
         : null;
     this.intersectionObserver?.observe(this.canvas);
@@ -292,12 +304,52 @@ class Controller {
     if (this.destroyed || !this.host) return;
     const rect = this.canvas.getBoundingClientRect();
     if (rect.width > 0 && rect.height > 0) this.host.scheduleRebuild();
-    this._syncRunning();
+    this._syncObserved();
   }
 
   _pointerPoint(event) {
     const rect = this.canvas.getBoundingClientRect();
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  }
+
+  /* Pixi writes the buffer size into the width and height attributes, and a
+     canvas with no CSS size lays out from them, so each resize would rescale
+     it by the pixel ratio. Doubling the attributes shows whether layout
+     follows them. */
+  _pinUnstyledSize() {
+    const canvas = this.canvas;
+    const original = {
+      styleWidth: canvas.style.width,
+      styleHeight: canvas.style.height,
+      width: canvas.getAttribute("width"),
+      height: canvas.getAttribute("height"),
+    };
+    const shown = canvas.getBoundingClientRect();
+    canvas.width *= 2;
+    canvas.height *= 2;
+    const doubled = canvas.getBoundingClientRect();
+    this._restoreAttributes(original);
+    if (doubled.width === shown.width && doubled.height === shown.height)
+      return;
+    this.originalSize = original;
+    canvas.style.width = `${shown.width}px`;
+    canvas.style.height = `${shown.height}px`;
+  }
+
+  _restoreSize() {
+    const original = this.originalSize;
+    if (!original) return;
+    this.originalSize = null;
+    this.canvas.style.width = original.styleWidth;
+    this.canvas.style.height = original.styleHeight;
+    this._restoreAttributes(original);
+  }
+
+  _restoreAttributes(original) {
+    for (const name of ["width", "height"]) {
+      if (original[name] === null) this.canvas.removeAttribute(name);
+      else this.canvas.setAttribute(name, original[name]);
+    }
   }
 
   _preserveHost() {
@@ -312,6 +364,16 @@ class Controller {
         application,
       });
     this.host = null;
+  }
+
+  /* Observer callbacks have no caller to throw to, so a failure there is
+     reported through the error event like any other runtime failure. */
+  _syncObserved() {
+    try {
+      this._syncRunning();
+    } catch (error) {
+      this._fail(error);
+    }
   }
 
   _syncRunning() {
@@ -434,13 +496,14 @@ const mount = (canvas, options = {}) => {
     return Promise.reject(new Error("canvas already has a BeefwifeCanvas"));
   let controller;
   try {
-    controller = new Controller(canvas, options);
+    controller = new Controller(canvas, options, lastReady.get(canvas));
   } catch (error) {
     return Promise.reject(error);
   }
   controller.facade = facadeOf(controller);
   controllers.set(canvas, controller);
   controller.ready = controller.initialize().then(() => controller.facade);
+  lastReady.set(canvas, controller.ready);
   return controller.ready;
 };
 
@@ -452,9 +515,12 @@ const autoMount = () => {
     });
 };
 
-if (document.readyState === "loading")
-  document.addEventListener("DOMContentLoaded", autoMount, { once: true });
-else queueMicrotask(autoMount);
+/* A server-side render imports the module with no document to mount into. */
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading")
+    document.addEventListener("DOMContentLoaded", autoMount, { once: true });
+  else queueMicrotask(autoMount);
+}
 
 /* One import reaches the whole runtime, so a page that wants to read, check,
    or write a document has no other way to reach the schema. */

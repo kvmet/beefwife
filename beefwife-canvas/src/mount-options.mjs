@@ -73,7 +73,8 @@ const attributesOf = (canvas) => {
     if (!attribute.name.startsWith("data-beefwife-")) continue;
     if (
       attribute.name === "data-beefwife-canvas" ||
-      attribute.name === "data-beefwife-state"
+      attribute.name === "data-beefwife-state" ||
+      attribute.name === "data-beefwife-pause-reason"
     )
       continue;
     const rule = ATTRIBUTES[attribute.name];

@@ -65,4 +65,12 @@ assert.deepEqual(
   ["BeefwifeCanvas"],
 );
 
+/* A server-side render evaluates the import with no document at all. */
+const serverContext = { console, URL };
+vm.createContext(serverContext);
+vm.runInContext(fs.readFileSync(bundlePath, "utf8"), serverContext, {
+  filename: bundlePath,
+});
+assert.equal(typeof serverContext.BeefwifeCanvas.mount, "function");
+
 console.log("BeefwifeCanvas bundle: one global, load order valid");
