@@ -1,4 +1,4 @@
-/*! Beefwife Canvas v0.1.0. Generated from beefwife-canvas/src; do not edit.
+/*! Beefwife Canvas v0.1.1. Generated from beefwife-canvas/src; do not edit.
 (c) Kristen Metcalfe, MPL-2.0.
 Bundles @kvmet/beefwife (MPL-2.0) and @kvmet/terrain (MIT, (c) Kristen Metcalfe). */
 import * as pixi from "pixi.js";

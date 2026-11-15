@@ -32,7 +32,7 @@ Or load the classic script after Pixi:
 
 ```html
 <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.23.0/dist/pixi.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@kvmet/beefwife@0.1.0/beefwife.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@kvmet/beefwife@0.1.1/beefwife.min.js"></script>
 ```
 
 | Entry | Use |
@@ -57,7 +57,7 @@ Seven descriptors ship under `samples/`: `bounding`, `chevron-guy`,
 `beefwife.example.json` uses every field. A CDN serves them without an install:
 
 ```text
-https://cdn.jsdelivr.net/npm/@kvmet/beefwife@0.1.0/samples/slow-guy.json
+https://cdn.jsdelivr.net/npm/@kvmet/beefwife@0.1.1/samples/slow-guy.json
 ```
 
 ## API

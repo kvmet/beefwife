@@ -3,6 +3,13 @@
 Notable changes to `@kvmet/beefwife`, newest first. This package follows
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.1.1 (2026-11-14)
+
+Documentation only; the library is unchanged.
+
+The README is rewritten as an install guide and API reference. The descriptor
+field reference moves to `DESCRIPTOR.md`, which now ships with the package.
+
 ## 0.1.0 (2026-11-14)
 
 First release.

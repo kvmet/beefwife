@@ -1,6 +1,6 @@
 {
   "name": "@kvmet/beefwife",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Procedurally animated chain-body creatures for the web.",
   "license": "MPL-2.0",
   "author": "Kristen Metcalfe",
@@ -39,6 +39,7 @@
   },
   "files": [
     "CHANGELOG.md",
+    "DESCRIPTOR.md",
     "LICENSE",
     "README.md",
     "beefwife.example.json",

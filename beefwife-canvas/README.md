@@ -8,12 +8,12 @@ mark. Add the canvas, name the creatures, and load two scripts:
 <canvas
   data-beefwife-canvas
   data-beefwife-sources="
-    https://cdn.jsdelivr.net/npm/@kvmet/beefwife@0.1.0/samples/slow-guy.json,
-    https://cdn.jsdelivr.net/npm/@kvmet/beefwife@0.1.0/samples/long-girl.json"
+    https://cdn.jsdelivr.net/npm/@kvmet/beefwife@0.1.1/samples/slow-guy.json,
+    https://cdn.jsdelivr.net/npm/@kvmet/beefwife@0.1.1/samples/long-girl.json"
 ></canvas>
 
 <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.23.0/dist/pixi.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@kvmet/beefwife-canvas@0.1.0/beefwife-canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@kvmet/beefwife-canvas@0.1.1/beefwife-canvas.min.js"></script>
 ```
 
 The canvas stays yours. Give it any id, class, size, or stacking order;
