@@ -1,252 +1,297 @@
 # BeefwifeCanvas
 
-`BeefwifeCanvas` mounts the Beefwife runtime into a canvas that belongs to the
-page. The canvas can have any ID, class, layout, or stacking rules; the API only
-looks for `data-beefwife-canvas` when auto-mounting.
+BeefwifeCanvas fills a `<canvas>` on your page with beefwives: procedurally
+animated creatures that wander the canvas and walk around the elements you
+mark. Add the canvas, name the creatures, and load two scripts:
 
 ```html
 <canvas
-  id="my-beefwives"
   data-beefwife-canvas
-  data-beefwife-manifest="beefwives/manifest.json"
-  data-beefwife-count="8"
-  data-beefwife-resolution-scale="0.25"
-  data-beefwife-image-rendering="pixelated"
-  data-beefwife-round-vertices="true"
-  data-beefwife-antialias="false"
-  data-beefwife-simulation-fps="60"
-  data-beefwife-draw-fps="24"
-  data-beefwife-target-mode="wander"
-  data-beefwife-pointer-input="click"
-  data-beefwife-wander-delay="4"
-  data-beefwife-knee-projection-center="canvas"
+  data-beefwife-sources="
+    https://cdn.jsdelivr.net/npm/@kvmet/beefwife@0.1.0/samples/slow-guy.json,
+    https://cdn.jsdelivr.net/npm/@kvmet/beefwife@0.1.0/samples/long-girl.json"
 ></canvas>
-```
 
-## Install
-
-Load Pixi 8, then the runtime. Beefwife and Terrain ride inside
-`beefwife-canvas.js`, so the page needs nothing else and gains one global,
-`BeefwifeCanvas`.
-
-Creatures are separate: the canvas draws whichever descriptors it is pointed
-at. `@kvmet/beefwife` ships seven samples under `samples/`, reachable from a
-CDN without installing it.
-
-From a CDN:
-
-```html
 <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.23.0/dist/pixi.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@kvmet/beefwife-canvas@0.1.0/beefwife-canvas.min.js"></script>
 ```
 
-With npm:
+The canvas stays yours. Give it any id, class, size, or stacking order;
+BeefwifeCanvas reads only its `data-beefwife-*` attributes.
+
+## Install
+
+From a CDN, use the two scripts above. With npm:
 
 ```sh
 npm install @kvmet/beefwife-canvas pixi.js
 ```
 
-With a bundler, import the module entry. Pixi stays external, so the page
-and the runtime share one copy:
-
 ```js
 import BeefwifeCanvas from "@kvmet/beefwife-canvas";
 ```
 
-The import mounts every marked canvas on its own, the same as the script
-does, so importing for the side effect alone is enough. Without a bundler,
-serve the script instead:
+| File | Use |
+| --- | --- |
+| `beefwife-canvas.min.js` | Classic script. Reads `window.PIXI` and adds one global, `BeefwifeCanvas`. |
+| `beefwife-canvas.js` | The same script, unminified. |
+| `beefwife-canvas.mjs` | Module. Imports `pixi.js`, so a bundler gives the page and the runtime one copy. |
 
-```html
-<script src="/node_modules/pixi.js/dist/pixi.min.js"></script>
-<script src="/node_modules/@kvmet/beefwife-canvas/beefwife-canvas.min.js"></script>
-```
+Every entry mounts each `canvas[data-beefwife-canvas]` once the DOM is ready,
+so an import with no other code is enough. `@kvmet/beefwife` and
+`@kvmet/terrain` are bundled in.
 
-Pixi 8.21.0 is the minimum: in earlier 8.x releases, destroying one WebGPU
-renderer can break another. The script entry reads `window.PIXI` and the
-module entry imports the peer, so only the script entry runs where no
-renderer is present.
+Pixi 8.21.0 or newer is required. In earlier 8.x releases, destroying one
+WebGPU renderer can break another.
 
-`beefwife-canvas.js` is the readable build and creates the same global;
-`beefwife-canvas.mjs` is the module build. `npm run build` writes all three
-from [`src`](src/); all are committed. The integrated development example is
-in [`examples/beefwife-canvas`](../examples/beefwife-canvas/).
+## Creatures
 
-The bundle auto-mounts every marked canvas after the DOM is ready.
-Listen for `beefwifecanvasready` or `beefwifecanvaserror`, await the `ready`
-promise on a handle returned by `BeefwifeCanvas.get(canvas)`, or inspect
-`data-beefwife-state`, whose values are `loading`, `ready`, `running`, `paused`,
-`stopped`, `error`, and `destroyed`. A paused canvas also exposes
-`data-beefwife-pause-reason` as `hidden`, `offscreen`, or `zero-size`. A mount
-or a texture render that fails dispatches the error event, stops the runtime,
-cleans itself up, and leaves the canvas in the `error` state, ready to mount again.
-The mounted handle exposes the same information through its read-only `state`
-and `pauseReason` getters; `pauseReason` is `null` unless state is `paused`.
+A creature is a descriptor: one JSON file that defines its body, gait, and
+look. `@kvmet/beefwife` ships seven under `samples/`: `bounding`,
+`chevron-guy`, `long-girl`, `peristaltic`, `reticulating`, `slow-guy`, and
+`undulating`. The format is in
+[DESCRIPTOR.md](https://github.com/kvmet/beefwife/blob/main/beefwife/DESCRIPTOR.md).
 
-`BeefwifeCanvas.scan()` mounts any currently unmounted
-`canvas[data-beefwife-canvas]` elements. The initial document is scanned
-automatically; call `scan()` after adding declarative canvases dynamically.
-Already mounted canvases are left alone.
+Three options supply descriptors. Use any mix; they add together.
 
-The manifest is deliberately small and versioned. Relative source URLs are
-resolved from the manifest URL. Weights affect random spawning, not loading.
+| Option | Accepts |
+| --- | --- |
+| `sources` | A descriptor URL, a `{ src, weight }` entry, or an array of either. The attribute takes a comma-separated list of URLs. |
+| `manifest` | The URL of a manifest. From JavaScript, also the parsed manifest object. |
+| `descriptors` | JavaScript only. A parsed descriptor, a `{ descriptor, weight }` entry, or an array of either. |
+
+A manifest lists sources in one file:
 
 ```json
 {
   "schemaVersion": 1,
-  "sources": ["slug-a.json", { "src": "slug-b.json", "weight": 3 }]
+  "sources": ["slow-guy.json", { "src": "long-girl.json", "weight": 3 }]
 }
 ```
 
-`manifest`, `sources`, and `descriptors` are additive when more than one is
-provided. Programmatic `manifest` may be either a manifest URL or the parsed
-manifest object. `sources` accepts one descriptor URL, one `{ src, weight }`
-entry, or an array of either. `descriptors` likewise accepts one descriptor,
-one `{ descriptor, weight }` entry, or an array. Declarative attributes support
-a manifest URL and a comma-separated source URL list; parsed descriptors are
-JavaScript-only. Every resulting descriptor name must be unique across all
-inputs or the mount fails atomically. When `count` is omitted it defaults to
-the number of unique descriptors, with weighted names sampled with replacement.
+Relative URLs in a manifest resolve against the manifest's URL. Other URLs
+resolve against the page.
 
-JavaScript options override attributes and can supply already-parsed
-descriptors or arbitrary caller-owned Pixi filters. Omit `data-beefwife-canvas`
-when mounting programmatically so auto-mount and programmatic mount do not race.
+`weight` defaults to 1 and sets how often a creature is picked when one
+spawns. It does not change what loads. `count` defaults to the number of
+descriptors. Each descriptor's `name` must be unique across all inputs, or the
+mount fails.
+
+## Mount from JavaScript
+
+Leave `data-beefwife-canvas` off a canvas you mount yourself, so the automatic
+mount does not race yours:
 
 ```js
-const canvas = document.querySelector("#programmatic-beefwives");
-const runtime = await BeefwifeCanvas.mount(canvas, {
+const canvas = document.querySelector("#beefwives");
+const beefwives = await BeefwifeCanvas.mount(canvas, {
   descriptors: [descriptorA, { descriptor: descriptorB, weight: 3 }],
   filters: [new PIXI.NoiseFilter({ noise: 0.08 })],
   targetMode: "manual",
-  pointerInput: "none",
 });
 
-runtime.setTarget({ x: 300, y: 180 });
-runtime.getActors()[0].setTarget({ x: 80, y: 120 });
+beefwives.setTarget({ x: 300, y: 180 });
+beefwives.getActors()[0].setTarget({ x: 80, y: 120 });
 ```
 
-`mount` resolves a frozen runtime handle. `BeefwifeCanvas.get(canvas)` and the
-`detail.controller` of either lifecycle event return the same handle while the
-event is being dispatched. A failed handle is released after its error event,
-so `get(canvas)` then returns `null` and a new mount can begin.
+JavaScript options override attributes. Attributes are read once, at mount;
+use the handle's methods for live changes.
 
-The lifecycle methods are `start()`, `stop()`, `destroy()`, `setCount(count)`,
-`setTimeScale(scale)`, `setTarget(point)`, `clearTarget()`,
-`setTargetMode(mode)`, `setPointerInput(input)`, `setDebug(flags)`,
-`refreshTerrain()`, `respawn()`, `getActors()`, `getTerrainView()`, and
-`getStats()`.
-`getActors()` returns frozen Canvas control handles with stable `id` and `name`
-fields plus `getPose()`, `getRoute()`, `getTarget()`, target, mode, and respawn
-methods; it does not expose the host's mutable actor or route objects.
-Targets and poses use canvas-local CSS pixels. Target policy and DOM input are
-independent. `targetMode` is `wander` or `manual`; `pointerInput` is `none`,
-`click`, or `move`. A click or pointer movement merely supplies a target and
-does not change what happens after arrival. In `manual`, every supplied target
-produces one finite route and the beefwife then stops until another target is
-supplied. In `wander`, the host waits a random duration from zero through
-`wanderDelay` seconds before supplying another target. `move` retains its last
-destination after the pointer leaves the canvas. The host chooses goals and
-Beefwife only receives its usual direction and throttle controls. Attribute
-values are read once. Use the methods for live changes.
+## Options
 
-`destroy()` removes the scene and runtime listeners but leaves the author's
-canvas in place. While the canvas stays in the page, its Pixi renderer is kept
-dormant so the same element can be mounted again without a second GPU context.
-`antialias` is fixed for the life of that renderer, so a remount cannot change
-it. When a destroyed canvas leaves the page, its renderer and GPU context are
-released and the canvas can be garbage collected; mounting that element again
-fails, so mount a new canvas instead. A canvas removed without `destroy()`
-keeps its renderer and GPU context for the life of the page, so call
-`destroy()` when you remove one, before or after removing it.
+Each option has an attribute: `data-beefwife-` and the option name in kebab
+case, so `drawFps` is `data-beefwife-draw-fps`. Boolean attributes take `true`
+or `false`. JavaScript-only options are marked. An unknown option or attribute
+fails the mount. Distances are CSS pixels.
 
-Performance and appearance options are `resolutionScale`, `roundVertices`,
-`antialias`, `simulationFps`, `drawFps`, `maxPixelRatio`, `imageRendering`,
-`kneePerspective`, `maxKneeOffset`, `kneeProjectionCenter`, and programmatic
-`filters`. `drawFps` is held at `simulationFps`, because a draw between two
-simulation steps repeats the frame before it. `simulationFps` defaults to 60
-and `drawFps` to 24; both accept 1 through 240, and a `drawFps` of zero asks
-for the `simulationFps` ceiling by name.
+### Population and movement
 
-The substep size is fixed, so a simulated second always costs the same number
-of substeps however `simulationFps` batches them. Lowering it buys fewer,
-larger steps and the routing saved between them, not cheaper physics: 10
-against 60 saves 8% of the simulation cost at 400 creatures. It also steers
-more coarsely, because a route advances once a tick, so creatures take
-visibly different paths. To spend less on physics, lower `timeScale`, which
-reduces simulated seconds per real second and says so by moving the creature
-slower. `drawFps` is the knob that pays without touching behaviour.
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `count` | Number of descriptors | Creatures on the canvas, 0 to 1024. |
+| `targetMode` | `"wander"` | `wander`: after each arrival, wait and pick a new target. `manual`: stop at each target until given another. |
+| `pointerInput` | `"none"` | `click`: a click sets the target. `move`: the pointer is the target, and its last position stays the target after it leaves. |
+| `wanderDelay` | `4` | Longest wait in seconds before a wandering creature picks a new target. Each wait is random, from 0 to this. |
+| `timeScale` | `1` | Simulated seconds per real second, 0 to 16. |
+| `autoStart` | `true` | Run once ready. `false` leaves the canvas `stopped` until `start()`. |
+| `random` | `Math.random` | JavaScript only. A function returning numbers from 0 up to 1. Drives spawning, wandering, and creature variation. |
 
-A host that cannot deliver `simulationFps` is not the same as a lower
-`simulationFps`. It plays slower and follows the same path, because each tick
-steps once whatever the frame took, so the route still advances one 60th of a
-second at a time.
+### Avoidance
 
-Rates need not divide each other. A step that is not a whole number of
-substeps carries its remainder, so `simulationFps` of 24 or a `timeScale` of
-0.7 stays within one substep of exact for any run length rather than drifting.
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `avoid` | `".beefwife-avoid"` | Selector for the elements creatures route around. |
+| `edgeMargin` | `25` | Clear space kept inside each canvas edge. |
+| `obstaclePadding` | `0` | Clear space kept around each avoided element. |
+| `waypointRadius` | `10` | Distance from a route corner that counts as reaching it. Above 1. |
+| `arrivalRadius` | `10` | Distance from the target that counts as arriving. Above 1. |
+| `throttleEase` | `4` | Rate per second at which a creature's speed settles to what its route asks for. |
+| `stuckReplanSeconds` | `120` | Seconds without reaching a waypoint before a creature drops its route. |
+| `escapeReplanSeconds` | `7` | The same limit for a creature caught inside an avoided area or past an edge. |
 
-Knee perspective affects
-leg-knee rendering only; planted feet and
-the simulated body are unchanged. `kneeProjectionCenter` is
-`canvas` by default; `viewport` makes separate canvases share one apparent
-knee-projection field. `resolutionScale` accepts 0.125 through 1 and defaults
-to 0.25, where quarter resolution costs a sixteenth of the fill work. When
-vertex rounding is enabled, vertices snap to pixels at the effective renderer
-resolution, including device pixel ratio and `resolutionScale`.
-`imageRendering` independently selects `pixelated` (the default) or `auto`,
-allowing either interpolation style at any resolution. For color effects, pass
-a configured `PIXI.ColorMatrixFilter` in `filters`.
+### Rendering
 
-Debug rendering is off by default. The boolean options `debugTargets`,
-`debugRoutes`, and `debugTerrain` show destination crosshairs, waypoint paths,
-and avoidance bounds, respectively. Their declarative forms are
-`data-beefwife-debug-targets`, `data-beefwife-debug-routes`,
-and `data-beefwife-debug-terrain`. Toggle layers after mounting with a partial
-update:
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `resolutionScale` | `0.25` | Render resolution against CSS pixels, 0.125 to 1. At 0.25 the renderer fills a sixteenth of the pixels. |
+| `imageRendering` | `"pixelated"` | How the canvas is scaled up: `pixelated` or `auto`. |
+| `roundVertices` | `true` | Snap vertices to the renderer's pixel grid, device pixel ratio included. |
+| `antialias` | `false` | Fixed for the life of the canvas's renderer. A remount cannot change it. |
+| `maxPixelRatio` | `2` | Upper limit on `devicePixelRatio`. |
+| `filters` | None | JavaScript only. Pixi filters for the whole scene, such as a `PIXI.ColorMatrixFilter`. |
+| `kneePerspective` | `0.002` | Pushes each drawn knee away from the projection center, by distance times knee height times this. `0` turns it off. |
+| `maxKneeOffset` | `256` | Upper limit on that push, in pixels. |
+| `kneeProjectionCenter` | `"canvas"` | `canvas`: center the projection on each canvas. `viewport`: center it on the window, so separate canvases share one. |
+| `simulationFps` | `60` | Simulation updates per second, 1 to 240. |
+| `drawFps` | `24` | Draws per second, 1 to 240, limited to `simulationFps`. `0` means match `simulationFps`. |
 
-```js
-runtime.setDebug({ targets: true, routes: true });
-runtime.setDebug({ routes: false, terrain: true });
+Knee perspective changes only the drawn knees. Feet and bodies stay where the
+simulation puts them.
+
+### Pausing and debug
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `pauseHidden` | `true` | Pause while the tab is hidden. |
+| `pauseOffscreen` | `true` | Pause while the canvas is out of view. |
+| `debugTargets` | `false` | Draw a crosshair at each target. |
+| `debugRoutes` | `false` | Draw each route's waypoints. |
+| `debugTerrain` | `false` | Draw the avoided areas, padding included. |
+
+Debug layers draw at the canvas's render resolution and do not change routing
+or simulation. To draw your own overlay instead, read `getTerrainView()` and
+each creature handle's `getRoute()` and `getTarget()`.
+
+## API
+
+### `BeefwifeCanvas.mount(canvas, options = {})`
+
+Mounts the canvas and returns a promise of its handle. Rejects when the canvas
+already has a handle, an option is invalid, or a descriptor fails to load or
+validate.
+
+### `BeefwifeCanvas.get(canvas)`
+
+Returns the canvas's handle, or `null`.
+
+### `BeefwifeCanvas.scan()`
+
+Mounts each `canvas[data-beefwife-canvas]` that has no handle. The page is
+scanned once on load; call `scan()` after you add marked canvases.
+
+### `BeefwifeCanvas.Descriptor`
+
+The `Descriptor` API from `@kvmet/beefwife`, for reading, checking, and
+resizing descriptors without a second script.
+
+### Handle
+
+Coordinates are canvas-local CSS pixels. Methods that change something return
+the handle. After `destroy()`, every method throws.
+
+| Member | Does |
+| --- | --- |
+| `start()`, `stop()` | Run or stop the canvas. A stopped canvas does not resume when it comes back into view. |
+| `destroy()` | Remove the scene and listeners. See [Lifecycle](#lifecycle). |
+| `setCount(count)` | Add or remove creatures. |
+| `setTimeScale(scale)` | Change `timeScale`. |
+| `setTarget({ x, y })` | Send every creature to a point. |
+| `clearTarget()` | Drop every creature's target. |
+| `setTargetMode(mode)` | `"wander"` or `"manual"`. |
+| `setPointerInput(input)` | `"none"`, `"click"`, or `"move"`. |
+| `setDebug(flags)` | Turn debug layers on or off: `{ targets, routes, terrain }`. Omitted layers keep their state. |
+| `respawn()` | Place every creature again. |
+| `refreshTerrain()` | Measure the avoided elements now. See [Avoidance and occlusion](#avoidance-and-occlusion). |
+| `getActors()` | One creature handle per creature. |
+| `getTerrainView()` | `{ bounds, rectangles }` from the last measurement: the walkable area inside `edgeMargin`, and each avoided element with its padding. Each is `{ left, top, right, bottom }`. |
+| `getStats()` | See [Performance](#performance). |
+| `state` | The canvas state. See [Lifecycle](#lifecycle). |
+| `pauseReason` | `"hidden"`, `"offscreen"`, or `"zero-size"` while `state` is `"paused"`, else `null`. |
+| `ready` | The promise that `mount` returned. |
+
+### Creature handle
+
+`getActors()` returns frozen handles. A creature keeps the same handle, with a
+stable `id` and its descriptor's `name`, for as long as it lives.
+
+| Member | Does |
+| --- | --- |
+| `getPose()` | `{ head, center, direction }`, each `{ x, y }`. `direction` is a unit vector. |
+| `getRoute()` | The waypoints left on its route. |
+| `getTarget()` | Its target, or `null`. |
+| `setTarget({ x, y })`, `clearTarget()` | Set or drop its target. |
+| `setTargetMode(mode)` | `"wander"` or `"manual"`, for this creature. |
+| `respawn()` | Place it again. |
+| `setDescriptor(descriptor)` | Change it to another descriptor in place. It keeps its position and motion. |
+
+The `get` methods return copies.
+
+## Lifecycle
+
+`handle.state` and the canvas's `data-beefwife-state` attribute hold one of
+`loading`, `ready`, `running`, `paused`, `stopped`, `error`, or `destroyed`.
+While paused, `data-beefwife-pause-reason` holds the reason.
+
+The canvas dispatches two events, each with the handle as
+`event.detail.controller`:
+
+- `beefwifecanvasready` when the mount succeeds.
+- `beefwifecanvaserror` when the mount or a later render fails. The error is
+  `event.detail.error`.
+
+A failure stops the canvas and cleans it up, leaving it in `error`. After the
+event, `get(canvas)` returns `null` and the canvas can be mounted again.
+
+`destroy()` removes the scene and listeners and leaves the canvas element in
+place. While the element stays in the page, its renderer is kept, so mounting
+it again reuses the GPU context. When a destroyed canvas leaves the page, its
+renderer is released and that element cannot be mounted again; mount a new
+canvas. A canvas removed without `destroy()` keeps its renderer and GPU context
+for the life of the page, so call `destroy()` when you remove one.
+
+## Avoidance and occlusion
+
+Avoidance and occlusion are separate. `avoid` changes where creatures walk. To
+make them walk behind an element, stack that element above the canvas. An
+element can be avoided, stacked above, both, or neither.
+
+Avoided elements are measured again when the window resizes, when an avoided
+element or the canvas resizes, and when a window scroll moves an avoided
+element against the canvas. Call `refreshTerrain()` after a change the runtime
+cannot see: a CSS transform, or a scroll inside a nested scroll container.
+
+## Performance
+
+`drawFps` and `resolutionScale` are the main controls. Each lowers cost
+without changing how creatures move.
+
+`simulationFps` saves little. The simulation runs fixed steps, so a simulated
+second costs the same however updates are grouped; at 400 creatures, 10 against
+60 saves 8% of the simulation cost. Fewer updates also steer more coarsely, so
+creatures take different paths. To spend less on simulation, lower
+`timeScale`: creatures move slower.
+
+A page that cannot keep up with `simulationFps` plays slower but follows the
+same paths.
+
+`getStats()` reports the last whole second: `actors`, `steps` and `draws` per
+second, and `stepMs` and `drawMs`, the mean cost of one simulation update and
+one draw. Both times are main-thread work only; GPU time is not included.
+
+## Development
+
+`beefwife-canvas.js`, `beefwife-canvas.min.js`, and `beefwife-canvas.mjs` are
+generated from `src/` by `npm run build`; do not edit them directly. From the
+repository root:
+
+```sh
+bb canvas          # public API
+bb canvas-runtime  # routing and runtime
+bb canvas-package  # build, then check the packed package
 ```
 
-Terrain draws below the beefwives; routes and targets draw above them. These
-layers are diagnostic and do not affect routing or simulation. Their marks are
-sized in renderer pixels, so a mark keeps its shape at every `resolutionScale`
-and grows on screen as the renderer coarsens.
+[`examples/beefwife-canvas`](https://github.com/kvmet/beefwife/tree/main/examples/beefwife-canvas)
+is a page with every feature wired up.
 
-To draw a debug layer of your own instead, read the same state and draw it at
-whatever resolution you like. `getTerrainView()` returns the field as the last
-build measured it, `{ bounds, rectangles }` in canvas-local CSS pixels, and each
-control handle answers `getRoute()` with the remaining waypoints and
-`getTarget()` with the current goal or `null`. All three return copies.
-
-`getStats()` reports the last whole second: `actors`, `steps` and `draws` a
-second, and `stepMs` and `drawMs` for the mean cost of one simulation step and
-one draw. Those milliseconds are this thread's work alone. A draw returns once
-the frame is submitted and the GPU renders it afterwards, so what a resolution
-costs to rasterise is not in `drawMs`.
-
-```js
-const { steps, drawMs } = runtime.getStats();
-for (const actor of runtime.getActors())
-  overlay.plot(actor.getRoute(), actor.getTarget());
-```
-
-Simulation and routing options are `timeScale`, `wanderDelay`, `edgeMargin`,
-`obstaclePadding`, `waypointRadius`, `arrivalRadius`, `throttleEase`,
-`stuckReplanSeconds`, and `escapeReplanSeconds`. `waypointRadius` controls how
-closely an intermediate corner must be followed, while `arrivalRadius`
-controls final-target satisfaction; both default to 10 CSS pixels.
-`wanderDelay` defaults to 4 seconds and may be zero.
-`avoid` defaults to `.beefwife-avoid`, `edgeMargin` defaults to 25, and
-`obstaclePadding` defaults to zero CSS pixels. Terrain is re-measured when the
-window resizes, an obstacle or the canvas resizes, or a window scroll moves an
-obstacle relative to the canvas, as with a fixed canvas or a sticky obstacle.
-Call `refreshTerrain()` after transform-only obstacle movement, or a scroll
-inside a nested scroll container, because the runtime cannot see either.
-`pauseHidden` and `pauseOffscreen` default to true.
-
-Avoidance and visual occlusion are independent. `avoid` changes routing. To
-make beefwives appear to walk behind a widget, place that DOM element above the
-canvas in normal stacking order. A widget may be an avoid element, an
-occluder, both, or neither; no Pixi mask is needed for ordinary DOM occlusion.
+BeefwifeCanvas is released under the
+[Mozilla Public License 2.0](https://github.com/kvmet/beefwife/blob/main/beefwife-canvas/LICENSE).
