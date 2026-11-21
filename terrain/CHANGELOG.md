@@ -3,6 +3,13 @@
 Notable changes to `@kvmet/terrain`, newest first. This package follows
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.0 (2026-11-21)
+
+Breaking: error messages are rewritten. Each one reads `<path>: <problem>` and
+names the option at fault, such as `options.avoid: must be a CSS selector, an
+iterable of elements, or a function`. Code that matches the old message text
+needs updating. Routing and queries are unchanged.
+
 ## 0.2.1 (2026-11-14)
 
 Packaging only; the routing and query behaviour is unchanged.

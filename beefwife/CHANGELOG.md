@@ -3,6 +3,25 @@
 Notable changes to `@kvmet/beefwife`, newest first. This package follows
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.0 (2026-11-21)
+
+Breaking: error messages are rewritten. Each one reads `<path>: <problem>`,
+states the rule that failed, and shows the value given, such as
+`$.legs.pairs: must be an integer (got 1.5)`. An error about an argument
+starts with the function's name, such as `scale:` or `parse:`. Code that
+matches the old message text needs updating. The descriptor format is
+unchanged: `read` accepts and rejects the same documents.
+
+`Descriptor.repair(value)` checks a descriptor like `read`, but drops or trims
+plates, ornaments, and legs that cannot be placed instead of throwing. It
+returns `{ descriptor, warnings }`, for an editor's live preview.
+
+Editing `legs.jitter` or `legs.liftThreshold` on a live creature now reaches
+every leg at once. Before, existing legs kept the proportions they were built
+with until the creature was rebuilt.
+
+A `raccoon` sample joins the seven under `samples/`.
+
 ## 0.1.1 (2026-11-14)
 
 Documentation only; the library is unchanged.

@@ -1,6 +1,6 @@
 {
   "name": "@kvmet/beefwife-canvas",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Drop-in canvas runtime that populates a page with beefwives.",
   "license": "MPL-2.0",
   "author": "Kristen Metcalfe",

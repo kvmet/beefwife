@@ -74,6 +74,7 @@ try {
     "samples/chevron-guy.json",
     "samples/long-girl.json",
     "samples/peristaltic.json",
+    "samples/raccoon.json",
     "samples/reticulating.json",
     "samples/slow-guy.json",
     "samples/undulating.json",

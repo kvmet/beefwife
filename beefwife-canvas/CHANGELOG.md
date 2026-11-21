@@ -3,6 +3,15 @@
 Notable changes to `@kvmet/beefwife-canvas`, newest first. This package follows
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.0 (2026-11-21)
+
+Built on `@kvmet/beefwife` 0.2.0, so `BeefwifeCanvas.Descriptor.repair` is
+available and jitter edits reach live legs.
+
+Breaking: error messages are rewritten in the same `<path>: <problem>` form,
+with the value given. A source that fails to load names its URL and HTTP
+status. Code that matches the old message text needs updating.
+
 ## 0.1.1 (2026-11-14)
 
 Documentation only; the runtime is unchanged.

@@ -8,12 +8,12 @@ mark. Add the canvas, name the creatures, and load two scripts:
 <canvas
   data-beefwife-canvas
   data-beefwife-sources="
-    https://cdn.jsdelivr.net/npm/@kvmet/beefwife@0.1.1/samples/slow-guy.json,
-    https://cdn.jsdelivr.net/npm/@kvmet/beefwife@0.1.1/samples/long-girl.json"
+    https://cdn.jsdelivr.net/npm/@kvmet/beefwife@0.2.0/samples/slow-guy.json,
+    https://cdn.jsdelivr.net/npm/@kvmet/beefwife@0.2.0/samples/long-girl.json"
 ></canvas>
 
 <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.23.0/dist/pixi.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@kvmet/beefwife-canvas@0.1.1/beefwife-canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@kvmet/beefwife-canvas@0.2.0/beefwife-canvas.min.js"></script>
 ```
 
 The canvas stays yours. Give it any id, class, size, or stacking order;
@@ -47,9 +47,9 @@ WebGPU renderer can break another.
 ## Creatures
 
 A creature is a descriptor: one JSON file that defines its body, gait, and
-look. `@kvmet/beefwife` ships seven under `samples/`: `bounding`,
-`chevron-guy`, `long-girl`, `peristaltic`, `reticulating`, `slow-guy`, and
-`undulating`. The format is in
+look. `@kvmet/beefwife` ships eight under `samples/`: `bounding`,
+`chevron-guy`, `long-girl`, `peristaltic`, `raccoon`, `reticulating`,
+`slow-guy`, and `undulating`. The format is in
 [DESCRIPTOR.md](https://github.com/kvmet/beefwife/blob/main/beefwife/DESCRIPTOR.md).
 
 Three options supply descriptors. Use any mix; they add together.
