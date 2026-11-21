@@ -1,6 +1,6 @@
 import chevronGuy from "../../../beefwife/samples/chevron-guy.json";
 import peristaltic from "../../../beefwife/samples/peristaltic.json";
-import reticulating from "../../../beefwife/samples/reticulating.json";
+import raccoon from "../../../beefwife/samples/raccoon.json";
 import undulating from "../../../beefwife/samples/undulating.json";
 
 /**
@@ -11,6 +11,6 @@ import undulating from "../../../beefwife/samples/undulating.json";
 export const PRESETS = [
   { key: "snake", label: "Snake", document: undulating },
   { key: "worm", label: "Worm", document: peristaltic },
-  { key: "lizard", label: "Lizard", document: reticulating },
+  { key: "raccoon", label: "Raccoon", document: raccoon },
   { key: "centipede", label: "Centipede", document: chevronGuy },
 ];
