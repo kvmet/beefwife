@@ -3,6 +3,18 @@
 Notable changes to `@kvmet/beefwife-canvas`, newest first. This package follows
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.1 (2026-11-21)
+
+Built on `@kvmet/beefwife` 0.2.0 and `@kvmet/terrain` 0.3.0.
+
+A creature spawned without a name is now one the canvas does not hold yet,
+until the canvas holds one of each. Weights then pick among all creatures. A
+default mount, whose `count` is the number of descriptors, shows every
+creature once.
+
+A source or descriptor entry takes `guaranteed: false` to leave its creature
+out of that first pass, so it appears only when the weights pick it.
+
 ## 0.2.0 (2026-11-21)
 
 Built on `@kvmet/beefwife` 0.2.0, so `BeefwifeCanvas.Descriptor.repair` is

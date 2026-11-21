@@ -22,7 +22,7 @@ scripts:
 ></canvas>
 
 <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.23.0/dist/pixi.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@kvmet/beefwife-canvas@0.2.0/beefwife-canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@kvmet/beefwife-canvas@0.2.1/beefwife-canvas.min.js"></script>
 ```
 
 That page works as written. `@kvmet/beefwife` ships eight samples: `bounding`,

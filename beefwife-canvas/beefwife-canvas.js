@@ -1,4 +1,4 @@
-/*! Beefwife Canvas v0.2.0. Generated from beefwife-canvas/src; do not edit.
+/*! Beefwife Canvas v0.2.1. Generated from beefwife-canvas/src; do not edit.
    (c) Kristen Metcalfe, MPL-2.0.
    Bundles @kvmet/beefwife (MPL-2.0) and @kvmet/terrain (MIT, (c) Kristen Metcalfe). */
 var BeefwifeCanvas = (function(pixi_js) {
@@ -3281,19 +3281,33 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		return response.json();
 	};
+	var weightOf = (value, path) => {
+		const weight = value ?? 1;
+		if (!Number.isFinite(weight) || weight <= 0) throw new RangeError(`${path}.weight: must be a finite number greater than 0 (got ${weight})`);
+		return weight;
+	};
+	var guaranteedOf = (value, path) => {
+		const guaranteed = value ?? true;
+		if (typeof guaranteed !== "boolean") throw new TypeError(`${path}.guaranteed: must be true or false`);
+		return guaranteed;
+	};
 	var weightedSource = (value, baseUrl, path) => {
 		if (typeof value === "string") return {
 			src: new URL(value, baseUrl).href,
-			weight: 1
+			weight: 1,
+			guaranteed: true
 		};
-		if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${path}: must be a URL string or a { src, weight } object`);
-		for (const key of Object.keys(value)) if (key !== "src" && key !== "weight") throw new TypeError(`${path}.${key}: is not a known field`);
+		if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${path}: must be a URL string or a { src, weight, guaranteed } object`);
+		for (const key of Object.keys(value)) if (![
+			"src",
+			"weight",
+			"guaranteed"
+		].includes(key)) throw new TypeError(`${path}.${key}: is not a known field`);
 		if (typeof value.src !== "string" || !value.src) throw new TypeError(`${path}.src: must be a non-empty URL string`);
-		const weight = value.weight ?? 1;
-		if (!Number.isFinite(weight) || weight <= 0) throw new RangeError(`${path}.weight: must be a finite number greater than 0 (got ${weight})`);
 		return {
 			src: new URL(value.src, baseUrl).href,
-			weight
+			weight: weightOf(value.weight, path),
+			guaranteed: guaranteedOf(value.guaranteed, path)
 		};
 	};
 	var manifestSources = async (manifest, signal) => {
@@ -3311,17 +3325,20 @@ pixi_js = __toESM(pixi_js, 1);
 		return value.sources.map((source, index) => weightedSource(source, baseUrl, `manifest.sources[${index}]`));
 	};
 	var descriptorEntry = (value, path) => {
-		let descriptor = value;
-		let weight = 1;
-		if (value?.descriptor !== void 0) {
-			for (const key of Object.keys(value)) if (key !== "descriptor" && key !== "weight") throw new TypeError(`${path}.${key}: is not a known field`);
-			descriptor = value.descriptor;
-			weight = value.weight ?? 1;
-		}
-		if (!Number.isFinite(weight) || weight <= 0) throw new RangeError(`${path}.weight: must be a finite number greater than 0 (got ${weight})`);
+		if (value?.descriptor === void 0) return {
+			descriptor: read(value),
+			weight: 1,
+			guaranteed: true
+		};
+		for (const key of Object.keys(value)) if (![
+			"descriptor",
+			"weight",
+			"guaranteed"
+		].includes(key)) throw new TypeError(`${path}.${key}: is not a known field`);
 		return {
-			descriptor: read(descriptor),
-			weight
+			descriptor: read(value.descriptor),
+			weight: weightOf(value.weight, path),
+			guaranteed: guaranteedOf(value.guaranteed, path)
 		};
 	};
 	var loadCast = async (options, signal) => {
@@ -3330,23 +3347,27 @@ pixi_js = __toESM(pixi_js, 1);
 		if (options.sources) (Array.isArray(options.sources) ? options.sources : [options.sources]).forEach((source, index) => sources.push(weightedSource(source, document.baseURI, `options.sources[${index}]`)));
 		const entries = [];
 		if (options.descriptors) (Array.isArray(options.descriptors) ? options.descriptors : [options.descriptors]).forEach((descriptor, index) => entries.push(descriptorEntry(descriptor, `options.descriptors[${index}]`)));
-		const fetched = await Promise.all(sources.map(async ({ src, weight }) => ({
+		const fetched = await Promise.all(sources.map(async ({ src, weight, guaranteed }) => ({
 			descriptor: read(await responseJson(src, signal)),
-			weight
+			weight,
+			guaranteed
 		})));
 		entries.push(...fetched);
 		if (!entries.length) throw new TypeError("cast: needs a manifest, sources, or descriptors");
 		const cast = Object.create(null);
 		const castWeights = Object.create(null);
+		const castGuaranteed = Object.create(null);
 		for (const entry of entries) {
 			const name = entry.descriptor.name;
 			if (cast[name]) throw new TypeError(`cast: two descriptors are named ${JSON.stringify(name)}; names must be unique`);
 			cast[name] = entry.descriptor;
 			castWeights[name] = entry.weight;
+			castGuaranteed[name] = entry.guaranteed;
 		}
 		return {
 			cast,
-			castWeights
+			castWeights,
+			castGuaranteed
 		};
 	};
 
@@ -4575,7 +4596,7 @@ pixi_js = __toESM(pixi_js, 1);
 		return rateOf(value, "renderFps");
 	};
 	var physicsFpsOf = (value) => value === void 0 ? config.DEFAULT_PHYSICS_FPS : rateOf(value, "physicsFps");
-	var chooseName = (cast, weights, random, namesOnCanvas = /* @__PURE__ */ new Set()) => {
+	var chooseName = (cast, weights, guaranteed, random, namesOnCanvas = /* @__PURE__ */ new Set()) => {
 		const names = Object.keys(cast);
 		if (!names.length) throw new Error("cast: must contain at least one beefwife");
 		const allWeighted = names.map((name) => {
@@ -4586,7 +4607,7 @@ pixi_js = __toESM(pixi_js, 1);
 				weight
 			};
 		});
-		const missing = allWeighted.filter(({ name }) => !namesOnCanvas.has(name));
+		const missing = allWeighted.filter(({ name }) => guaranteed?.[name] !== false && !namesOnCanvas.has(name));
 		const weighted = missing.length ? missing : allWeighted;
 		const total = weighted.reduce((sum, entry) => sum + entry.weight, 0);
 		let sample = random() * total;
@@ -4877,6 +4898,7 @@ pixi_js = __toESM(pixi_js, 1);
 			this.router = router;
 			this.cast = options.cast || null;
 			this.castWeights = options.castWeights || null;
+			this.castGuaranteed = options.castGuaranteed || null;
 			this.random = options.random || Math.random;
 			this.renderOptions = options.renderOptions || null;
 			this.roam = options.roam;
@@ -4898,7 +4920,7 @@ pixi_js = __toESM(pixi_js, 1);
 			return this._addNow(name);
 		}
 		_addNow(name) {
-			const selectedName = name || chooseName(this.cast, this.castWeights, this.random, new Set(this.actors.map((actor) => actor.name)));
+			const selectedName = name || chooseName(this.cast, this.castWeights, this.castGuaranteed, this.random, new Set(this.actors.map((actor) => actor.name)));
 			const spec = this.cast[selectedName];
 			if (!spec) throw new Error(`name: the cast has no beefwife named ${JSON.stringify(name)}`);
 			const planner = new BeefwifeCanvasTargetPolicy(this.router, this.targetMode, {
@@ -5064,6 +5086,7 @@ pixi_js = __toESM(pixi_js, 1);
 			this.population = new BeefwifeCanvasPopulation(this.terrain, this.router, {
 				cast: options.cast || null,
 				castWeights: options.castWeights || null,
+				castGuaranteed: options.castGuaranteed || null,
 				count: options.count,
 				random,
 				renderOptions: this.scene.renderOptions,
@@ -5457,7 +5480,7 @@ pixi_js = __toESM(pixi_js, 1);
 				this.supplied = null;
 				this.wantsToRun = this.options.autoStart;
 				this._connectCanvas();
-				const { cast, castWeights } = await loadCast(this.options, this.abortController.signal);
+				const { cast, castWeights, castGuaranteed } = await loadCast(this.options, this.abortController.signal);
 				if (this.destroyed) return this;
 				const filters = [...this.options.filters || []];
 				const count = this.options.count ?? Object.keys(cast).length;
@@ -5470,6 +5493,7 @@ pixi_js = __toESM(pixi_js, 1);
 					canvas: this.canvas,
 					cast,
 					castWeights,
+					castGuaranteed,
 					count,
 					debug: {
 						routes: this.options.debugRoutes,
