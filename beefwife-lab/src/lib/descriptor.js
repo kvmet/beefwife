@@ -1,11 +1,13 @@
 import { get, writable } from "svelte/store";
 import { defaultBeefwife } from "./defaultBeefwife.js";
 
-/* One slot, holding the document under edit. The lab keeps no history; this
-   is here so a refresh or a closed tab costs nothing. */
+/* One slot, holding the document under edit, so a refresh or a closed tab
+   costs nothing. Undo history lives in memory only. */
 const STORAGE_KEY = "beefwife-lab:document";
-/* Long enough that a slider drag writes once on release, not once a pixel. */
+/* Long enough that a slider drag writes once on release, not once a pixel.
+   The same gap closes one undo step, so a drag undoes in one press. */
 const SAVE_DELAY = 400;
+const HISTORY_LIMIT = 100;
 
 /* Fields the panels read before the runtime ever sees the document. A slot
    missing one crashes every later load rather than the edit that broke it,
@@ -61,8 +63,55 @@ export const dirty = writable(false);
    has to hand back what was loaded rather than what it has become. */
 let lastLoaded = structuredClone(get(descriptor));
 let replacing = false;
+let restoring = false;
 let started = false;
 let saveTimer = 0;
+
+/* Undo history, as JSON text: `settled` is the document after the last
+   closed step, and `past` and `future` hold the steps either side of it. */
+const past = [];
+const future = [];
+let settled = JSON.stringify(get(descriptor));
+let settleTimer = 0;
+
+/** Whether Undo and Redo have a step to take. */
+export const canUndo = writable(false);
+export const canRedo = writable(false);
+
+/* Closes the step in progress, if the document changed since the last one. */
+function settle() {
+  clearTimeout(settleTimer);
+  const current = JSON.stringify(get(descriptor));
+  if (current !== settled) {
+    past.push(settled);
+    if (past.length > HISTORY_LIMIT) past.shift();
+    future.length = 0;
+    settled = current;
+  }
+  canUndo.set(past.length > 0);
+  canRedo.set(future.length > 0);
+}
+
+function travel(from, to) {
+  settle();
+  if (!from.length) return;
+  to.push(settled);
+  settled = from.pop();
+  restoring = true;
+  try {
+    descriptor.set(JSON.parse(settled));
+  } finally {
+    restoring = false;
+  }
+  dirty.set(settled !== JSON.stringify(lastLoaded));
+  canUndo.set(past.length > 0);
+  canRedo.set(future.length > 0);
+}
+
+/** Step the document back to before the last burst of edits. */
+export const undo = () => travel(past, future);
+/** Take back the last undo. */
+export const redo = () => travel(future, past);
 
 function persist(value) {
   try {
@@ -83,6 +132,11 @@ descriptor.subscribe((value) => {
     return;
   }
   if (!replacing) dirty.set(true);
+  if (!restoring) {
+    canUndo.set(true);
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(settle, SAVE_DELAY);
+  }
   saveState.set("saving");
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => persist(value), SAVE_DELAY);
@@ -94,6 +148,7 @@ descriptor.subscribe((value) => {
  * knows when there is work a replacement would drop.
  */
 export function replaceDocument(value) {
+  settle();
   lastLoaded = structuredClone(value);
   replacing = true;
   try {
@@ -102,6 +157,8 @@ export function replaceDocument(value) {
     replacing = false;
   }
   dirty.set(false);
+  // A replacement is one undo step of its own, never merged with an edit.
+  settle();
 }
 
 /** Hand back the document as the last preset, file, or refresh left it. */

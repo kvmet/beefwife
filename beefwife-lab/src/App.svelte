@@ -2,7 +2,14 @@
   import Inspector from "./lib/Inspector.svelte";
   import Stage from "./lib/Stage.svelte";
   import Tooltip from "./lib/Tooltip.svelte";
-  import { saveError, saveState } from "./lib/descriptor.js";
+  import {
+    canRedo,
+    canUndo,
+    redo,
+    saveError,
+    saveState,
+    undo,
+  } from "./lib/descriptor.js";
   import packageInfo from "../package.json";
 
   const SAVE_LABELS = { saving: "Saving", saved: "Saved", failed: "Not saved" };
@@ -45,6 +52,23 @@
     }
   }
 
+  /* Text fields keep ⌘Z for their own typing. */
+  const TYPED_INPUTS = ["text", "number", "search", "url", "email", "password"];
+  const typing = (target) =>
+    target.isContentEditable ||
+    target.tagName === "TEXTAREA" ||
+    (target.tagName === "INPUT" && TYPED_INPUTS.includes(target.type));
+
+  function historyKeys(event) {
+    if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
+    const key = event.key.toLowerCase();
+    if (key !== "z" && key !== "y") return;
+    if (typing(event.target)) return;
+    event.preventDefault();
+    if (key === "y" || event.shiftKey) redo();
+    else undo();
+  }
+
   function resizeSidebarFromKeyboard(event) {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
     event.preventDefault();
@@ -53,6 +77,8 @@
     );
   }
 </script>
+
+<svelte:window onkeydown={historyKeys} />
 
 <svelte:head>
   <meta name="description" content="The Beefwife chain editor." />
@@ -80,7 +106,12 @@
         </span>
       </Tooltip>
       <Tooltip label="Undo" keys="⌘Z">
-        <button class="quiet" aria-label="Undo">
+        <button
+          class="quiet"
+          aria-label="Undo"
+          disabled={!$canUndo}
+          onclick={undo}
+        >
           <svg viewBox="0 0 16 16" aria-hidden="true">
             <path
               d="M6.5 4.5 3 8l3.5 3.5M3 8h7a3 3 0 0 1 0 6H7"
@@ -92,7 +123,12 @@
         </button>
       </Tooltip>
       <Tooltip label="Redo" keys="⇧⌘Z">
-        <button class="quiet" aria-label="Redo">
+        <button
+          class="quiet"
+          aria-label="Redo"
+          disabled={!$canRedo}
+          onclick={redo}
+        >
           <svg viewBox="0 0 16 16" aria-hidden="true">
             <path
               d="M9.5 4.5 13 8l-3.5 3.5M13 8H6a3 3 0 0 0 0 6h3"
