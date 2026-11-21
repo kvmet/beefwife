@@ -117,9 +117,12 @@ assert.equal(
 checks += 6;
 assert.deepEqual(Descriptor.scale(source, 1), canonical);
 for (const factor of [0, -1, NaN, Infinity, "2"])
-  assert.throws(() => Descriptor.scale(source, factor), /scale factor/);
-assert.throws(() => Descriptor.scale(source, 100), /between/);
-assert.throws(() => Descriptor.scale(source, 0.0001), /between/);
+  assert.throws(
+    () => Descriptor.scale(source, factor),
+    /scale: factor must be/,
+  );
+assert.throws(() => Descriptor.scale(source, 100), /must be from/);
+assert.throws(() => Descriptor.scale(source, 0.0001), /must be from/);
 checks += 24;
 
 assert.deepEqual(Descriptor.bounds("legs.pairs"), {
@@ -163,10 +166,14 @@ for (const [path, key] of [
   first.test = () => true;
   checks += 2;
 }
-rejected("neutered name pattern", { ...source, name: "Not A Slug" }, /allowed/);
+rejected(
+  "neutered name pattern",
+  { ...source, name: "Not A Slug" },
+  /must start with a lowercase letter or digit/,
+);
 const badKey = copy(source);
 badKey.definitions.shapes["not an id"] = { path: "M 0 0" };
-rejected("neutered key pattern", badKey, /invalid id/);
+rejected("neutered key pattern", badKey, /id must start with a letter/);
 
 /* Head and trunk have to exist, and a caller driving a slider from `bounds`
    must be told so rather than finding out from `read`. */
@@ -176,7 +183,7 @@ assert.equal(Descriptor.bounds("chain.sections.tail.chunks").min, 0);
 for (const section of ["head", "trunk"]) {
   const empty = copy(source);
   empty.chain.sections[section].chunks = 0;
-  rejected(`empty ${section}`, empty, /must be between 1 and 256/);
+  rejected(`empty ${section}`, empty, /must be from 1 to 256/);
 }
 const noTail = copy(source);
 noTail.chain.sections.tail.chunks = 0;
@@ -198,7 +205,7 @@ blankFill.definitions.paints.shell.fill = " ";
 rejected("blank fill", blankFill, /must not be blank/);
 checks += 4;
 for (const path of ["legs.nope", "chain.skin.plates.side", "legs..pairs"])
-  assert.throws(() => Descriptor.bounds(path), /not a field/);
+  assert.throws(() => Descriptor.bounds(path), /is not a descriptor field/);
 assert.throws(() => Descriptor.bounds(""), /non-empty string/);
 assert.throws(() => Descriptor.bounds(null), /non-empty string/);
 checks += 11;
@@ -293,7 +300,7 @@ for (const path of everyNumber) {
     }
     const beyond = copy(source);
     setAt(beyond, segments, outside);
-    rejected(`${path} past ${outside}`, beyond, /between/);
+    rejected(`${path} past ${outside}`, beyond, /must be from/);
     swept++;
   }
 }
@@ -319,7 +326,7 @@ for (const channel of ["bend", "thrust", "gather", "contact"])
     // At harmonic 1 the field's own bound is the cap, and it rejects first.
     const reason =
       harmonic === 1
-        ? /gait\.cyclesPerSecond: must be between 0 and 15/
+        ? /gait\.cyclesPerSecond: must be from 0 to 15/
         : new RegExp(`gait\\.${channel}\\.harmonic: .*at most 15`);
     rejected(`${channel} x${harmonic} past the rate cap`, pastCap, reason);
   }

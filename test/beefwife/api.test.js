@@ -148,43 +148,43 @@ checks += 3;
 [
   [
     () => new Beefwife(example, { unknown: true }),
-    /options\.unknown is unknown/,
+    /options\.unknown: is not a known option/,
   ],
   [
     () => new Beefwife(example, { position: { x: 0, y: 0, z: 0 } }),
-    /options\.position\.z is unknown/,
+    /options\.position\.z: is not a known field/,
   ],
   [
     () => new Beefwife(example, { direction: { x: 0, y: 0 } }),
-    /options\.direction must be nonzero/,
+    /options\.direction: x and y must not both be 0/,
   ],
   [
     () => new Beefwife(example, { position: { x: Number.MAX_VALUE, y: 0 } }),
-    /options\.position coordinates must be from/,
+    /options\.position: x and y must be from/,
   ],
   [
     () => new Beefwife(example, { phase: Infinity }),
-    /options\.phase must be a finite number/,
+    /options\.phase: must be a finite number/,
   ],
   [
     () => new Beefwife(example, { random: 1 }),
-    /options\.random must be a function/,
+    /options\.random: must be a function/,
   ],
   [
     () => new Beefwife(example, { render: { unknown: true } }),
-    /options\.render\.unknown is unknown/,
+    /options\.render\.unknown: is not a known option/,
   ],
   [
     () => new Beefwife(example, { render: { roundVertices: 1 } }),
-    /options\.render\.roundVertices must be a boolean/,
+    /options\.render\.roundVertices: must be true or false/,
   ],
   [
     () => new Beefwife(example, { render: { pixelResolution: 0 } }),
-    /options\.render\.pixelResolution must be positive/,
+    /options\.render\.pixelResolution: must be from/,
   ],
   [
     () => new Beefwife(example, { render: { pixelResolution: Infinity } }),
-    /options\.render\.pixelResolution must be a finite number/,
+    /options\.render\.pixelResolution: must be a finite number/,
   ],
   [
     () =>
@@ -193,7 +193,7 @@ checks += 3;
           kneeProjection: { centerX: 0, centerY: 0, perspective: -1 },
         },
       }),
-    /options\.render\.kneeProjection\.perspective must be nonnegative/,
+    /options\.render\.kneeProjection\.perspective: must be from 0 to/,
   ],
   [
     () =>
@@ -207,37 +207,37 @@ checks += 3;
           },
         },
       }),
-    /options\.render\.kneeProjection\.extra is unknown/,
+    /options\.render\.kneeProjection\.extra: is not a known option/,
   ],
-  [() => beefwife.step(-1), /dt must be nonnegative/],
-  [() => beefwife.step(NaN), /dt must be a finite number/],
+  [() => beefwife.step(-1), /dt: must be 0 or more/],
+  [() => beefwife.step(NaN), /dt: must be a finite number/],
   [
     () => beefwife.step(0.01, { throttle: 1.1 }),
-    /controls\.throttle must be from 0 to 1/,
+    /controls\.throttle: must be from 0 to 1/,
   ],
   [
     () => beefwife.step(0.01, { direction: { x: 0, y: 0 } }),
-    /controls\.direction must be nonzero/,
+    /controls\.direction: x and y must not both be 0/,
   ],
-  [() => beefwife.step(0.01, { extra: true }), /controls\.extra is unknown/],
+  [() => beefwife.step(0.01, { extra: true }), /controls\.extra: is not a known option/],
   [
     () => beefwife.translate({ x: 1, y: Infinity }),
-    /offset\.y must be a finite number/,
+    /offset\.y: must be a finite number/,
   ],
-  [() => beefwife.translate(), /offset is required/],
+  [() => beefwife.translate(), /offset: is required/],
   /* null is what an emptied number input hands back, and `??` would take it
      as an omitted field rather than a bad one. */
   [
     () => beefwife.step(0.01, { throttle: null }),
-    /controls\.throttle must be a finite number/,
+    /controls\.throttle: must be a finite number/,
   ],
   [
     () => new Beefwife(example, { phase: null }),
-    /options\.phase must be a finite number/,
+    /options\.phase: must be a finite number/,
   ],
   [
     () => beefwife.reset({ phase: null }),
-    /options\.phase must be a finite number/,
+    /options\.phase: must be a finite number/,
   ],
   /* Finite but absurd render policy turns finite vertices into infinities, so
      these are rejected on the same terms as an out-of-world position. */
@@ -246,11 +246,11 @@ checks += 3;
       new Beefwife(example, {
         render: { pixelResolution: Number.MAX_VALUE },
       }),
-    /options\.render\.pixelResolution must be from/,
+    /options\.render\.pixelResolution: must be from/,
   ],
   [
     () => new Beefwife(example, { render: { pixelResolution: 5e-324 } }),
-    /options\.render\.pixelResolution must be from/,
+    /options\.render\.pixelResolution: must be from/,
   ],
   [
     () =>
@@ -259,7 +259,7 @@ checks += 3;
           kneeProjection: { centerX: 0, centerY: 0, perspective: 1e300 },
         },
       }),
-    /options\.render\.kneeProjection\.perspective must be at most/,
+    /options\.render\.kneeProjection\.perspective: must be from 0 to/,
   ],
   [
     () =>
@@ -268,7 +268,7 @@ checks += 3;
           kneeProjection: { centerX: 1e300, centerY: 0, perspective: 0.002 },
         },
       }),
-    /options\.render\.kneeProjection\.center coordinates must be from/,
+    /options\.render\.kneeProjection\.center: x and y must be from/,
   ],
   [
     () =>
@@ -282,7 +282,7 @@ checks += 3;
           },
         },
       }),
-    /options\.render\.kneeProjection\.maxOffset must be at most/,
+    /options\.render\.kneeProjection\.maxOffset: must be from 0 to/,
   ],
 ].forEach(([act, reason]) => {
   assert.throws(act, reason);
@@ -321,7 +321,7 @@ const nearBoundary = new Beefwife(example, {
 const beforeRejectedTranslation = copy(nearBoundary.getPose());
 assert.throws(
   () => nearBoundary.translate({ x: 2, y: 0 }),
-  /outside the world/,
+  /px from the origin on an axis/,
 );
 assert.ok(samePose(nearBoundary.getPose(), beforeRejectedTranslation));
 assert.throws(
@@ -330,7 +330,7 @@ assert.throws(
       position: { x: Beefwife.MAX_WORLD_COORDINATE, y: 0 },
       direction: { x: -1, y: 0 },
     }),
-  /outside the world/,
+  /px from the origin on an axis/,
 );
 assert.ok(finitePose(nearBoundary.getPose()));
 checks += 4;

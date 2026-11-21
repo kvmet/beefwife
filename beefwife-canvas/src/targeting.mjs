@@ -2,26 +2,26 @@
 
 const pointOf = (value, path = "target") => {
   if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new TypeError(`${path} must be an object`);
+    throw new TypeError(`${path}: must be an object`);
   const prototype = Object.getPrototypeOf(value);
   if (prototype !== Object.prototype && prototype !== null)
-    throw new TypeError(`${path} must be a plain object`);
+    throw new TypeError(`${path}: must be a plain object`);
   for (const key of Object.keys(value)) {
     if (key !== "x" && key !== "y")
-      throw new TypeError(`${path}.${key} is unknown`);
+      throw new TypeError(`${path}.${key}: is not a known field`);
   }
   if (!Number.isFinite(value.x) || !Number.isFinite(value.y))
-    throw new TypeError(`${path} must have finite x and y coordinates`);
+    throw new TypeError(`${path}: x and y must be finite numbers`);
   return { x: value.x, y: value.y };
 };
 const targetModeOf = (value) => {
   if (!["wander", "manual"].includes(value))
-    throw new RangeError("targetMode must be wander or manual");
+    throw new RangeError('targetMode: must be "wander" or "manual"');
   return value;
 };
 const wanderDelayOf = (value) => {
   if (!Number.isFinite(value) || value < 0)
-    throw new RangeError("wanderDelay must be a nonnegative number");
+    throw new RangeError(`wanderDelay: must be 0 or more (got ${value})`);
   return value;
 };
 

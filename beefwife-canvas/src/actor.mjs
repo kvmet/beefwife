@@ -21,7 +21,7 @@ class BeefwifeCanvasActor {
       value > BeefwifeCanvasActor.MAX_TIME_SCALE
     )
       throw new RangeError(
-        `timeScale must be from 0 to ${BeefwifeCanvasActor.MAX_TIME_SCALE}`,
+        `timeScale: must be from 0 to ${BeefwifeCanvasActor.MAX_TIME_SCALE} (got ${value})`,
       );
     return value;
   }
@@ -167,7 +167,7 @@ class BeefwifeCanvasActor {
 
   update(dt, timeScale) {
     if (!Number.isFinite(dt) || dt < 0)
-      throw new RangeError("dt must be nonnegative seconds");
+      throw new RangeError(`dt: must be 0 or more seconds (got ${dt})`);
     BeefwifeCanvasActor.timeScaleOf(timeScale);
     const scaledDt = dt * timeScale;
     const pose = this.beefwife.getPose();

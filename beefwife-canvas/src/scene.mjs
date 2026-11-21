@@ -34,12 +34,15 @@ class BeefwifeCanvasScene {
   }
 
   async initialize() {
-    if (!available) throw new Error("PIXI must load first");
+    if (!available)
+      throw new Error(
+        "Pixi is not loaded; load pixi.js before beefwife-canvas",
+      );
     this._syncPixelResolution();
     if (this.reusableApplication) {
       this.application = this.reusableApplication;
       if (this.application.canvas !== this.canvas)
-        throw new Error("reusable Pixi application belongs to another canvas");
+        throw new Error("the Pixi application belongs to a different canvas");
       this._buildStage();
       return this;
     }
@@ -88,7 +91,7 @@ class BeefwifeCanvasScene {
   }
 
   attach() {
-    if (!this.application) throw new Error("Pixi renderer is not ready");
+    if (!this.application) throw new Error("the Pixi renderer is not ready");
     if (this.ownsCanvas) document.body.appendChild(this.canvas);
   }
 

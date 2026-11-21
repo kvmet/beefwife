@@ -47,7 +47,9 @@ const pixelResolutionOf = (options) => {
   const value = options?.pixelResolution;
   if (value === undefined) return 1;
   if (!Number.isFinite(value))
-    throw new RangeError("pixelResolution must be finite and positive");
+    throw new RangeError(
+      "options.render.pixelResolution: must be a finite number",
+    );
   return Math.max(MIN_PIXEL_RESOLUTION, Math.min(MAX_PIXEL_RESOLUTION, value));
 };
 
@@ -627,7 +629,9 @@ class Graphics {
      sheet they came from. Only the geometry below answers to `drawable`. */
   sync(state, renderer = null, drawable = true) {
     if (state.model !== this.model)
-      throw new Error("render state model does not match Beefwife graphics");
+      throw new Error(
+        "Graphics.sync: state.model must be the model these graphics were built for",
+      );
     /* Held for the bake, which builds its particles between frames and has to
        stand them somewhere. An edit arriving before the next sync leaves the
        cast at the origin, which a dragged slider does every frame. */

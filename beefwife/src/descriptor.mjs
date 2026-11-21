@@ -11,14 +11,36 @@ import {
   LIMITS,
   SECTIONS,
   ID_PATTERN,
+  ID_RULE,
   NAME_PATTERN,
   schema,
 } from "./schema.mjs";
 import { MAX_CHANNEL_RATE } from "./limits.mjs";
 
-const fail = (path, message) => {
-  throw new Error(`${path}: ${message}`);
+/* `path` and `rule` let `scale` restate a range error in terms of its factor. */
+const fail = (path, rule) => {
+  throw Object.assign(new Error(`${path}: ${rule}`), { path, rule });
 };
+
+/* Bounds print at six digits, so -Math.PI reads -3.14159. A given value
+   prints whole: rounded, one just past a bound would read as equal to it. */
+const bound = (number) => String(Number(number.toPrecision(6)));
+const shown = (value) => {
+  if (typeof value === "number") return String(value);
+  if (typeof value === "string") return JSON.stringify(value);
+  return typeof value;
+};
+
+const oneOf = (values) => {
+  const quoted = values.map((value) => JSON.stringify(value));
+  if (quoted.length < 3) return quoted.join(" or ");
+  return `${quoted.slice(0, -1).join(", ")}, or ${quoted.at(-1)}`;
+};
+
+/* Twelve digits drop float noise such as 0.30000000000000004 and keep a
+   product just past 1 from reading as 1. */
+const product = (a, b) =>
+  `${shown(a)} × ${shown(b)} = ${Number((a * b).toPrecision(12))}`;
 
 const plainObject = (value, path) => {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -44,21 +66,25 @@ const readNode = (node, value, path, ancestors) => {
   if (node.kind === "nullable")
     return value === null ? null : readNode(node.item, value, path, ancestors);
   if (node.kind === "literal") {
-    if (value !== node.value) fail(path, `must equal ${node.value}`);
+    if (value !== node.value)
+      fail(path, `must be ${node.value} (got ${shown(value)})`);
     return value;
   }
   if (node.kind === "choice") {
     if (!node.values.includes(value))
-      fail(path, `must be one of ${node.values.join(", ")}`);
+      fail(path, `must be ${oneOf(node.values)} (got ${shown(value)})`);
     return value;
   }
   if (node.kind === "number") {
     if (typeof value !== "number" || !Number.isFinite(value))
       fail(path, "must be a finite number");
     if (node.integer && !Number.isInteger(value))
-      fail(path, "must be an integer");
+      fail(path, `must be an integer (got ${shown(value)})`);
     if (value < node.min || value > node.max)
-      fail(path, `must be between ${node.min} and ${node.max}`);
+      fail(
+        path,
+        `must be from ${bound(node.min)} to ${bound(node.max)} (got ${shown(value)})`,
+      );
     return Object.is(value, -0) ? 0 : value;
   }
   if (node.kind === "string") {
@@ -66,10 +92,10 @@ const readNode = (node, value, path, ancestors) => {
     if (value.length < node.minLength || value.length > node.maxLength)
       fail(
         path,
-        `must contain ${node.minLength} to ${node.maxLength} characters`,
+        `must contain ${node.minLength} to ${node.maxLength} characters (got ${value.length})`,
       );
     if (node.pattern && !node.pattern.test(value))
-      fail(path, "contains characters that are not allowed");
+      fail(path, `${node.rule} (got ${shown(value)})`);
     return value;
   }
 
@@ -83,7 +109,10 @@ const readNode = (node, value, path, ancestors) => {
   try {
     if (node.kind === "array") {
       if (value.length > node.maxLength)
-        fail(path, `must contain at most ${node.maxLength} entries`);
+        fail(
+          path,
+          `must contain at most ${node.maxLength} entries (got ${value.length})`,
+        );
       const keys = Reflect.ownKeys(value).filter((key) => key !== "length");
       if (keys.some((key) => typeof key !== "string"))
         fail(path, "must not contain symbol keys");
@@ -93,9 +122,10 @@ const readNode = (node, value, path, ancestors) => {
           fail(`${path}.${String(key)}`, "must be an enumerable data property");
       });
       for (let i = 0; i < value.length; i++)
-        if (!Object.hasOwn(value, i)) fail(`${path}[${i}]`, "is missing");
+        if (!Object.hasOwn(value, i))
+          fail(`${path}[${i}]`, "is an empty slot; arrays must not have holes");
       if (keys.some((key) => !/^(0|[1-9][0-9]*)$/.test(key)))
-        fail(path, "must not contain named properties");
+        fail(path, "must contain only numbered items");
       return value.map((item, i) =>
         readNode(node.item, item, `${path}[${i}]`, ancestors),
       );
@@ -105,11 +135,11 @@ const readNode = (node, value, path, ancestors) => {
       if (keys.length < node.minLength || keys.length > node.maxLength)
         fail(
           path,
-          `must contain ${node.minLength} to ${node.maxLength} definitions`,
+          `must contain ${node.minLength} to ${node.maxLength} definitions (got ${keys.length})`,
         );
       const out = {};
       keys.sort().forEach((key) => {
-        if (!ID_PATTERN.test(key)) fail(`${path}.${key}`, "has an invalid id");
+        if (!ID_PATTERN.test(key)) fail(`${path}.${key}`, `id ${ID_RULE}`);
         out[key] = readNode(node.item, value[key], `${path}.${key}`, ancestors);
       });
       return out;
@@ -118,7 +148,7 @@ const readNode = (node, value, path, ancestors) => {
     const expected = Object.keys(node.fields);
     keys.forEach((key) => {
       if (!Object.hasOwn(node.fields, key))
-        fail(`${path}.${key}`, "is unknown");
+        fail(`${path}.${key}`, "is not a known field");
     });
     const out = {};
     expected.forEach((key) => {
@@ -136,8 +166,9 @@ const readNode = (node, value, path, ancestors) => {
   }
 };
 
-const reference = (table, id, path) => {
-  if (!Object.hasOwn(table, id)) fail(path, `references missing "${id}"`);
+const reference = (definitions, table, id, path) => {
+  if (!Object.hasOwn(definitions[table], id))
+    fail(path, `${shown(id)} is not defined in $.definitions.${table}`);
 };
 
 const resolvedChunks = (descriptor, placement, path) => {
@@ -151,15 +182,27 @@ const resolvedChunks = (descriptor, placement, path) => {
   const length = section
     ? sections[section].chunks
     : SECTIONS.reduce((sum, name) => sum + sections[name].chunks, 0);
-  if (!length) fail(`${path}.at`, "cannot address an empty scope");
+  if (!length) fail(`${path}.at.section`, `${shown(section)} has no chunks`);
+  const area = section ? `the ${section}` : "the chain";
   const offset = placement.at.offset;
-  if (offset >= length) fail(`${path}.at.offset`, "falls outside its scope");
+  if (offset >= length)
+    fail(
+      `${path}.at.offset`,
+      `must be at most ${length - 1}, the last chunk of ${area} (got ${offset})`,
+    );
   const direction = placement.at.from === "head" ? 1 : -1;
   const localStart = direction > 0 ? offset : length - 1 - offset;
-  const available =
-    Math.floor((length - 1 - offset) / placement.repeat.step) + 1;
+  const step = placement.repeat.step;
+  const available = Math.floor((length - 1 - offset) / step) + 1;
   const count = placement.repeat.count ?? available;
-  if (count > available) fail(`${path}.repeat.count`, "runs outside its scope");
+  if (count > available) {
+    const copies = available === 1 ? "copy" : "copies";
+    const spacing = step === 1 ? "in a row" : `${step} chunks apart`;
+    fail(
+      `${path}.repeat.count`,
+      `must be at most ${available} (got ${count}); from offset ${offset}, ${area} fits ${available} ${copies} ${spacing}`,
+    );
+  }
   const base = section ? offsets[section] : 0;
   return Array.from(
     { length: count },
@@ -172,80 +215,95 @@ const validate = (descriptor) => {
   const sections = chain.sections;
   const total = SECTIONS.reduce((sum, name) => sum + sections[name].chunks, 0);
   if (total < 2 || total > LIMITS.chunks)
-    fail("$.chain.sections", `must contain 2 to ${LIMITS.chunks} chunks`);
+    fail(
+      "$.chain.sections",
+      `chunk counts must total 2 to ${LIMITS.chunks} (got ${total})`,
+    );
   SECTIONS.forEach((name) =>
     reference(
-      definitions.materials,
+      definitions,
+      "materials",
       sections[name].material,
       `$.chain.sections.${name}.material`,
     ),
   );
   SECTIONS.forEach((name) => {
     const scale = sections[name].motionScale;
-    if (descriptor.gait.gather.amplitude * scale.gather >= 1)
+    const { gather, contact } = descriptor.gait;
+    if (gather.amplitude * scale.gather >= 1)
       fail(
         `$.chain.sections.${name}.motionScale.gather`,
-        "makes the gathered link length zero or negative",
+        `gait.gather.amplitude × motionScale.gather must be less than 1 (got ${product(gather.amplitude, scale.gather)})`,
       );
-    if (descriptor.gait.contact.amplitude * scale.contact > 1)
+    if (contact.amplitude * scale.contact > 1)
       fail(
         `$.chain.sections.${name}.motionScale.contact`,
-        "makes ground contact negative",
+        `gait.contact.amplitude × motionScale.contact must be at most 1 (got ${product(contact.amplitude, scale.contact)})`,
       );
   });
   const references = [
-    [definitions.paints, chain.skin.ribbon.paint, "$.chain.skin.ribbon.paint"],
-    [definitions.paints, legs.skin.limbPaint, "$.legs.skin.limbPaint"],
-    [definitions.shapes, legs.skin.foot.shape, "$.legs.skin.foot.shape"],
-    [definitions.paints, legs.skin.foot.paint, "$.legs.skin.foot.paint"],
+    ["paints", chain.skin.ribbon.paint, "$.chain.skin.ribbon.paint"],
+    ["paints", legs.skin.limbPaint, "$.legs.skin.limbPaint"],
+    ["shapes", legs.skin.foot.shape, "$.legs.skin.foot.shape"],
+    ["paints", legs.skin.foot.paint, "$.legs.skin.foot.paint"],
   ];
-  references.forEach((args) => reference(...args));
+  references.forEach((args) => reference(definitions, ...args));
 
   const placementIds = new Set();
+  const uniqueId = (entry, path) => {
+    if (placementIds.has(entry.id))
+      fail(
+        `${path}.id`,
+        `${shown(entry.id)} is already used by another plate or ornament`,
+      );
+    placementIds.add(entry.id);
+  };
   const occupied = new Map();
   chain.skin.plates.forEach((entry, i) => {
     const path = `$.chain.skin.plates[${i}]`;
-    if (placementIds.has(entry.id)) fail(`${path}.id`, "must be unique");
-    placementIds.add(entry.id);
-    reference(definitions.shapes, entry.shape, `${path}.shape`);
-    reference(definitions.paints, entry.paint, `${path}.paint`);
+    uniqueId(entry, path);
+    reference(definitions, "shapes", entry.shape, `${path}.shape`);
+    reference(definitions, "paints", entry.paint, `${path}.paint`);
     resolvedChunks(descriptor, entry, path).forEach((chunk) => {
       if (occupied.has(chunk))
         fail(
           `${path}.at`,
-          `overlaps plate "${occupied.get(chunk)}" at chunk ${chunk}`,
+          `must not overlap plate ${shown(occupied.get(chunk))}; both cover chunk ${chunk}`,
         );
       occupied.set(chunk, entry.id);
     });
   });
 
-  let ornamentInstances = 0;
+  let ornamentCount = 0;
   chain.skin.ornaments.forEach((entry, i) => {
     const path = `$.chain.skin.ornaments[${i}]`;
-    if (placementIds.has(entry.id)) fail(`${path}.id`, "must be unique");
-    placementIds.add(entry.id);
-    reference(definitions.shapes, entry.shape, `${path}.shape`);
-    reference(definitions.paints, entry.paint, `${path}.paint`);
-    ornamentInstances +=
+    uniqueId(entry, path);
+    reference(definitions, "shapes", entry.shape, `${path}.shape`);
+    reference(definitions, "paints", entry.paint, `${path}.paint`);
+    ornamentCount +=
       resolvedChunks(descriptor, entry, path).length *
       (entry.side === "both" ? 2 : 1);
-    if (ornamentInstances > LIMITS.instances)
-      fail(
-        "$.chain.skin.ornaments",
-        `must expand to at most ${LIMITS.instances} instances`,
-      );
   });
+  if (ornamentCount > LIMITS.instances)
+    fail(
+      "$.chain.skin.ornaments",
+      `must place at most ${LIMITS.instances} ornaments, counting repeats and both sides (got ${ornamentCount})`,
+    );
 
   ["bend", "thrust", "gather", "contact"].forEach((channel) => {
-    if (gait.cyclesPerSecond * gait[channel].harmonic > MAX_CHANNEL_RATE)
+    const harmonic = gait[channel].harmonic;
+    if (gait.cyclesPerSecond * harmonic > MAX_CHANNEL_RATE)
       fail(
         `$.gait.${channel}.harmonic`,
-        `times cyclesPerSecond must be at most ${MAX_CHANNEL_RATE}`,
+        `harmonic × gait.cyclesPerSecond must be at most ${bound(MAX_CHANNEL_RATE)} (got ${product(harmonic, gait.cyclesPerSecond)})`,
       );
   });
 
   if (legs.pairs && !sections[legs.section].chunks)
-    fail("$.legs.section", "cannot attach legs to an empty section");
+    fail(
+      "$.legs.section",
+      `${shown(legs.section)} has no chunks to carry legs`,
+    );
 
   Object.entries(definitions.paints).forEach(([name, entry]) => {
     if (entry.fill !== null && !entry.fill.trim())
@@ -255,7 +313,7 @@ const validate = (descriptor) => {
     if (entry.fill === null && (entry.stroke === null || !entry.stroke.width))
       fail(
         `$.definitions.paints.${name}`,
-        "must draw a fill or visible stroke",
+        "needs a fill, or a stroke wider than 0",
       );
   });
   let pathTotal = 0;
@@ -267,7 +325,7 @@ const validate = (descriptor) => {
   if (pathTotal > LIMITS.pathTotal)
     fail(
       "$.definitions.shapes",
-      `paths must total at most ${LIMITS.pathTotal} characters`,
+      `paths must total at most ${LIMITS.pathTotal} characters (got ${pathTotal})`,
     );
   return descriptor;
 };
@@ -331,9 +389,9 @@ const shapeOf = (node) => {
 
 const bounds = (path) => {
   if (typeof path !== "string" || !path)
-    fail("$", "bounds path must be a non-empty string");
+    fail("bounds", "path must be a non-empty string");
   const found = resolve(path.replace(/\[\]/g, ".[]").split("."));
-  if (!found) fail(`$.${path}`, "is not a field in this schema");
+  if (!found) fail("bounds", `${shown(path)} is not a descriptor field`);
   return Object.freeze({ ...shapeOf(found.node), nullable: found.nullable });
 };
 
@@ -365,7 +423,7 @@ const scaleNode = (node, value, factor) => {
    unchanged. Re-reading rejects any product outside its field's bounds. */
 const scale = (descriptor, factor) => {
   if (typeof factor !== "number" || !Number.isFinite(factor) || factor <= 0)
-    fail("$", "scale factor must be a finite number greater than 0");
+    fail("scale", "factor must be a finite number greater than 0");
   const source = read(descriptor);
   const scaled = scaleNode(schema, source, factor);
   const worldPaints = new Set([
@@ -393,23 +451,28 @@ const scale = (descriptor, factor) => {
     }
     scaled.definitions.paints[shapeId] = paint;
   }
-  return read(scaled);
+  try {
+    return read(scaled);
+  } catch (error) {
+    if (!error.path) throw error;
+    fail("scale", `with factor ${shown(factor)}, ${error.path} ${error.rule}`);
+  }
 };
 
 const parse = (text) => {
-  if (typeof text !== "string") fail("$", "JSON input must be a string");
+  if (typeof text !== "string") fail("parse", "text must be a string");
   let value;
   try {
     value = JSON.parse(text);
   } catch (error) {
-    fail("$", `invalid JSON: ${error.message}`);
+    fail("parse", `text is not valid JSON: ${error.message}`);
   }
   return read(value);
 };
 
 const stringify = (value, space = 2) => {
   if (!Number.isInteger(space) || space < 0 || space > 10)
-    fail("$", "indentation must be an integer from 0 to 10");
+    fail("stringify", "space must be an integer from 0 to 10");
   return JSON.stringify(read(value), null, space);
 };
 

@@ -155,7 +155,7 @@ for (const key of ["jointBend", "jointLean", "jointLeanCenter"]) {
   for (const value of [-1.01, 1.01]) {
     const joint = copy(source);
     joint.legs[key] = value;
-    rejected(`${key} ${value}`, joint, /between -1 and 1/);
+    rejected(`${key} ${value}`, joint, /from -1 to 1/);
   }
 }
 const maximumBreathing = copy(source);
@@ -164,7 +164,7 @@ accepted("maximum breathing", maximumBreathing);
 for (const breathing of [-0.01, 1.01]) {
   const outsideBreathing = copy(source);
   outsideBreathing.chain.breathing = breathing;
-  rejected(`breathing ${breathing}`, outsideBreathing, /between 0 and 1/);
+  rejected(`breathing ${breathing}`, outsideBreathing, /from 0 to 1/);
 }
 
 propertyPaths(source).forEach((tokens) => {
@@ -207,7 +207,11 @@ containerPaths(source).forEach((tokens) => {
 ["My Cool Beefwife", "Undulating", "two_words", " trailing"].forEach((name) => {
   const candidate = copy(source);
   candidate.name = name;
-  rejected(`noncanonical name ${JSON.stringify(name)}`, candidate, /allowed/);
+  rejected(
+    `noncanonical name ${JSON.stringify(name)}`,
+    candidate,
+    /must start with a lowercase letter or digit/,
+  );
 });
 
 const overlap = copy(source);
@@ -232,19 +236,23 @@ const plateOverlap = copy(source);
 const secondPlate = copy(plateOverlap.chain.skin.plates[0]);
 secondPlate.id = "second-head-shell";
 plateOverlap.chain.skin.plates.push(secondPlate);
-rejected("overlapping plates", plateOverlap, /overlaps plate/);
+rejected("overlapping plates", plateOverlap, /must not overlap plate/);
 
 const duplicateOrnament = copy(overlap);
 duplicateOrnament.chain.skin.ornaments[1].id = "eyes";
-rejected("duplicate placement id", duplicateOrnament, /must be unique/);
+rejected(
+  "duplicate placement id",
+  duplicateOrnament,
+  /already used by another plate or ornament/,
+);
 
 const missingShape = copy(source);
 missingShape.chain.skin.ornaments[0].shape = "missing";
-rejected("missing shape reference", missingShape, /references missing/);
+rejected("missing shape reference", missingShape, /is not defined in/);
 
 const missingPaint = copy(source);
 missingPaint.legs.skin.foot.paint = "missing";
-rejected("missing paint reference", missingPaint, /references missing/);
+rejected("missing paint reference", missingPaint, /is not defined in/);
 
 const tailMaterial = copy(source);
 tailMaterial.definitions.materials.tail = copy(
@@ -255,41 +263,61 @@ accepted("linked tail material", tailMaterial);
 
 const missingMaterial = copy(source);
 missingMaterial.chain.sections.tail.material = "missing";
-rejected("missing material reference", missingMaterial, /references missing/);
+rejected("missing material reference", missingMaterial, /is not defined in/);
 
 const unknownSection = copy(source);
 unknownSection.chain.skin.plates[1].at.section = "torso";
-rejected("unknown anchor section", unknownSection, /one of head, trunk, tail/);
+rejected(
+  "unknown anchor section",
+  unknownSection,
+  /must be "head", "trunk", or "tail"/,
+);
 
 const outsideAnchor = copy(source);
 outsideAnchor.chain.skin.ornaments[0].at.offset = 2;
-rejected("anchor outside section", outsideAnchor, /falls outside/);
+rejected(
+  "anchor outside section",
+  outsideAnchor,
+  /must be at most \d+, the last chunk of/,
+);
 
 const outsideRepeat = copy(source);
 outsideRepeat.chain.skin.ornaments[0].repeat.count = 2;
-rejected("repeat outside section", outsideRepeat, /runs outside/);
+rejected("repeat outside section", outsideRepeat, /fits \d+ cop/);
 
 const collapsedGather = copy(source);
 collapsedGather.gait.gather.amplitude = 0.6;
 collapsedGather.chain.sections.tail.motionScale.gather = 2;
-rejected("non-positive gathered link", collapsedGather, /zero or negative/);
+rejected(
+  "non-positive gathered link",
+  collapsedGather,
+  /gather\.amplitude × motionScale\.gather must be less than 1/,
+);
 
 const negativeContact = copy(source);
 negativeContact.gait.contact.amplitude = 0.6;
 negativeContact.chain.sections.tail.motionScale.contact = 2;
-rejected("negative contact", negativeContact, /contact negative/);
+rejected(
+  "negative contact",
+  negativeContact,
+  /contact\.amplitude × motionScale\.contact must be at most 1/,
+);
 
 const emptyHead = copy(source);
 emptyHead.chain.sections.head.chunks = 0;
-rejected("empty head", emptyHead, /must be between 1 and 256/);
+rejected("empty head", emptyHead, /must be from 1 to 256/);
 
 const emptyTrunk = copy(source);
 emptyTrunk.chain.sections.trunk.chunks = 0;
-rejected("empty trunk", emptyTrunk, /must be between 1 and 256/);
+rejected("empty trunk", emptyTrunk, /must be from 1 to 256/);
 
 const tooManyChunks = copy(source);
 tooManyChunks.chain.sections.trunk.chunks = Descriptor.LIMITS.chunks;
-rejected("too many total chunks", tooManyChunks, /2 to 256/);
+rejected(
+  "too many total chunks",
+  tooManyChunks,
+  /chunk counts must total 2 to 256/,
+);
 
 const fractionalPairs = copy(source);
 fractionalPairs.legs.pairs = 0.5;
@@ -301,14 +329,18 @@ rejected("fractional repeat", fractionalRepeat, /integer/);
 
 const invisiblePaint = copy(source);
 invisiblePaint.definitions.paints.eye = { fill: null, stroke: null };
-rejected("invisible paint", invisiblePaint, /visible stroke/);
+rejected("invisible paint", invisiblePaint, /stroke wider than 0/);
 
 const widthlessStroke = copy(source);
 widthlessStroke.definitions.paints.eye = {
   fill: null,
   stroke: { colour: "#123456", width: 0 },
 };
-rejected("stroke-only paint with no width", widthlessStroke, /visible stroke/);
+rejected(
+  "stroke-only paint with no width",
+  widthlessStroke,
+  /stroke wider than 0/,
+);
 
 /* A limb draws whatever its paint draws, and a body may want bare feet, so
    the schema asks nothing of either the paint or the width. */
@@ -349,11 +381,11 @@ rejected("NaN lag", nan, /finite number/);
 
 const sparse = copy(source);
 delete sparse.chain.skin.plates[0];
-rejected("sparse placement array", sparse, /is missing/);
+rejected("sparse placement array", sparse, /empty slot/);
 
 const namedArray = copy(source);
 namedArray.chain.skin.plates.extra = true;
-rejected("named array property", namedArray, /named properties/);
+rejected("named array property", namedArray, /only numbered items/);
 
 const customPrototype = copy(source);
 Object.setPrototypeOf(customPrototype.chain, { inherited: true });
@@ -372,7 +404,7 @@ Object.defineProperty(hostileKey.chain, "__proto__", {
   enumerable: true,
   value: {},
 });
-rejected("prototype-named key", hostileKey, /is unknown/);
+rejected("prototype-named key", hostileKey, /is not a known field/);
 
 const longPath = copy(source);
 longPath.definitions.shapes.eye.path = "M".repeat(Descriptor.LIMITS.path + 1);
@@ -414,7 +446,7 @@ rejected("one excessive ornament", oneExtraOrnament, /at most 512/);
 
 const excessiveScale = copy(source);
 excessiveScale.chain.skin.plates[0].scale = 1001;
-rejected("excessive drawable scale", excessiveScale, /between/);
+rejected("excessive drawable scale", excessiveScale, /must be from/);
 
 /* Lag is radians per pixel, so tight spacing needs a large one: this is the
    example's own 0.47 radians per chunk at a hundredth of its spacing. */
@@ -430,7 +462,7 @@ checks++;
 
 const disconnectedMaterial = copy(source);
 disconnectedMaterial.definitions.materials.body.linkCorrection = 0;
-rejected("disconnected material", disconnectedMaterial, /between/);
+rejected("disconnected material", disconnectedMaterial, /must be from/);
 
 const blankPath = copy(source);
 blankPath.definitions.shapes.eye.path = "   ";
@@ -442,7 +474,11 @@ rejected("blank paint", blankPaint, /must not be blank/);
 
 const paddedName = copy(source);
 paddedName.name = " beefwife ";
-rejected("padded name", paddedName, /allowed/);
+rejected(
+  "padded name",
+  paddedName,
+  /must start with a lowercase letter or digit/,
+);
 
 const accessor = copy(source);
 Object.defineProperty(accessor.chain, "physics", {
@@ -480,14 +516,17 @@ reordered.definitions.shapes = Object.fromEntries(
 assert.equal(Descriptor.stringify(reordered), Descriptor.stringify(source));
 checks++;
 
-assert.throws(() => Descriptor.parse("{"), /invalid JSON/);
+assert.throws(() => Descriptor.parse("{"), /not valid JSON/);
 assert.throws(() => Descriptor.parse({}), /must be a string/);
-assert.throws(() => Descriptor.stringify(source, 11), /indentation/);
+assert.throws(
+  () => Descriptor.stringify(source, 11),
+  /space must be an integer/,
+);
 checks += 3;
 
 const withAppearance = copy(source);
 withAppearance.appearance = { scale: 2.1 };
-rejected("appearance key", withAppearance, /appearance: is unknown/);
+rejected("appearance key", withAppearance, /appearance: is not a known field/);
 
 if (uncanonical.length)
   throw new Error(

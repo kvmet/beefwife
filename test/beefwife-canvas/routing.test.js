@@ -40,11 +40,11 @@ const policyRouter = {
 const directed = new BeefwifeCanvasTargetPolicy(policyRouter, "manual");
 assert.throws(
   () => directed.setTarget({ x: 1, y: 2, z: 3 }),
-  /target\.z is unknown/,
+  /target\.z: is not a known field/,
 );
 assert.throws(
   () => directed.setTarget(Object.assign([], { x: 1, y: 2 })),
-  /target must be an object/,
+  /target: must be an object/,
 );
 directed.setTarget({ x: 12, y: 14 });
 assert.deepEqual(directed.plan({ x: 0, y: 0 }), [{ x: 12, y: 14 }]);

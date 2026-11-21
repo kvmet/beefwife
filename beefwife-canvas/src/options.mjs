@@ -25,7 +25,7 @@ const config = {
 const countOf = (value) => {
   if (!Number.isInteger(value) || value < 0 || value > config.MAX_COUNT)
     throw new RangeError(
-      `count must be an integer from 0 to ${config.MAX_COUNT}`,
+      `count: must be an integer from 0 to ${config.MAX_COUNT} (got ${value})`,
     );
   return value;
 };
@@ -36,28 +36,31 @@ const debugOf = (value, current) => {
     : { routes: false, targets: false, terrain: false };
   if (value === undefined) return result;
   if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new TypeError("debug must be an object");
+    throw new TypeError("debug: must be an object");
   for (const [key, enabled] of Object.entries(value)) {
-    if (!DEBUG_KEYS.has(key)) throw new TypeError(`debug.${key} is unknown`);
+    if (!DEBUG_KEYS.has(key))
+      throw new TypeError(`debug.${key}: is not a known option`);
     if (typeof enabled !== "boolean")
-      throw new TypeError(`debug.${key} must be a boolean`);
+      throw new TypeError(`debug.${key}: must be true or false`);
     result[key] = enabled;
   }
   return result;
 };
 const resolutionScaleOf = (value) => {
   if (!Number.isFinite(value) || value < 0.125 || value > 1)
-    throw new RangeError("resolutionScale must be from 0.125 to 1");
+    throw new RangeError(
+      `resolutionScale: must be from 0.125 to 1 (got ${value})`,
+    );
   return value;
 };
 const imageRenderingOf = (value) => {
   if (!["auto", "pixelated"].includes(value))
-    throw new RangeError("imageRendering must be auto or pixelated");
+    throw new RangeError('imageRendering: must be "auto" or "pixelated"');
   return value;
 };
 const rateOf = (value, name) => {
   if (!Number.isFinite(value) || value < 1 || value > 240)
-    throw new RangeError(`${name} must be from 1 to 240`);
+    throw new RangeError(`${name}: must be from 1 to 240 (got ${value})`);
   return value;
 };
 /* A draw rate of 0 asks to match the physics rate, which is also its ceiling.
@@ -74,11 +77,14 @@ const physicsFpsOf = (value) =>
     : rateOf(value, "physicsFps");
 const chooseName = (cast, weights, random) => {
   const names = Object.keys(cast);
-  if (!names.length) throw new Error("cast must contain at least one beefwife");
+  if (!names.length)
+    throw new Error("cast: must contain at least one beefwife");
   const weighted = names.map((name) => {
     const weight = weights?.[name] ?? 1;
     if (!Number.isFinite(weight) || weight <= 0)
-      throw new RangeError(`weight for ${name} must be positive`);
+      throw new RangeError(
+        `cast: the weight of ${JSON.stringify(name)} must be a finite number greater than 0 (got ${weight})`,
+      );
     return { name, weight };
   });
   const total = weighted.reduce((sum, entry) => sum + entry.weight, 0);

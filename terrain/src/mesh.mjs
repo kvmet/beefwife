@@ -33,14 +33,16 @@ export class TerrainMesh {
     if (supplied) source = source();
     if (typeof source === "string") {
       if (supplied)
-        throw new TypeError("options.avoid() must return an iterable");
+        throw new TypeError("options.avoid: must return an iterable of elements");
       const root = this.options.root || globalThis.document;
       if (typeof root?.querySelectorAll !== "function")
-        throw new Error("a document or options.root is required for a selector");
+        throw new Error(
+          "options.avoid: a selector needs options.root or a global document",
+        );
       return Array.from(root.querySelectorAll(source));
     }
     if (!source?.[Symbol.iterator])
-      throw new TypeError("options.avoid() must return an iterable");
+      throw new TypeError("options.avoid: must return an iterable of elements");
     return Array.from(source);
   }
 
@@ -56,7 +58,7 @@ export class TerrainMesh {
     finite(x, "x");
     finite(y, "y");
     if (!result || typeof result !== "object")
-      throw new TypeError("result must be an object");
+      throw new TypeError("result: must be an object");
     if (!this.ready) return null;
     if (
       x >= this.x0 &&
@@ -126,20 +128,24 @@ export class TerrainMesh {
       const viewport =
         typeof configured === "function" ? configured() : configured;
       if (!viewport || typeof viewport !== "object")
-        throw new TypeError("viewport must be a rectangle");
+        throw new TypeError("options.viewport: must be a rectangle or return one");
       const { left = 0, top = 0, width, height } = viewport;
-      finite(left, "viewport.left");
-      finite(top, "viewport.top");
-      finite(width, "viewport.width");
-      finite(height, "viewport.height");
+      finite(left, "options.viewport.left");
+      finite(top, "options.viewport.top");
+      finite(width, "options.viewport.width");
+      finite(height, "options.viewport.height");
       if (width < 0 || height < 0)
-        throw new RangeError("viewport width and height must be nonnegative");
+        throw new RangeError(
+          `options.viewport: width and height must be 0 or more (got ${width} × ${height})`,
+        );
       return { left, top, width, height };
     }
 
     const view = globalThis.window;
     if (!view)
-      throw new Error("a window or options.viewport is required to build");
+      throw new Error(
+        "options.viewport: is required when there is no global window",
+      );
     const viewport = {
       left: 0,
       top: 0,
@@ -147,7 +153,9 @@ export class TerrainMesh {
       height: finite(view.innerHeight, "window.innerHeight"),
     };
     if (viewport.width < 0 || viewport.height < 0)
-      throw new RangeError("viewport width and height must be nonnegative");
+      throw new RangeError(
+        `window: innerWidth and innerHeight must be 0 or more (got ${viewport.width} × ${viewport.height})`,
+      );
     return viewport;
   }
 
@@ -171,15 +179,17 @@ export class TerrainMesh {
     elements.forEach((el, index) => {
       if (typeof el?.getBoundingClientRect !== "function")
         throw new TypeError(
-          `avoid[${index}] must support getBoundingClientRect()`,
+          `avoid[${index}]: must have a getBoundingClientRect() method`,
         );
       const r = el.getBoundingClientRect();
       if (!r || typeof r !== "object")
-        throw new TypeError(`avoid[${index}] returned an invalid rectangle`);
+        throw new TypeError(`avoid[${index}]: getBoundingClientRect() must return an object`);
       for (const side of ["left", "top", "right", "bottom"])
         finite(r[side], `avoid[${index}].${side}`);
       if (r.right < r.left || r.bottom < r.top)
-        throw new RangeError(`avoid[${index}] rectangle is inverted`);
+        throw new RangeError(
+          `avoid[${index}]: right must be at least left, and bottom at least top`,
+        );
       const rect = {
         left: r.left - viewport.left - padding,
         top: r.top - viewport.top - padding,

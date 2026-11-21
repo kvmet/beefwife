@@ -79,15 +79,16 @@ const KNEE_PROJECTION_KEYS = new Set([
   "perspective",
   "maxOffset",
 ]);
+const OUTSIDE_WORLD = `puts part of the body more than ${MAX_WORLD_COORDINATE} px from the origin on an axis`;
 const RESET_KEYS = new Set(["position", "direction", "phase"]);
 const CONTROL_KEYS = new Set(["throttle", "direction"]);
 
 const plainObject = (value, path) => {
   if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new TypeError(`${path} must be an object`);
+    throw new TypeError(`${path}: must be an object`);
   const prototype = Object.getPrototypeOf(value);
   if (prototype !== Object.prototype && prototype !== null)
-    throw new TypeError(`${path} must be a plain object`);
+    throw new TypeError(`${path}: must be a plain object`);
   return value;
 };
 
@@ -95,7 +96,8 @@ const optionsOf = (value, allowed, path) => {
   if (value === undefined) return {};
   const options = plainObject(value, path);
   for (const key in options) {
-    if (!allowed.has(key)) throw new TypeError(`${path}.${key} is unknown`);
+    if (!allowed.has(key))
+      throw new TypeError(`${path}.${key}: is not a known option`);
   }
   return options;
 };
@@ -106,7 +108,7 @@ const defaulted = (value, fallback) => (value === undefined ? fallback : value);
 
 const finite = (value, path) => {
   if (typeof value !== "number" || !Number.isFinite(value))
-    throw new TypeError(`${path} must be a finite number`);
+    throw new TypeError(`${path}: must be a finite number`);
   return value;
 };
 
@@ -117,14 +119,12 @@ const renderOptionsOf = (value) => {
     render.roundVertices !== undefined &&
     typeof render.roundVertices !== "boolean"
   )
-    throw new TypeError("options.render.roundVertices must be a boolean");
+    throw new TypeError("options.render.roundVertices: must be true or false");
   if (render.pixelResolution !== undefined) {
     const pixelResolution = finite(
       render.pixelResolution,
       "options.render.pixelResolution",
     );
-    if (pixelResolution <= 0)
-      throw new RangeError("options.render.pixelResolution must be positive");
     /* Snapping multiplies a world coordinate by this and divides by it, so a
        value outside this range turns finite vertices into infinities. Real
        displays sit near 1. */
@@ -133,7 +133,7 @@ const renderOptionsOf = (value) => {
       pixelResolution > MAX_PIXEL_RESOLUTION
     )
       throw new RangeError(
-        `options.render.pixelResolution must be from ${MIN_PIXEL_RESOLUTION} to ${MAX_PIXEL_RESOLUTION}`,
+        `options.render.pixelResolution: must be from ${MIN_PIXEL_RESOLUTION} to ${MAX_PIXEL_RESOLUTION} (got ${pixelResolution})`,
       );
   }
   const projection = render.kneeProjection;
@@ -153,28 +153,20 @@ const renderOptionsOf = (value) => {
       projection.perspective,
       "options.render.kneeProjection.perspective",
     );
-    if (perspective < 0)
-      throw new RangeError(
-        "options.render.kneeProjection.perspective must be nonnegative",
-      );
     /* The knee moves by view distance times elbow height times this, and
        both distances span the world, so a larger factor overflows. */
-    if (perspective > MAX_PERSPECTIVE)
+    if (perspective < 0 || perspective > MAX_PERSPECTIVE)
       throw new RangeError(
-        `options.render.kneeProjection.perspective must be at most ${MAX_PERSPECTIVE}`,
+        `options.render.kneeProjection.perspective: must be from 0 to ${MAX_PERSPECTIVE} (got ${perspective})`,
       );
     if (projection.maxOffset !== undefined) {
       const maxOffset = finite(
         projection.maxOffset,
         "options.render.kneeProjection.maxOffset",
       );
-      if (maxOffset < 0)
+      if (maxOffset < 0 || maxOffset > MAX_WORLD_COORDINATE)
         throw new RangeError(
-          "options.render.kneeProjection.maxOffset must be nonnegative",
-        );
-      if (maxOffset > MAX_WORLD_COORDINATE)
-        throw new RangeError(
-          `options.render.kneeProjection.maxOffset must be at most ${MAX_WORLD_COORDINATE}`,
+          `options.render.kneeProjection.maxOffset: must be from 0 to ${MAX_WORLD_COORDINATE} (got ${maxOffset})`,
         );
     }
   }
@@ -183,13 +175,13 @@ const renderOptionsOf = (value) => {
 
 const point = (value, fallback, path) => {
   if (value === undefined) {
-    if (fallback === null) throw new TypeError(`${path} is required`);
+    if (fallback === null) throw new TypeError(`${path}: is required`);
     return { ...fallback };
   }
   const input = plainObject(value, path);
   for (const key in input) {
     if (key !== "x" && key !== "y")
-      throw new TypeError(`${path}.${key} is unknown`);
+      throw new TypeError(`${path}.${key}: is not a known field`);
   }
   return { x: finite(input.x, `${path}.x`), y: finite(input.y, `${path}.y`) };
 };
@@ -201,7 +193,7 @@ const worldPoint = (value, fallback, path) => {
     Math.abs(result.y) > MAX_WORLD_COORDINATE
   )
     throw new RangeError(
-      `${path} coordinates must be from ${-MAX_WORLD_COORDINATE} to ${MAX_WORLD_COORDINATE}`,
+      `${path}: x and y must be from ${-MAX_WORLD_COORDINATE} to ${MAX_WORLD_COORDINATE}`,
     );
   return result;
 };
@@ -211,13 +203,13 @@ const directionInto = (value, fallback, path, result) => {
   if (value !== undefined) {
     for (const key in input) {
       if (key !== "x" && key !== "y")
-        throw new TypeError(`${path}.${key} is unknown`);
+        throw new TypeError(`${path}.${key}: is not a known field`);
     }
   }
   const inputX = finite(input.x, `${path}.x`);
   const inputY = finite(input.y, `${path}.y`);
   const scale = Math.max(Math.abs(inputX), Math.abs(inputY));
-  if (!scale) throw new RangeError(`${path} must be nonzero`);
+  if (!scale) throw new RangeError(`${path}: x and y must not both be 0`);
   const x = inputX / scale;
   const y = inputY / scale;
   const magnitude = Math.hypot(x, y);
@@ -289,7 +281,7 @@ class Beefwife extends Container {
     );
     const phase = finite(defaulted(options.phase, 0), "options.phase");
     if (options.random !== undefined && typeof options.random !== "function")
-      throw new TypeError("options.random must be a function");
+      throw new TypeError("options.random: must be a function");
     this.#random = options.random ?? Math.random;
     this.#renderOptions = renderOptionsOf(options.render);
     this.#requestedDirection = { ...facing };
@@ -302,9 +294,7 @@ class Beefwife extends Container {
     this.#body = new Body(this.#model, this.#gait, breathingPhase);
     this.#body.place(position, facing);
     if (!bodyFitsWorld(this.#body))
-      throw new RangeError(
-        "options.position places the body outside the world",
-      );
+      throw new RangeError(`options.position: ${OUTSIDE_WORLD}`);
     this.#legs = new Legs(this.#model, this.#body, this.#gait, () =>
       this.#sampleRandom(),
     );
@@ -332,14 +322,16 @@ class Beefwife extends Container {
   step(rawDt, rawControls) {
     this.#live("step");
     const dt = finite(rawDt, "dt");
-    if (dt < 0) throw new RangeError("dt must be nonnegative");
+    if (dt < 0) throw new RangeError(`dt: must be 0 or more (got ${dt})`);
     const controls = optionsOf(rawControls, CONTROL_KEYS, "controls");
     const throttle = finite(
       defaulted(controls.throttle, 1),
       "controls.throttle",
     );
     if (throttle < 0 || throttle > 1)
-      throw new RangeError("controls.throttle must be from 0 to 1");
+      throw new RangeError(
+        `controls.throttle: must be from 0 to 1 (got ${throttle})`,
+      );
     const wanted = directionInto(
       controls.direction,
       this.#requestedDirection,
@@ -382,7 +374,7 @@ class Beefwife extends Container {
       body.adopt(this.#body);
       body.refreshContacts(this.#throttle);
       if (!bodyFitsWorld(body))
-        throw new RangeError("descriptor places the body outside the world");
+        throw new RangeError(`descriptor: ${OUTSIDE_WORLD}`);
     }
     const nextLegs =
       legCountKey(this.#model) === legCountKey(nextModel)
@@ -436,9 +428,7 @@ class Beefwife extends Container {
     const body = new Body(this.#model, gait, breathingPhase);
     body.place(position, facing);
     if (!bodyFitsWorld(body))
-      throw new RangeError(
-        "options.position places the body outside the world",
-      );
+      throw new RangeError(`options.position: ${OUTSIDE_WORLD}`);
     const legs = new Legs(this.#model, body, gait, () => this.#sampleRandom());
     const skin = new Skin(this.#model, body, legs);
     if (options.direction !== undefined)
@@ -456,7 +446,7 @@ class Beefwife extends Container {
     this.#live("translate");
     const offset = worldPoint(rawOffset, null, "offset");
     if (!this.#body.chain.fitsTranslation(offset, MAX_WORLD_COORDINATE))
-      throw new RangeError("offset places the body outside the world");
+      throw new RangeError(`offset: ${OUTSIDE_WORLD}`);
     this.#body.chain.translate(offset);
     this.#legs.translate(offset);
     this.#skin.translate(offset);
@@ -493,15 +483,19 @@ class Beefwife extends Container {
      nothing would ever free. Refuse rather than leak. */
   #live(method) {
     if (this.#gone)
-      throw new Error(`${method} was called on a destroyed beefwife`);
+      throw new Error(`${method}: cannot be called after destroy()`);
   }
 
   #sampleRandom() {
     const sample = this.#random();
     if (typeof sample !== "number" || !Number.isFinite(sample))
-      throw new TypeError("random() must return a finite number");
+      throw new TypeError(
+        `options.random: must return a finite number (got ${typeof sample === "number" ? sample : typeof sample})`,
+      );
     if (sample < 0 || sample >= 1)
-      throw new RangeError("random() must return a number from 0 to 1");
+      throw new RangeError(
+        `options.random: must return a number from 0 up to but not including 1 (got ${sample})`,
+      );
     return sample;
   }
 

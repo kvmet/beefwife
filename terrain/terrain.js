@@ -40,33 +40,33 @@ var Terrain = (function() {
 		"viewport"
 	]);
 	var finite = (value, path) => {
-		if (typeof value !== "number" || !Number.isFinite(value)) throw new TypeError(`${path} must be a finite number`);
+		if (typeof value !== "number" || !Number.isFinite(value)) throw new TypeError(`${path}: must be a finite number`);
 		return value;
 	};
 	var point = (value, path) => {
-		if (!value || typeof value !== "object") throw new TypeError(`${path} must contain finite x and y coordinates`);
+		if (!value || typeof value !== "object") throw new TypeError(`${path}: must be an object with finite x and y`);
 		return {
 			x: finite(value.x, `${path}.x`),
 			y: finite(value.y, `${path}.y`)
 		};
 	};
 	var optionsOf = (supplied) => {
-		if (supplied === null || typeof supplied !== "object" || Array.isArray(supplied)) throw new TypeError("options must be an object");
-		for (const key of Object.keys(supplied)) if (!TERRAIN_OPTIONS.has(key)) throw new TypeError(`options.${key} is unknown`);
+		if (supplied === null || typeof supplied !== "object" || Array.isArray(supplied)) throw new TypeError("options: must be an object");
+		for (const key of Object.keys(supplied)) if (!TERRAIN_OPTIONS.has(key)) throw new TypeError(`options.${key}: is not a known option`);
 		const options = {
 			...TERRAIN_CONFIG,
 			...supplied
 		};
 		for (const key of ["edgeMargin", "obstaclePadding"]) {
 			finite(options[key], `options.${key}`);
-			if (options[key] < 0) throw new RangeError(`options.${key} must be nonnegative`);
+			if (options[key] < 0) throw new RangeError(`options.${key}: must be 0 or more (got ${options[key]})`);
 		}
-		if (typeof options.funnel !== "boolean") throw new TypeError("options.funnel must be true or false");
+		if (typeof options.funnel !== "boolean") throw new TypeError("options.funnel: must be true or false");
 		const avoidType = typeof options.avoid;
-		if (avoidType !== "string" && avoidType !== "function" && !options.avoid?.[Symbol.iterator]) throw new TypeError("options.avoid must be a selector, iterable, or function");
-		if (options.root !== void 0 && typeof options.root?.querySelectorAll !== "function") throw new TypeError("options.root must support querySelectorAll()");
+		if (avoidType !== "string" && avoidType !== "function" && !options.avoid?.[Symbol.iterator]) throw new TypeError("options.avoid: must be a CSS selector, an iterable of elements, or a function");
+		if (options.root !== void 0 && typeof options.root?.querySelectorAll !== "function") throw new TypeError("options.root: must have a querySelectorAll() method");
 		const viewportType = typeof options.viewport;
-		if (options.viewport !== void 0 && viewportType !== "function" && (options.viewport === null || viewportType !== "object")) throw new TypeError("options.viewport must be a rectangle or function");
+		if (options.viewport !== void 0 && viewportType !== "function" && (options.viewport === null || viewportType !== "object")) throw new TypeError("options.viewport: must be a rectangle or a function");
 		return Object.freeze(options);
 	};
 	/** Twice the signed area of a triangle. Its sign selects a side of ab. */
@@ -136,12 +136,12 @@ var Terrain = (function() {
 			const supplied = typeof source === "function";
 			if (supplied) source = source();
 			if (typeof source === "string") {
-				if (supplied) throw new TypeError("options.avoid() must return an iterable");
+				if (supplied) throw new TypeError("options.avoid: must return an iterable of elements");
 				const root = this.options.root || globalThis.document;
-				if (typeof root?.querySelectorAll !== "function") throw new Error("a document or options.root is required for a selector");
+				if (typeof root?.querySelectorAll !== "function") throw new Error("options.avoid: a selector needs options.root or a global document");
 				return Array.from(root.querySelectorAll(source));
 			}
-			if (!source?.[Symbol.iterator]) throw new TypeError("options.avoid() must return an iterable");
+			if (!source?.[Symbol.iterator]) throw new TypeError("options.avoid: must return an iterable of elements");
 			return Array.from(source);
 		}
 		nearest(x, y, result = {}) {
@@ -153,7 +153,7 @@ var Terrain = (function() {
 		_nearest(x, y, result, absolute, includeDistance = true) {
 			finite(x, "x");
 			finite(y, "y");
-			if (!result || typeof result !== "object") throw new TypeError("result must be an object");
+			if (!result || typeof result !== "object") throw new TypeError("result: must be an object");
 			if (!this.ready) return null;
 			if (x >= this.x0 && x <= this.x1 && y >= this.y0 && y <= this.y1 && !this._covered(x, y)) {
 				if (absolute) {
@@ -213,13 +213,13 @@ var Terrain = (function() {
 			const configured = this.options.viewport;
 			if (configured !== void 0) {
 				const viewport = typeof configured === "function" ? configured() : configured;
-				if (!viewport || typeof viewport !== "object") throw new TypeError("viewport must be a rectangle");
+				if (!viewport || typeof viewport !== "object") throw new TypeError("options.viewport: must be a rectangle or return one");
 				const { left = 0, top = 0, width, height } = viewport;
-				finite(left, "viewport.left");
-				finite(top, "viewport.top");
-				finite(width, "viewport.width");
-				finite(height, "viewport.height");
-				if (width < 0 || height < 0) throw new RangeError("viewport width and height must be nonnegative");
+				finite(left, "options.viewport.left");
+				finite(top, "options.viewport.top");
+				finite(width, "options.viewport.width");
+				finite(height, "options.viewport.height");
+				if (width < 0 || height < 0) throw new RangeError(`options.viewport: width and height must be 0 or more (got ${width} × ${height})`);
 				return {
 					left,
 					top,
@@ -228,14 +228,14 @@ var Terrain = (function() {
 				};
 			}
 			const view = globalThis.window;
-			if (!view) throw new Error("a window or options.viewport is required to build");
+			if (!view) throw new Error("options.viewport: is required when there is no global window");
 			const viewport = {
 				left: 0,
 				top: 0,
 				width: finite(view.innerWidth, "window.innerWidth"),
 				height: finite(view.innerHeight, "window.innerHeight")
 			};
-			if (viewport.width < 0 || viewport.height < 0) throw new RangeError("viewport width and height must be nonnegative");
+			if (viewport.width < 0 || viewport.height < 0) throw new RangeError(`window: innerWidth and innerHeight must be 0 or more (got ${viewport.width} × ${viewport.height})`);
 			return viewport;
 		}
 		_reset() {
@@ -259,16 +259,16 @@ var Terrain = (function() {
 			const padding = this.options.obstaclePadding;
 			const viewport = this.viewport;
 			[...new Set(this.avoidElements())].forEach((el, index) => {
-				if (typeof el?.getBoundingClientRect !== "function") throw new TypeError(`avoid[${index}] must support getBoundingClientRect()`);
+				if (typeof el?.getBoundingClientRect !== "function") throw new TypeError(`avoid[${index}]: must have a getBoundingClientRect() method`);
 				const r = el.getBoundingClientRect();
-				if (!r || typeof r !== "object") throw new TypeError(`avoid[${index}] returned an invalid rectangle`);
+				if (!r || typeof r !== "object") throw new TypeError(`avoid[${index}]: getBoundingClientRect() must return an object`);
 				for (const side of [
 					"left",
 					"top",
 					"right",
 					"bottom"
 				]) finite(r[side], `avoid[${index}].${side}`);
-				if (r.right < r.left || r.bottom < r.top) throw new RangeError(`avoid[${index}] rectangle is inverted`);
+				if (r.right < r.left || r.bottom < r.top) throw new RangeError(`avoid[${index}]: right must be at least left, and bottom at least top`);
 				const rect = {
 					left: r.left - viewport.left - padding,
 					top: r.top - viewport.top - padding,

@@ -33,6 +33,9 @@ const prepared = new WeakMap();
 const planAtlas = (model, renderResolution) => {
   const resolution = renderResolution * BAKE_SUPERSAMPLE;
   const specs = new Map();
+  const shapes = model.descriptor.definitions.shapes;
+  const shapeIdOf = (shape) =>
+    Object.keys(shapes).find((id) => shapes[id] === shape);
   // Request detail for the largest draw scale; packing applies the budget.
   const claim = (shape, paint, scale) => {
     // A plate profiled down to nothing draws nothing, and needs no frame.
@@ -40,7 +43,8 @@ const planAtlas = (model, renderResolution) => {
     const key = frameKeyFor(shape, paint);
     const frame = specs.get(key);
     if (frame) frame.scale = Math.max(frame.scale, scale);
-    else specs.set(key, { key, shape, paint, scale });
+    else
+      specs.set(key, { key, shape, shapeId: shapeIdOf(shape), paint, scale });
     return key;
   };
 
@@ -116,7 +120,9 @@ const packAtlas = (plan) => {
         height: bounds.height,
       };
       if (!Object.values(entry.bounds).every(Number.isFinite))
-        throw new RangeError("atlas shape bounds must be finite");
+        throw new RangeError(
+          `$.definitions.shapes.${entry.shapeId}.path: has a coordinate too large to draw`,
+        );
     }
     let frameLimit = FRAME_TEXEL_LIMIT;
     let size;
@@ -147,7 +153,9 @@ const packAtlas = (plan) => {
         break;
       // Four texels leave room for a shape and its border even at minimum detail.
       if (frameLimit === 4)
-        throw new RangeError("too many atlas frames for the texture budget");
+        throw new RangeError(
+          `$.definitions: too many distinct shape and paint pairs to fit one ${ATLAS_TEXEL_LIMIT} × ${ATLAS_TEXEL_LIMIT} texture`,
+        );
       frameLimit = Math.max(4, Math.floor(frameLimit * 0.75));
     }
     for (const entry of entries) {
@@ -169,7 +177,9 @@ const prepareAtlas = (model, renderResolution) => {
   const held = prepared.get(model);
   if (held?.renderResolution === renderResolution) return held.plan;
   if (!Number.isFinite(renderResolution) || renderResolution <= 0)
-    throw new RangeError("pixelResolution must be finite and positive");
+    throw new RangeError(
+      "prepareAtlas: renderResolution must be a finite number greater than 0",
+    );
   const plan = planAtlas(model, renderResolution);
   const sheet = packAtlas(plan);
   for (const entry of sheet.entries) entry.context.destroy();

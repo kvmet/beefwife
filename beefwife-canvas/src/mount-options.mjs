@@ -58,12 +58,14 @@ const parseAttribute = (value, type, name) => {
       .filter(Boolean);
   if (type === "boolean") {
     if (!BOOLEAN.has(value))
-      throw new TypeError(`${name} must be true or false`);
+      throw new TypeError(`${name}: must be "true" or "false"`);
     return value === "true";
   }
   const number = Number(value);
   if (!Number.isFinite(number))
-    throw new TypeError(`${name} must be a finite number`);
+    throw new TypeError(
+      `${name}: must be a finite number (got ${JSON.stringify(value)})`,
+    );
   return number;
 };
 
@@ -78,7 +80,8 @@ const attributesOf = (canvas) => {
     )
       continue;
     const rule = ATTRIBUTES[attribute.name];
-    if (!rule) throw new TypeError(`${attribute.name} is unknown`);
+    if (!rule)
+      throw new TypeError(`${attribute.name}: is not a known attribute`);
     options[rule[0]] = parseAttribute(attribute.value, rule[1], attribute.name);
   }
   return options;
@@ -90,33 +93,34 @@ const optionsOf = (canvas, supplied) => {
     typeof supplied !== "object" ||
     Array.isArray(supplied)
   )
-    throw new TypeError("options must be an object");
+    throw new TypeError("options: must be an object");
   for (const key of Object.keys(supplied)) {
-    if (!OPTIONS[key]) throw new TypeError(`options.${key} is unknown`);
+    if (!OPTIONS[key])
+      throw new TypeError(`options.${key}: is not a known option`);
   }
   const options = { ...DEFAULTS, ...attributesOf(canvas), ...supplied };
   for (const [key, rule] of Object.entries(OPTIONS)) {
     const value = options[key];
     if (value === undefined) continue;
     if (rule.type === "boolean" && typeof value !== "boolean")
-      throw new TypeError(`${key} must be true or false`);
+      throw new TypeError(`${key}: must be true or false`);
     if (rule.type === "number" && !Number.isFinite(value))
-      throw new TypeError(`${key} must be a finite number`);
+      throw new TypeError(`${key}: must be a finite number`);
     if (key === "avoid" && typeof value !== "string")
-      throw new TypeError("avoid must be a selector string");
+      throw new TypeError("avoid: must be a CSS selector string");
   }
   if (options.count !== undefined && !Number.isInteger(options.count))
-    throw new TypeError("count must be an integer");
+    throw new TypeError(`count: must be an integer (got ${options.count})`);
   if (options.random !== undefined && typeof options.random !== "function")
-    throw new TypeError("random must be a function");
+    throw new TypeError("random: must be a function");
   if (options.filters !== undefined && !Array.isArray(options.filters))
-    throw new TypeError("filters must be an array");
+    throw new TypeError("filters: must be an array");
   if (!["auto", "pixelated"].includes(options.imageRendering))
-    throw new RangeError("imageRendering must be auto or pixelated");
+    throw new RangeError('imageRendering: must be "auto" or "pixelated"');
   if (!["none", "click", "move"].includes(options.pointerInput))
-    throw new RangeError("pointerInput must be none, click, or move");
+    throw new RangeError('pointerInput: must be "none", "click", or "move"');
   if (!["wander", "manual"].includes(options.targetMode))
-    throw new RangeError("targetMode must be wander or manual");
+    throw new RangeError('targetMode: must be "wander" or "manual"');
   for (const key of [
     "edgeMargin",
     "escapeReplanSeconds",
@@ -126,14 +130,21 @@ const optionsOf = (canvas, supplied) => {
     "stuckReplanSeconds",
     "wanderDelay",
   ]) {
-    if (options[key] < 0) throw new RangeError(`${key} must be nonnegative`);
+    if (options[key] < 0)
+      throw new RangeError(`${key}: must be 0 or more (got ${options[key]})`);
   }
   if (options.arrivalRadius !== undefined && options.arrivalRadius <= 1)
-    throw new RangeError("arrivalRadius must be greater than 1");
+    throw new RangeError(
+      `arrivalRadius: must be greater than 1 (got ${options.arrivalRadius})`,
+    );
   if (options.waypointRadius !== undefined && options.waypointRadius <= 1)
-    throw new RangeError("waypointRadius must be greater than 1");
+    throw new RangeError(
+      `waypointRadius: must be greater than 1 (got ${options.waypointRadius})`,
+    );
   if (options.throttleEase !== undefined && options.throttleEase <= 0)
-    throw new RangeError("throttleEase must be positive");
+    throw new RangeError(
+      `throttleEase: must be greater than 0 (got ${options.throttleEase})`,
+    );
   return options;
 };
 

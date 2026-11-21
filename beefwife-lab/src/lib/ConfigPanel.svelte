@@ -21,7 +21,7 @@
   <div class="fields single-column">
     <label>
       <Tooltip
-        label="Portable identity and file name stem. Lowercase letters, digits, and hyphens, up to 64."
+        label="Used as the file name and as this beefwife's name in a cast. Up to 64 lowercase letters, digits, and hyphens; the first character must be a letter or digit."
         ><span>Name</span></Tooltip
       >
       <input
@@ -35,7 +35,7 @@
     {#if advanced}
       <label>
         <Tooltip
-          label="Descriptor version this document follows. The runtime reads version 1 alone."
+          label="Descriptor version this document follows. The runtime reads only version 1."
           ><span>Schema</span></Tooltip
         >
         <input value={$descriptor.schemaVersion} readonly />

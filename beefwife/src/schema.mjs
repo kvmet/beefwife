@@ -11,6 +11,10 @@ const VERSION = 1;
 const SECTIONS = ["head", "trunk", "tail"];
 const ID_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 const NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
+const ID_RULE =
+  'must start with a letter and contain only letters, digits, "_" and "-"';
+const NAME_RULE =
+  'must start with a lowercase letter or digit and contain only lowercase letters, digits and "-"';
 const LIMITS = Object.freeze({
   name: 64,
   definitions: 256,
@@ -31,11 +35,12 @@ const number = (min, max, integer = false) => ({
    value by factor ** length. Untagged numbers are size-invariant. */
 const px = (min, max) => ({ ...number(min, max), length: 1 });
 const perPx = (min, max) => ({ ...number(min, max), length: -1 });
-const string = (minLength, maxLength, pattern = null) => ({
+const string = (minLength, maxLength, pattern = null, rule = null) => ({
   kind: "string",
   minLength,
   maxLength,
   pattern,
+  rule,
 });
 const choice = (...values) => ({ kind: "choice", values });
 const literal = (value) => ({ kind: "literal", value });
@@ -49,7 +54,7 @@ const record = (item, minLength = 0) => ({
   maxLength: LIMITS.definitions,
 });
 
-const id = string(1, 64, ID_PATTERN);
+const id = string(1, 64, ID_PATTERN, ID_RULE);
 const ratio = number(0, 1);
 /* Placement scales carry the px dimension: shape paths are local units,
    drawn px = path units x scale. plantedScale is a ratio on top of
@@ -149,7 +154,7 @@ const ornament = object({
 
 const schema = object({
   schemaVersion: literal(VERSION),
-  name: string(1, LIMITS.name, NAME_PATTERN),
+  name: string(1, LIMITS.name, NAME_PATTERN, NAME_RULE),
   definitions: object({
     materials: record(material, 1),
     shapes: record(shape, 1),
@@ -240,4 +245,4 @@ const schema = object({
   }),
 });
 
-export { VERSION, LIMITS, SECTIONS, ID_PATTERN, NAME_PATTERN, schema };
+export { VERSION, LIMITS, SECTIONS, ID_PATTERN, ID_RULE, NAME_PATTERN, schema };

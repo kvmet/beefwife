@@ -202,7 +202,10 @@ swungWhole.legs.legs.forEach((leg, index) => {
 });
 checks += 2;
 
-assert.throws(() => new Beefwife(source, { random: () => 1 }), /from 0 to 1/);
+assert.throws(
+  () => new Beefwife(source, { random: () => 1 }),
+  /from 0 up to but not including 1/,
+);
 assert.throws(() => new Beefwife(source, { random: () => NaN }), /finite/);
 checks += 2;
 

@@ -316,15 +316,15 @@ assert.throws(
       avoid: () => ".blocked",
       viewport: { width: 10, height: 10 },
     }).build(),
-  /must return an iterable/,
+  /must return an iterable of elements/,
 );
 assert.throws(
   () => new Terrain({ avoid: [], viewport: () => null }).build(),
-  /must be a rectangle/,
+  /must be a rectangle or return one/,
 );
 assert.throws(
   () => build([{ left: 2, top: 1, right: 1, bottom: 2 }]),
-  /rectangle is inverted/,
+  /right must be at least left/,
 );
 
 const overlap = build([

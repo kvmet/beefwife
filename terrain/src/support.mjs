@@ -36,13 +36,13 @@ const TERRAIN_OPTIONS = new Set([
 
 export const finite = (value, path) => {
   if (typeof value !== "number" || !Number.isFinite(value))
-    throw new TypeError(`${path} must be a finite number`);
+    throw new TypeError(`${path}: must be a finite number`);
   return value;
 };
 
 export const point = (value, path) => {
   if (!value || typeof value !== "object")
-    throw new TypeError(`${path} must contain finite x and y coordinates`);
+    throw new TypeError(`${path}: must be an object with finite x and y`);
   return { x: finite(value.x, `${path}.x`), y: finite(value.y, `${path}.y`) };
 };
 
@@ -52,21 +52,23 @@ export const optionsOf = (supplied) => {
     typeof supplied !== "object" ||
     Array.isArray(supplied)
   )
-    throw new TypeError("options must be an object");
+    throw new TypeError("options: must be an object");
 
   for (const key of Object.keys(supplied)) {
     if (!TERRAIN_OPTIONS.has(key))
-      throw new TypeError(`options.${key} is unknown`);
+      throw new TypeError(`options.${key}: is not a known option`);
   }
 
   const options = { ...TERRAIN_CONFIG, ...supplied };
   for (const key of ["edgeMargin", "obstaclePadding"]) {
     finite(options[key], `options.${key}`);
     if (options[key] < 0)
-      throw new RangeError(`options.${key} must be nonnegative`);
+      throw new RangeError(
+        `options.${key}: must be 0 or more (got ${options[key]})`,
+      );
   }
   if (typeof options.funnel !== "boolean")
-    throw new TypeError("options.funnel must be true or false");
+    throw new TypeError("options.funnel: must be true or false");
 
   const avoidType = typeof options.avoid;
   if (
@@ -75,13 +77,13 @@ export const optionsOf = (supplied) => {
     !options.avoid?.[Symbol.iterator]
   )
     throw new TypeError(
-      "options.avoid must be a selector, iterable, or function",
+      "options.avoid: must be a CSS selector, an iterable of elements, or a function",
     );
   if (
     options.root !== undefined &&
     typeof options.root?.querySelectorAll !== "function"
   )
-    throw new TypeError("options.root must support querySelectorAll()");
+    throw new TypeError("options.root: must have a querySelectorAll() method");
 
   const viewportType = typeof options.viewport;
   if (
@@ -89,7 +91,7 @@ export const optionsOf = (supplied) => {
     viewportType !== "function" &&
     (options.viewport === null || viewportType !== "object")
   )
-    throw new TypeError("options.viewport must be a rectangle or function");
+    throw new TypeError("options.viewport: must be a rectangle or a function");
   return Object.freeze(options);
 };
 

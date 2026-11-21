@@ -261,15 +261,15 @@ const sceneBoundary = async () => {
   assert.equal(browser.layer.debug.routes, true);
   assert.throws(
     () => browser.layer.setDebug({ unknown: true }),
-    /debug\.unknown is unknown/,
+    /debug\.unknown: is not a known option/,
   );
   assert.throws(
     () => browser.layer.setDebug({ navigation: true }),
-    /debug\.navigation is unknown/,
+    /debug\.navigation: is not a known option/,
   );
   assert.throws(
     () => browser.layer.setDebug({ terrain: 1 }),
-    /debug\.terrain must be a boolean/,
+    /debug\.terrain: must be true or false/,
   );
   browser.layer.start();
   assert.equal(

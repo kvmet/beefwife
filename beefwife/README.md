@@ -162,9 +162,11 @@ moved back inside it, motion included.
 
 ## Descriptor
 
-`Descriptor` reads, checks, resizes, and writes descriptors. Every function
+`Descriptor` reads, checks, resizes, and writes descriptors. A bad descriptor
 throws an `Error` whose message starts with the path of the bad field, such as
-`$.legs.pairs: must be an integer`. The format is in
+`$.legs.pairs: must be an integer (got 1.5)`. A bad argument throws one that
+starts with the function's name, such as `scale: factor must be a finite number
+greater than 0`. The format is in
 [DESCRIPTOR.md](https://github.com/kvmet/beefwife/blob/main/beefwife/DESCRIPTOR.md).
 
 | Member | Does |

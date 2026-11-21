@@ -37,7 +37,7 @@ class BeefwifeCanvasRuntime {
     this.onError = options.onError || null;
     this.timeScale = timeScaleOf(options.timeScale ?? 1);
     if (options.random !== undefined && typeof options.random !== "function")
-      throw new TypeError("random must be a function");
+      throw new TypeError("random: must be a function");
     const random = options.random || Math.random;
     const resolutionScale = resolutionScaleOf(options.resolutionScale ?? 1);
     const imageRendering = imageRenderingOf(options.imageRendering ?? "auto");
@@ -56,7 +56,9 @@ class BeefwifeCanvasRuntime {
       maxPixelRatio !== Infinity &&
       (!Number.isFinite(maxPixelRatio) || maxPixelRatio <= 0)
     )
-      throw new RangeError("maxPixelRatio must be positive");
+      throw new RangeError(
+        `maxPixelRatio: must be greater than 0 (got ${maxPixelRatio})`,
+      );
     const roam = options.roam
       ? { ...BEEFWIFE_CANVAS_ROUTE_DEFAULTS, ...options.roam }
       : BEEFWIFE_CANVAS_ROUTE_DEFAULTS;
@@ -78,7 +80,9 @@ class BeefwifeCanvasRuntime {
         : null,
     };
     if (!["canvas", "viewport"].includes(kneeProjectionCenter))
-      throw new RangeError("kneeProjectionCenter must be canvas or viewport");
+      throw new RangeError(
+        'kneeProjectionCenter: must be "canvas" or "viewport"',
+      );
     this.scene = new RuntimeBeefwifeCanvasScene({
       antialias: options.antialias ?? false,
       application: options.application || null,
@@ -172,7 +176,9 @@ class BeefwifeCanvasRuntime {
     this.scene.attach();
     this.scene.resize();
     if (!this.population.cast)
-      throw new Error("BeefwifeCanvas runtime needs a cast");
+      throw new Error(
+        "start: the runtime has no cast; set one before starting",
+      );
     this.rebuild();
 
     window.addEventListener("resize", this._onResize);
@@ -390,7 +396,7 @@ class BeefwifeCanvasRuntime {
 
   _assertActive() {
     if (this.destroyed)
-      throw new Error("BeefwifeCanvasRuntime has been destroyed");
+      throw new Error("BeefwifeCanvasRuntime: cannot be used after destroy()");
   }
 
   _resume() {

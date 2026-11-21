@@ -382,9 +382,9 @@ const namedDescriptor = (name) => parseInContext(descriptorJson(name));
   assert.equal(canvas.dataset.beefwifeState, "destroyed");
   assert.equal(canvas.style.imageRendering, "crisp-edges");
   assert.equal(context.BeefwifeCanvas.get(canvas), null);
-  assert.throws(() => handle.setTarget({ x: 1, y: 2 }), /destroyed/);
-  assert.throws(() => handle.getRoute(), /destroyed/);
-  assert.throws(() => runtime.getStats(), /destroyed/);
+  assert.throws(() => handle.setTarget({ x: 1, y: 2 }), /after destroy\(\)/);
+  assert.throws(() => handle.getRoute(), /after destroy\(\)/);
+  assert.throws(() => runtime.getStats(), /after destroy\(\)/);
   checks += 7;
 
   const remounted = await context.BeefwifeCanvas.mount(canvas, {
@@ -413,7 +413,7 @@ const namedDescriptor = (name) => parseInContext(descriptorJson(name));
       autoStart: false,
       descriptors: [namedDescriptor("same"), namedDescriptor("same")],
     }),
-    /duplicate beefwife name/,
+    /two descriptors are named/,
   );
   assert.equal(errored, 1);
   assert.equal(Object.isFrozen(failedRuntime), true);
@@ -462,7 +462,7 @@ const namedDescriptor = (name) => parseInContext(descriptorJson(name));
   });
   await assert.rejects(
     context.BeefwifeCanvas.mount(invalidCanvas),
-    /true or false/,
+    /must be "true" or "false"/,
   );
   assert.equal(invalidCanvas.dataset.beefwifeState, "error");
   assert.equal(invalidEvent.detail.error.name, "TypeError");

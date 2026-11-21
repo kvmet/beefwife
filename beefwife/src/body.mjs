@@ -80,7 +80,9 @@ class Body {
 
   reconfigure(model, gait, throttle = 1, breathingPhase = this.breathingPhase) {
     if (model.chunks.length !== this.chain.count)
-      throw new Error("cannot reconfigure a different chunk count");
+      throw new Error(
+        "Body.reconfigure: the new model must have the same chunk count; build a new Body instead",
+      );
     this.model = model;
     this.gait = gait;
     this.breathingPhase = breathingPhase;

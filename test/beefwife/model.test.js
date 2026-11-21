@@ -308,7 +308,10 @@ checks += 3;
 
 const invalid = copy(model.descriptor);
 invalid.chain.sections.trunk.material = "missing";
-assert.throws(() => Model.compile(invalid), /references missing/);
+assert.throws(
+  () => Model.compile(invalid),
+  /is not defined in \$\.definitions/,
+);
 checks++;
 
 const castDir = path.join(__dirname, "..", "..", "beefwife", "samples");

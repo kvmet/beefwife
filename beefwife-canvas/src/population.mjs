@@ -30,10 +30,10 @@ class BeefwifeCanvasPopulation {
 
   add(name) {
     if (name !== undefined && typeof name !== "string")
-      throw new TypeError("name must be a string");
+      throw new TypeError("name: must be a string");
     if (this.actors.length + this.pending.length >= config.MAX_COUNT)
       throw new RangeError(
-        `cannot add more than ${config.MAX_COUNT} beefwives`,
+        `add: the canvas already holds the maximum of ${config.MAX_COUNT} beefwives`,
       );
     if (!this.router.ready || !this.cast) {
       this.pending.push(name ?? null);
@@ -46,7 +46,10 @@ class BeefwifeCanvasPopulation {
     const selectedName =
       name || chooseName(this.cast, this.castWeights, this.random);
     const spec = this.cast[selectedName];
-    if (!spec) throw new Error(`no creature named ${name}`);
+    if (!spec)
+      throw new Error(
+        `name: the cast has no beefwife named ${JSON.stringify(name)}`,
+      );
     const planner = new BeefwifeCanvasTargetPolicy(
       this.router,
       this.targetMode,
@@ -97,7 +100,7 @@ class BeefwifeCanvasPopulation {
   _targets(actor) {
     if (!actor) return this.actors;
     if (!this.targetPolicies.has(actor))
-      throw new Error("actor does not belong to this host");
+      throw new Error("actor: belongs to a different canvas");
     return [actor];
   }
 

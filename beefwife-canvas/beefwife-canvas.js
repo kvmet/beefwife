@@ -80,6 +80,8 @@ pixi_js = __toESM(pixi_js, 1);
 	];
 	var ID_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 	var NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
+	var ID_RULE = "must start with a letter and contain only letters, digits, \"_\" and \"-\"";
+	var NAME_RULE = "must start with a lowercase letter or digit and contain only lowercase letters, digits and \"-\"";
 	var LIMITS = Object.freeze({
 		name: 64,
 		definitions: 256,
@@ -103,11 +105,12 @@ pixi_js = __toESM(pixi_js, 1);
 		...number(min, max),
 		length: -1
 	});
-	var string = (minLength, maxLength, pattern = null) => ({
+	var string = (minLength, maxLength, pattern = null, rule = null) => ({
 		kind: "string",
 		minLength,
 		maxLength,
-		pattern
+		pattern,
+		rule
 	});
 	var choice = (...values) => ({
 		kind: "choice",
@@ -136,7 +139,7 @@ pixi_js = __toESM(pixi_js, 1);
 		minLength,
 		maxLength: LIMITS.definitions
 	});
-	var id = string(1, 64, ID_PATTERN);
+	var id = string(1, 64, ID_PATTERN, ID_RULE);
 	var ratio = number(0, 1);
 	var pxScale = px(.001, 1e3);
 	var ratioScale = number(.001, 100);
@@ -225,7 +228,7 @@ pixi_js = __toESM(pixi_js, 1);
 	});
 	var schema = object({
 		schemaVersion: literal(1),
-		name: string(1, LIMITS.name, NAME_PATTERN),
+		name: string(1, LIMITS.name, NAME_PATTERN, NAME_RULE),
 		definitions: object({
 			materials: record(material, 1),
 			shapes: record(shape, 1),
@@ -329,9 +332,24 @@ pixi_js = __toESM(pixi_js, 1);
 		scale: () => scale,
 		stringify: () => stringify
 	});
-	var fail = (path, message) => {
-		throw new Error(`${path}: ${message}`);
+	var fail = (path, rule) => {
+		throw Object.assign(/* @__PURE__ */ new Error(`${path}: ${rule}`), {
+			path,
+			rule
+		});
 	};
+	var bound = (number) => String(Number(number.toPrecision(6)));
+	var shown = (value) => {
+		if (typeof value === "number") return String(value);
+		if (typeof value === "string") return JSON.stringify(value);
+		return typeof value;
+	};
+	var oneOf = (values) => {
+		const quoted = values.map((value) => JSON.stringify(value));
+		if (quoted.length < 3) return quoted.join(" or ");
+		return `${quoted.slice(0, -1).join(", ")}, or ${quoted.at(-1)}`;
+	};
+	var product = (a, b) => `${shown(a)} × ${shown(b)} = ${Number((a * b).toPrecision(12))}`;
 	var plainObject$1 = /* @__PURE__ */ __name((value, path) => {
 		if (!value || typeof value !== "object" || Array.isArray(value)) fail(path, "must be an object");
 		const prototype = Object.getPrototypeOf(value);
@@ -349,23 +367,23 @@ pixi_js = __toESM(pixi_js, 1);
 	var readNode = (node, value, path, ancestors) => {
 		if (node.kind === "nullable") return value === null ? null : readNode(node.item, value, path, ancestors);
 		if (node.kind === "literal") {
-			if (value !== node.value) fail(path, `must equal ${node.value}`);
+			if (value !== node.value) fail(path, `must be ${node.value} (got ${shown(value)})`);
 			return value;
 		}
 		if (node.kind === "choice") {
-			if (!node.values.includes(value)) fail(path, `must be one of ${node.values.join(", ")}`);
+			if (!node.values.includes(value)) fail(path, `must be ${oneOf(node.values)} (got ${shown(value)})`);
 			return value;
 		}
 		if (node.kind === "number") {
 			if (typeof value !== "number" || !Number.isFinite(value)) fail(path, "must be a finite number");
-			if (node.integer && !Number.isInteger(value)) fail(path, "must be an integer");
-			if (value < node.min || value > node.max) fail(path, `must be between ${node.min} and ${node.max}`);
+			if (node.integer && !Number.isInteger(value)) fail(path, `must be an integer (got ${shown(value)})`);
+			if (value < node.min || value > node.max) fail(path, `must be from ${bound(node.min)} to ${bound(node.max)} (got ${shown(value)})`);
 			return Object.is(value, -0) ? 0 : value;
 		}
 		if (node.kind === "string") {
 			if (typeof value !== "string") fail(path, "must be a string");
-			if (value.length < node.minLength || value.length > node.maxLength) fail(path, `must contain ${node.minLength} to ${node.maxLength} characters`);
-			if (node.pattern && !node.pattern.test(value)) fail(path, "contains characters that are not allowed");
+			if (value.length < node.minLength || value.length > node.maxLength) fail(path, `must contain ${node.minLength} to ${node.maxLength} characters (got ${value.length})`);
+			if (node.pattern && !node.pattern.test(value)) fail(path, `${node.rule} (got ${shown(value)})`);
 			return value;
 		}
 		if (node.kind === "array") {
@@ -375,30 +393,30 @@ pixi_js = __toESM(pixi_js, 1);
 		ancestors.add(value);
 		try {
 			if (node.kind === "array") {
-				if (value.length > node.maxLength) fail(path, `must contain at most ${node.maxLength} entries`);
+				if (value.length > node.maxLength) fail(path, `must contain at most ${node.maxLength} entries (got ${value.length})`);
 				const keys = Reflect.ownKeys(value).filter((key) => key !== "length");
 				if (keys.some((key) => typeof key !== "string")) fail(path, "must not contain symbol keys");
 				keys.forEach((key) => {
 					const descriptor = Object.getOwnPropertyDescriptor(value, key);
 					if (!descriptor.enumerable || !("value" in descriptor)) fail(`${path}.${String(key)}`, "must be an enumerable data property");
 				});
-				for (let i = 0; i < value.length; i++) if (!Object.hasOwn(value, i)) fail(`${path}[${i}]`, "is missing");
-				if (keys.some((key) => !/^(0|[1-9][0-9]*)$/.test(key))) fail(path, "must not contain named properties");
+				for (let i = 0; i < value.length; i++) if (!Object.hasOwn(value, i)) fail(`${path}[${i}]`, "is an empty slot; arrays must not have holes");
+				if (keys.some((key) => !/^(0|[1-9][0-9]*)$/.test(key))) fail(path, "must contain only numbered items");
 				return value.map((item, i) => readNode(node.item, item, `${path}[${i}]`, ancestors));
 			}
 			const keys = ownKeys(value, path);
 			if (node.kind === "record") {
-				if (keys.length < node.minLength || keys.length > node.maxLength) fail(path, `must contain ${node.minLength} to ${node.maxLength} definitions`);
+				if (keys.length < node.minLength || keys.length > node.maxLength) fail(path, `must contain ${node.minLength} to ${node.maxLength} definitions (got ${keys.length})`);
 				const out = {};
 				keys.sort().forEach((key) => {
-					if (!ID_PATTERN.test(key)) fail(`${path}.${key}`, "has an invalid id");
+					if (!ID_PATTERN.test(key)) fail(`${path}.${key}`, `id ${ID_RULE}`);
 					out[key] = readNode(node.item, value[key], `${path}.${key}`, ancestors);
 				});
 				return out;
 			}
 			const expected = Object.keys(node.fields);
 			keys.forEach((key) => {
-				if (!Object.hasOwn(node.fields, key)) fail(`${path}.${key}`, "is unknown");
+				if (!Object.hasOwn(node.fields, key)) fail(`${path}.${key}`, "is not a known field");
 			});
 			const out = {};
 			expected.forEach((key) => {
@@ -410,8 +428,8 @@ pixi_js = __toESM(pixi_js, 1);
 			ancestors.delete(value);
 		}
 	};
-	var reference = (table, id, path) => {
-		if (!Object.hasOwn(table, id)) fail(path, `references missing "${id}"`);
+	var reference = (definitions, table, id, path) => {
+		if (!Object.hasOwn(definitions[table], id)) fail(path, `${shown(id)} is not defined in $.definitions.${table}`);
 	};
 	var resolvedChunks = (descriptor, placement, path) => {
 		const sections = descriptor.chain.sections;
@@ -422,14 +440,20 @@ pixi_js = __toESM(pixi_js, 1);
 		};
 		const section = placement.at.section;
 		const length = section ? sections[section].chunks : SECTIONS.reduce((sum, name) => sum + sections[name].chunks, 0);
-		if (!length) fail(`${path}.at`, "cannot address an empty scope");
+		if (!length) fail(`${path}.at.section`, `${shown(section)} has no chunks`);
+		const area = section ? `the ${section}` : "the chain";
 		const offset = placement.at.offset;
-		if (offset >= length) fail(`${path}.at.offset`, "falls outside its scope");
+		if (offset >= length) fail(`${path}.at.offset`, `must be at most ${length - 1}, the last chunk of ${area} (got ${offset})`);
 		const direction = placement.at.from === "head" ? 1 : -1;
 		const localStart = direction > 0 ? offset : length - 1 - offset;
-		const available = Math.floor((length - 1 - offset) / placement.repeat.step) + 1;
+		const step = placement.repeat.step;
+		const available = Math.floor((length - 1 - offset) / step) + 1;
 		const count = placement.repeat.count ?? available;
-		if (count > available) fail(`${path}.repeat.count`, "runs outside its scope");
+		if (count > available) {
+			const copies = available === 1 ? "copy" : "copies";
+			const spacing = step === 1 ? "in a row" : `${step} chunks apart`;
+			fail(`${path}.repeat.count`, `must be at most ${available} (got ${count}); from offset ${offset}, ${area} fits ${available} ${copies} ${spacing}`);
+		}
 		const base = section ? offsets[section] : 0;
 		return Array.from({ length: count }, (_, i) => base + localStart + direction * i * placement.repeat.step);
 	};
@@ -437,78 +461,82 @@ pixi_js = __toESM(pixi_js, 1);
 		const { definitions, chain, gait, legs } = descriptor;
 		const sections = chain.sections;
 		const total = SECTIONS.reduce((sum, name) => sum + sections[name].chunks, 0);
-		if (total < 2 || total > LIMITS.chunks) fail("$.chain.sections", `must contain 2 to ${LIMITS.chunks} chunks`);
-		SECTIONS.forEach((name) => reference(definitions.materials, sections[name].material, `$.chain.sections.${name}.material`));
+		if (total < 2 || total > LIMITS.chunks) fail("$.chain.sections", `chunk counts must total 2 to ${LIMITS.chunks} (got ${total})`);
+		SECTIONS.forEach((name) => reference(definitions, "materials", sections[name].material, `$.chain.sections.${name}.material`));
 		SECTIONS.forEach((name) => {
 			const scale = sections[name].motionScale;
-			if (descriptor.gait.gather.amplitude * scale.gather >= 1) fail(`$.chain.sections.${name}.motionScale.gather`, "makes the gathered link length zero or negative");
-			if (descriptor.gait.contact.amplitude * scale.contact > 1) fail(`$.chain.sections.${name}.motionScale.contact`, "makes ground contact negative");
+			const { gather, contact } = descriptor.gait;
+			if (gather.amplitude * scale.gather >= 1) fail(`$.chain.sections.${name}.motionScale.gather`, `gait.gather.amplitude × motionScale.gather must be less than 1 (got ${product(gather.amplitude, scale.gather)})`);
+			if (contact.amplitude * scale.contact > 1) fail(`$.chain.sections.${name}.motionScale.contact`, `gait.contact.amplitude × motionScale.contact must be at most 1 (got ${product(contact.amplitude, scale.contact)})`);
 		});
 		[
 			[
-				definitions.paints,
+				"paints",
 				chain.skin.ribbon.paint,
 				"$.chain.skin.ribbon.paint"
 			],
 			[
-				definitions.paints,
+				"paints",
 				legs.skin.limbPaint,
 				"$.legs.skin.limbPaint"
 			],
 			[
-				definitions.shapes,
+				"shapes",
 				legs.skin.foot.shape,
 				"$.legs.skin.foot.shape"
 			],
 			[
-				definitions.paints,
+				"paints",
 				legs.skin.foot.paint,
 				"$.legs.skin.foot.paint"
 			]
-		].forEach((args) => reference(...args));
+		].forEach((args) => reference(definitions, ...args));
 		const placementIds = /* @__PURE__ */ new Set();
+		const uniqueId = (entry, path) => {
+			if (placementIds.has(entry.id)) fail(`${path}.id`, `${shown(entry.id)} is already used by another plate or ornament`);
+			placementIds.add(entry.id);
+		};
 		const occupied = /* @__PURE__ */ new Map();
 		chain.skin.plates.forEach((entry, i) => {
 			const path = `$.chain.skin.plates[${i}]`;
-			if (placementIds.has(entry.id)) fail(`${path}.id`, "must be unique");
-			placementIds.add(entry.id);
-			reference(definitions.shapes, entry.shape, `${path}.shape`);
-			reference(definitions.paints, entry.paint, `${path}.paint`);
+			uniqueId(entry, path);
+			reference(definitions, "shapes", entry.shape, `${path}.shape`);
+			reference(definitions, "paints", entry.paint, `${path}.paint`);
 			resolvedChunks(descriptor, entry, path).forEach((chunk) => {
-				if (occupied.has(chunk)) fail(`${path}.at`, `overlaps plate "${occupied.get(chunk)}" at chunk ${chunk}`);
+				if (occupied.has(chunk)) fail(`${path}.at`, `must not overlap plate ${shown(occupied.get(chunk))}; both cover chunk ${chunk}`);
 				occupied.set(chunk, entry.id);
 			});
 		});
-		let ornamentInstances = 0;
+		let ornamentCount = 0;
 		chain.skin.ornaments.forEach((entry, i) => {
 			const path = `$.chain.skin.ornaments[${i}]`;
-			if (placementIds.has(entry.id)) fail(`${path}.id`, "must be unique");
-			placementIds.add(entry.id);
-			reference(definitions.shapes, entry.shape, `${path}.shape`);
-			reference(definitions.paints, entry.paint, `${path}.paint`);
-			ornamentInstances += resolvedChunks(descriptor, entry, path).length * (entry.side === "both" ? 2 : 1);
-			if (ornamentInstances > LIMITS.instances) fail("$.chain.skin.ornaments", `must expand to at most ${LIMITS.instances} instances`);
+			uniqueId(entry, path);
+			reference(definitions, "shapes", entry.shape, `${path}.shape`);
+			reference(definitions, "paints", entry.paint, `${path}.paint`);
+			ornamentCount += resolvedChunks(descriptor, entry, path).length * (entry.side === "both" ? 2 : 1);
 		});
+		if (ornamentCount > LIMITS.instances) fail("$.chain.skin.ornaments", `must place at most ${LIMITS.instances} ornaments, counting repeats and both sides (got ${ornamentCount})`);
 		[
 			"bend",
 			"thrust",
 			"gather",
 			"contact"
 		].forEach((channel) => {
-			if (gait.cyclesPerSecond * gait[channel].harmonic > 15) fail(`$.gait.${channel}.harmonic`, `times cyclesPerSecond must be at most ${15}`);
+			const harmonic = gait[channel].harmonic;
+			if (gait.cyclesPerSecond * harmonic > 15) fail(`$.gait.${channel}.harmonic`, `harmonic × gait.cyclesPerSecond must be at most ${bound(15)} (got ${product(harmonic, gait.cyclesPerSecond)})`);
 		});
-		if (legs.pairs && !sections[legs.section].chunks) fail("$.legs.section", "cannot attach legs to an empty section");
+		if (legs.pairs && !sections[legs.section].chunks) fail("$.legs.section", `${shown(legs.section)} has no chunks to carry legs`);
 		Object.entries(definitions.paints).forEach(([name, entry]) => {
 			if (entry.fill !== null && !entry.fill.trim()) fail(`$.definitions.paints.${name}.fill`, "must not be blank");
 			if (entry.stroke !== null && !entry.stroke.colour.trim()) fail(`$.definitions.paints.${name}.stroke.colour`, "must not be blank");
-			if (entry.fill === null && (entry.stroke === null || !entry.stroke.width)) fail(`$.definitions.paints.${name}`, "must draw a fill or visible stroke");
+			if (entry.fill === null && (entry.stroke === null || !entry.stroke.width)) fail(`$.definitions.paints.${name}`, "needs a fill, or a stroke wider than 0");
 		});
 		let pathTotal = 0;
 		Object.entries(definitions.shapes).forEach(([name, entry]) => {
 			if (!entry.path.trim()) fail(`$.definitions.shapes.${name}.path`, "must not be blank");
 			pathTotal += entry.path.length;
 		});
-		if (pathTotal > LIMITS.pathTotal) fail("$.definitions.shapes", `paths must total at most ${LIMITS.pathTotal} characters`);
+		if (pathTotal > LIMITS.pathTotal) fail("$.definitions.shapes", `paths must total at most ${LIMITS.pathTotal} characters (got ${pathTotal})`);
 		return descriptor;
 	};
 	var read = (value) => validate(readNode(schema, value, "$", /* @__PURE__ */ new WeakSet()));
@@ -565,9 +593,9 @@ pixi_js = __toESM(pixi_js, 1);
 		};
 	};
 	var bounds = (path) => {
-		if (typeof path !== "string" || !path) fail("$", "bounds path must be a non-empty string");
+		if (typeof path !== "string" || !path) fail("bounds", "path must be a non-empty string");
 		const found = resolve(path.replace(/\[\]/g, ".[]").split("."));
-		if (!found) fail(`$.${path}`, "is not a field in this schema");
+		if (!found) fail("bounds", `${shown(path)} is not a descriptor field`);
 		return Object.freeze({
 			...shapeOf(found.node),
 			nullable: found.nullable
@@ -594,7 +622,7 @@ pixi_js = __toESM(pixi_js, 1);
 		return value;
 	};
 	var scale = (descriptor, factor) => {
-		if (typeof factor !== "number" || !Number.isFinite(factor) || factor <= 0) fail("$", "scale factor must be a finite number greater than 0");
+		if (typeof factor !== "number" || !Number.isFinite(factor) || factor <= 0) fail("scale", "factor must be a finite number greater than 0");
 		const source = read(descriptor);
 		const scaled = scaleNode(schema, source, factor);
 		const worldPaints = /* @__PURE__ */ new Set([source.chain.skin.ribbon.paint, source.legs.skin.limbPaint]);
@@ -617,20 +645,25 @@ pixi_js = __toESM(pixi_js, 1);
 			}
 			scaled.definitions.paints[shapeId] = paint;
 		}
-		return read(scaled);
+		try {
+			return read(scaled);
+		} catch (error) {
+			if (!error.path) throw error;
+			fail("scale", `with factor ${shown(factor)}, ${error.path} ${error.rule}`);
+		}
 	};
 	var parse = (text) => {
-		if (typeof text !== "string") fail("$", "JSON input must be a string");
+		if (typeof text !== "string") fail("parse", "text must be a string");
 		let value;
 		try {
 			value = JSON.parse(text);
 		} catch (error) {
-			fail("$", `invalid JSON: ${error.message}`);
+			fail("parse", `text is not valid JSON: ${error.message}`);
 		}
 		return read(value);
 	};
 	var stringify = (value, space = 2) => {
-		if (!Number.isInteger(space) || space < 0 || space > 10) fail("$", "indentation must be an integer from 0 to 10");
+		if (!Number.isInteger(space) || space < 0 || space > 10) fail("stringify", "space must be an integer from 0 to 10");
 		return JSON.stringify(read(value), null, space);
 	};
 
@@ -1266,7 +1299,7 @@ pixi_js = __toESM(pixi_js, 1);
 			this.tables = new ChainTables(model, model.gait, PHYSICS_STEP, RELAX_PASSES);
 		}
 		reconfigure(model, gait, throttle = 1, breathingPhase = this.breathingPhase) {
-			if (model.chunks.length !== this.chain.count) throw new Error("cannot reconfigure a different chunk count");
+			if (model.chunks.length !== this.chain.count) throw new Error("Body.reconfigure: the new model must have the same chunk count; build a new Body instead");
 			this.model = model;
 			this.gait = gait;
 			this.breathingPhase = breathingPhase;
@@ -2169,6 +2202,8 @@ pixi_js = __toESM(pixi_js, 1);
 	var planAtlas = (model, renderResolution) => {
 		const resolution = renderResolution * 4;
 		const specs = /* @__PURE__ */ new Map();
+		const shapes = model.descriptor.definitions.shapes;
+		const shapeIdOf = (shape) => Object.keys(shapes).find((id) => shapes[id] === shape);
 		const claim = (shape, paint, scale) => {
 			if (!(scale > 0)) return null;
 			const key = frameKeyFor(shape, paint);
@@ -2177,6 +2212,7 @@ pixi_js = __toESM(pixi_js, 1);
 			else specs.set(key, {
 				key,
 				shape,
+				shapeId: shapeIdOf(shape),
 				paint,
 				scale
 			});
@@ -2239,7 +2275,7 @@ pixi_js = __toESM(pixi_js, 1);
 					width: bounds.width,
 					height: bounds.height
 				};
-				if (!Object.values(entry.bounds).every(Number.isFinite)) throw new RangeError("atlas shape bounds must be finite");
+				if (!Object.values(entry.bounds).every(Number.isFinite)) throw new RangeError(`$.definitions.shapes.${entry.shapeId}.path: has a coordinate too large to draw`);
 			}
 			let frameLimit = FRAME_TEXEL_LIMIT;
 			let size;
@@ -2258,7 +2294,7 @@ pixi_js = __toESM(pixi_js, 1);
 				}
 				size = arrangeEntries(entries);
 				if (size.width <= 2048 && size.height <= 2048) break;
-				if (frameLimit === 4) throw new RangeError("too many atlas frames for the texture budget");
+				if (frameLimit === 4) throw new RangeError(`$.definitions: too many distinct shape and paint pairs to fit one ${ATLAS_TEXEL_LIMIT} × ${ATLAS_TEXEL_LIMIT} texture`);
 				frameLimit = Math.max(4, Math.floor(frameLimit * .75));
 			}
 			for (const entry of entries) {
@@ -2280,7 +2316,7 @@ pixi_js = __toESM(pixi_js, 1);
 	var prepareAtlas = (model, renderResolution) => {
 		const held = prepared.get(model);
 		if (held?.renderResolution === renderResolution) return held.plan;
-		if (!Number.isFinite(renderResolution) || renderResolution <= 0) throw new RangeError("pixelResolution must be finite and positive");
+		if (!Number.isFinite(renderResolution) || renderResolution <= 0) throw new RangeError("prepareAtlas: renderResolution must be a finite number greater than 0");
 		const plan = planAtlas(model, renderResolution);
 		const sheet = packAtlas(plan);
 		for (const entry of sheet.entries) entry.context.destroy();
@@ -2398,7 +2434,7 @@ pixi_js = __toESM(pixi_js, 1);
 	var pixelResolutionOf = (options) => {
 		const value = options?.pixelResolution;
 		if (value === void 0) return 1;
-		if (!Number.isFinite(value)) throw new RangeError("pixelResolution must be finite and positive");
+		if (!Number.isFinite(value)) throw new RangeError("options.render.pixelResolution: must be a finite number");
 		return Math.max(MIN_PIXEL_RESOLUTION, Math.min(MAX_PIXEL_RESOLUTION, value));
 	};
 	/**
@@ -2780,7 +2816,7 @@ pixi_js = __toESM(pixi_js, 1);
 			});
 		}
 		sync(state, renderer = null, drawable = true) {
-			if (state.model !== this.model) throw new Error("render state model does not match Beefwife graphics");
+			if (state.model !== this.model) throw new Error("Graphics.sync: state.model must be the model these graphics were built for");
 			this.state = state;
 			this._syncAtlas(renderer);
 			if (!drawable) return;
@@ -2876,6 +2912,7 @@ pixi_js = __toESM(pixi_js, 1);
 		"perspective",
 		"maxOffset"
 	]);
+	var OUTSIDE_WORLD = `puts part of the body more than ${MAX_WORLD_COORDINATE} px from the origin on an axis`;
 	var RESET_KEYS = /* @__PURE__ */ new Set([
 		"position",
 		"direction",
@@ -2883,30 +2920,29 @@ pixi_js = __toESM(pixi_js, 1);
 	]);
 	var CONTROL_KEYS = /* @__PURE__ */ new Set(["throttle", "direction"]);
 	var plainObject = (value, path) => {
-		if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${path} must be an object`);
+		if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${path}: must be an object`);
 		const prototype = Object.getPrototypeOf(value);
-		if (prototype !== Object.prototype && prototype !== null) throw new TypeError(`${path} must be a plain object`);
+		if (prototype !== Object.prototype && prototype !== null) throw new TypeError(`${path}: must be a plain object`);
 		return value;
 	};
 	var optionsOf$2 = /* @__PURE__ */ __name((value, allowed, path) => {
 		if (value === void 0) return {};
 		const options = plainObject(value, path);
-		for (const key in options) if (!allowed.has(key)) throw new TypeError(`${path}.${key} is unknown`);
+		for (const key in options) if (!allowed.has(key)) throw new TypeError(`${path}.${key}: is not a known option`);
 		return options;
 	}, "optionsOf");
 	var defaulted = (value, fallback) => value === void 0 ? fallback : value;
 	var finite$1 = /* @__PURE__ */ __name((value, path) => {
-		if (typeof value !== "number" || !Number.isFinite(value)) throw new TypeError(`${path} must be a finite number`);
+		if (typeof value !== "number" || !Number.isFinite(value)) throw new TypeError(`${path}: must be a finite number`);
 		return value;
 	}, "finite");
 	var renderOptionsOf = (value) => {
 		if (value === void 0) return null;
 		const render = optionsOf$2(value, RENDER_KEYS, "options.render");
-		if (render.roundVertices !== void 0 && typeof render.roundVertices !== "boolean") throw new TypeError("options.render.roundVertices must be a boolean");
+		if (render.roundVertices !== void 0 && typeof render.roundVertices !== "boolean") throw new TypeError("options.render.roundVertices: must be true or false");
 		if (render.pixelResolution !== void 0) {
 			const pixelResolution = finite$1(render.pixelResolution, "options.render.pixelResolution");
-			if (pixelResolution <= 0) throw new RangeError("options.render.pixelResolution must be positive");
-			if (pixelResolution < 1e-6 || pixelResolution > 1e6) throw new RangeError(`options.render.pixelResolution must be from ${MIN_PIXEL_RESOLUTION} to ${MAX_PIXEL_RESOLUTION}`);
+			if (pixelResolution < 1e-6 || pixelResolution > 1e6) throw new RangeError(`options.render.pixelResolution: must be from ${MIN_PIXEL_RESOLUTION} to ${MAX_PIXEL_RESOLUTION} (got ${pixelResolution})`);
 		}
 		const projection = render.kneeProjection;
 		if (projection !== void 0 && projection !== null) {
@@ -2916,23 +2952,21 @@ pixi_js = __toESM(pixi_js, 1);
 				y: projection.centerY
 			}, null, "options.render.kneeProjection.center");
 			const perspective = finite$1(projection.perspective, "options.render.kneeProjection.perspective");
-			if (perspective < 0) throw new RangeError("options.render.kneeProjection.perspective must be nonnegative");
-			if (perspective > 1e6) throw new RangeError(`options.render.kneeProjection.perspective must be at most ${MAX_PERSPECTIVE}`);
+			if (perspective < 0 || perspective > 1e6) throw new RangeError(`options.render.kneeProjection.perspective: must be from 0 to ${MAX_PERSPECTIVE} (got ${perspective})`);
 			if (projection.maxOffset !== void 0) {
 				const maxOffset = finite$1(projection.maxOffset, "options.render.kneeProjection.maxOffset");
-				if (maxOffset < 0) throw new RangeError("options.render.kneeProjection.maxOffset must be nonnegative");
-				if (maxOffset > 1e9) throw new RangeError(`options.render.kneeProjection.maxOffset must be at most ${MAX_WORLD_COORDINATE}`);
+				if (maxOffset < 0 || maxOffset > 1e9) throw new RangeError(`options.render.kneeProjection.maxOffset: must be from 0 to ${MAX_WORLD_COORDINATE} (got ${maxOffset})`);
 			}
 		}
 		return render;
 	};
 	var point$1 = /* @__PURE__ */ __name((value, fallback, path) => {
 		if (value === void 0) {
-			if (fallback === null) throw new TypeError(`${path} is required`);
+			if (fallback === null) throw new TypeError(`${path}: is required`);
 			return { ...fallback };
 		}
 		const input = plainObject(value, path);
-		for (const key in input) if (key !== "x" && key !== "y") throw new TypeError(`${path}.${key} is unknown`);
+		for (const key in input) if (key !== "x" && key !== "y") throw new TypeError(`${path}.${key}: is not a known field`);
 		return {
 			x: finite$1(input.x, `${path}.x`),
 			y: finite$1(input.y, `${path}.y`)
@@ -2940,18 +2974,18 @@ pixi_js = __toESM(pixi_js, 1);
 	}, "point");
 	var worldPoint = (value, fallback, path) => {
 		const result = point$1(value, fallback, path);
-		if (Math.abs(result.x) > 1e9 || Math.abs(result.y) > 1e9) throw new RangeError(`${path} coordinates must be from ${-MAX_WORLD_COORDINATE} to ${MAX_WORLD_COORDINATE}`);
+		if (Math.abs(result.x) > 1e9 || Math.abs(result.y) > 1e9) throw new RangeError(`${path}: x and y must be from ${-MAX_WORLD_COORDINATE} to ${MAX_WORLD_COORDINATE}`);
 		return result;
 	};
 	var directionInto = (value, fallback, path, result) => {
 		const input = value === void 0 ? fallback : plainObject(value, path);
 		if (value !== void 0) {
-			for (const key in input) if (key !== "x" && key !== "y") throw new TypeError(`${path}.${key} is unknown`);
+			for (const key in input) if (key !== "x" && key !== "y") throw new TypeError(`${path}.${key}: is not a known field`);
 		}
 		const inputX = finite$1(input.x, `${path}.x`);
 		const inputY = finite$1(input.y, `${path}.y`);
 		const scale = Math.max(Math.abs(inputX), Math.abs(inputY));
-		if (!scale) throw new RangeError(`${path} must be nonzero`);
+		if (!scale) throw new RangeError(`${path}: x and y must not both be 0`);
 		const x = inputX / scale;
 		const y = inputY / scale;
 		const magnitude = Math.hypot(x, y);
@@ -3017,7 +3051,7 @@ pixi_js = __toESM(pixi_js, 1);
 				y: 0
 			}, "options.direction");
 			const phase = finite$1(defaulted(options.phase, 0), "options.phase");
-			if (options.random !== void 0 && typeof options.random !== "function") throw new TypeError("options.random must be a function");
+			if (options.random !== void 0 && typeof options.random !== "function") throw new TypeError("options.random: must be a function");
 			this.#random = options.random ?? Math.random;
 			this.#renderOptions = renderOptionsOf(options.render);
 			this.#requestedDirection = { ...facing };
@@ -3027,7 +3061,7 @@ pixi_js = __toESM(pixi_js, 1);
 			const breathingPhase = this.#model.breathing.strain ? TAU * this.#sampleRandom() : this.#gait.phase;
 			this.#body = new Body(this.#model, this.#gait, breathingPhase);
 			this.#body.place(position, facing);
-			if (!bodyFitsWorld(this.#body)) throw new RangeError("options.position places the body outside the world");
+			if (!bodyFitsWorld(this.#body)) throw new RangeError(`options.position: ${OUTSIDE_WORLD}`);
 			this.#legs = new Legs(this.#model, this.#body, this.#gait, () => this.#sampleRandom());
 			this.#throttle = 1;
 			this.#stepThrottle = 1;
@@ -3046,10 +3080,10 @@ pixi_js = __toESM(pixi_js, 1);
 		step(rawDt, rawControls) {
 			this.#live("step");
 			const dt = finite$1(rawDt, "dt");
-			if (dt < 0) throw new RangeError("dt must be nonnegative");
+			if (dt < 0) throw new RangeError(`dt: must be 0 or more (got ${dt})`);
 			const controls = optionsOf$2(rawControls, CONTROL_KEYS, "controls");
 			const throttle = finite$1(defaulted(controls.throttle, 1), "controls.throttle");
-			if (throttle < 0 || throttle > 1) throw new RangeError("controls.throttle must be from 0 to 1");
+			if (throttle < 0 || throttle > 1) throw new RangeError(`controls.throttle: must be from 0 to 1 (got ${throttle})`);
 			const wanted = directionInto(controls.direction, this.#requestedDirection, "controls.direction", this.#requestedDirection);
 			this.#stepThrottle = throttle;
 			if (this.#body.step(dt, throttle, wanted, this.#updateDependents)) {
@@ -3074,7 +3108,7 @@ pixi_js = __toESM(pixi_js, 1);
 				body = new Body(nextModel, nextGait, breathingPhase);
 				body.adopt(this.#body);
 				body.refreshContacts(this.#throttle);
-				if (!bodyFitsWorld(body)) throw new RangeError("descriptor places the body outside the world");
+				if (!bodyFitsWorld(body)) throw new RangeError(`descriptor: ${OUTSIDE_WORLD}`);
 			}
 			const nextLegs = legCountKey(this.#model) === legCountKey(nextModel) ? null : new Legs(nextModel, body, nextGait, () => this.#sampleRandom());
 			const nextSkin = ornamentKey(this.#model) === ornamentKey(nextModel) ? null : new Skin(nextModel, body, nextLegs || this.#legs);
@@ -3101,7 +3135,7 @@ pixi_js = __toESM(pixi_js, 1);
 			const breathingPhase = this.#model.breathing.strain ? TAU * this.#sampleRandom() : gait.phase;
 			const body = new Body(this.#model, gait, breathingPhase);
 			body.place(position, facing);
-			if (!bodyFitsWorld(body)) throw new RangeError("options.position places the body outside the world");
+			if (!bodyFitsWorld(body)) throw new RangeError(`options.position: ${OUTSIDE_WORLD}`);
 			const legs = new Legs(this.#model, body, gait, () => this.#sampleRandom());
 			const skin = new Skin(this.#model, body, legs);
 			if (options.direction !== void 0) this.#requestedDirection = { ...facing };
@@ -3116,7 +3150,7 @@ pixi_js = __toESM(pixi_js, 1);
 		translate(rawOffset) {
 			this.#live("translate");
 			const offset = worldPoint(rawOffset, null, "offset");
-			if (!this.#body.chain.fitsTranslation(offset, 1e9)) throw new RangeError("offset places the body outside the world");
+			if (!this.#body.chain.fitsTranslation(offset, 1e9)) throw new RangeError(`offset: ${OUTSIDE_WORLD}`);
 			this.#body.chain.translate(offset);
 			this.#legs.translate(offset);
 			this.#skin.translate(offset);
@@ -3139,12 +3173,12 @@ pixi_js = __toESM(pixi_js, 1);
 			super.destroy(options);
 		}
 		#live(method) {
-			if (this.#gone) throw new Error(`${method} was called on a destroyed beefwife`);
+			if (this.#gone) throw new Error(`${method}: cannot be called after destroy()`);
 		}
 		#sampleRandom() {
 			const sample = this.#random();
-			if (typeof sample !== "number" || !Number.isFinite(sample)) throw new TypeError("random() must return a finite number");
-			if (sample < 0 || sample >= 1) throw new RangeError("random() must return a number from 0 to 1");
+			if (typeof sample !== "number" || !Number.isFinite(sample)) throw new TypeError(`options.random: must return a finite number (got ${typeof sample === "number" ? sample : typeof sample})`);
+			if (sample < 0 || sample >= 1) throw new RangeError(`options.random: must return a number from 0 up to but not including 1 (got ${sample})`);
 			return sample;
 		}
 		#refreshPose() {
@@ -3173,7 +3207,10 @@ pixi_js = __toESM(pixi_js, 1);
 			cache: "no-cache",
 			signal
 		});
-		if (!response.ok) throw new Error(`${url}: ${response.status}`);
+		if (!response.ok) {
+			const status = [response.status, response.statusText].filter(Boolean);
+			throw new Error(`cast: could not fetch ${url} (HTTP ${status.join(" ")})`);
+		}
 		return response.json();
 	};
 	var weightedSource = (value, baseUrl, path) => {
@@ -3181,11 +3218,11 @@ pixi_js = __toESM(pixi_js, 1);
 			src: new URL(value, baseUrl).href,
 			weight: 1
 		};
-		if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${path} must be a URL or source object`);
-		for (const key of Object.keys(value)) if (key !== "src" && key !== "weight") throw new TypeError(`${path}.${key} is unknown`);
-		if (typeof value.src !== "string" || !value.src) throw new TypeError(`${path}.src must be a URL`);
+		if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${path}: must be a URL string or a { src, weight } object`);
+		for (const key of Object.keys(value)) if (key !== "src" && key !== "weight") throw new TypeError(`${path}.${key}: is not a known field`);
+		if (typeof value.src !== "string" || !value.src) throw new TypeError(`${path}.src: must be a non-empty URL string`);
 		const weight = value.weight ?? 1;
-		if (!Number.isFinite(weight) || weight <= 0) throw new RangeError(`${path}.weight must be positive`);
+		if (!Number.isFinite(weight) || weight <= 0) throw new RangeError(`${path}.weight: must be a finite number greater than 0 (got ${weight})`);
 		return {
 			src: new URL(value.src, baseUrl).href,
 			weight
@@ -3199,21 +3236,21 @@ pixi_js = __toESM(pixi_js, 1);
 			value = await responseJson(url, signal);
 			baseUrl = url;
 		}
-		if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("manifest must be an object");
-		for (const key of Object.keys(value)) if (key !== "schemaVersion" && key !== "sources") throw new TypeError(`manifest.${key} is unknown`);
-		if (value.schemaVersion !== 1) throw new TypeError("manifest.schemaVersion must be 1");
-		if (!Array.isArray(value.sources) || !value.sources.length) throw new TypeError("manifest.sources must be a nonempty array");
+		if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("manifest: must be an object");
+		for (const key of Object.keys(value)) if (key !== "schemaVersion" && key !== "sources") throw new TypeError(`manifest.${key}: is not a known field`);
+		if (value.schemaVersion !== 1) throw new TypeError(`manifest.schemaVersion: must be 1 (got ${JSON.stringify(value.schemaVersion)})`);
+		if (!Array.isArray(value.sources) || !value.sources.length) throw new TypeError("manifest.sources: must be an array with at least one source");
 		return value.sources.map((source, index) => weightedSource(source, baseUrl, `manifest.sources[${index}]`));
 	};
 	var descriptorEntry = (value, path) => {
 		let descriptor = value;
 		let weight = 1;
 		if (value?.descriptor !== void 0) {
-			for (const key of Object.keys(value)) if (key !== "descriptor" && key !== "weight") throw new TypeError(`${path}.${key} is unknown`);
+			for (const key of Object.keys(value)) if (key !== "descriptor" && key !== "weight") throw new TypeError(`${path}.${key}: is not a known field`);
 			descriptor = value.descriptor;
 			weight = value.weight ?? 1;
 		}
-		if (!Number.isFinite(weight) || weight <= 0) throw new RangeError(`${path}.weight must be positive`);
+		if (!Number.isFinite(weight) || weight <= 0) throw new RangeError(`${path}.weight: must be a finite number greater than 0 (got ${weight})`);
 		return {
 			descriptor: read(descriptor),
 			weight
@@ -3230,12 +3267,12 @@ pixi_js = __toESM(pixi_js, 1);
 			weight
 		})));
 		entries.push(...fetched);
-		if (!entries.length) throw new TypeError("provide manifest, sources, or descriptors");
+		if (!entries.length) throw new TypeError("cast: needs a manifest, sources, or descriptors");
 		const cast = Object.create(null);
 		const castWeights = Object.create(null);
 		for (const entry of entries) {
 			const name = entry.descriptor.name;
-			if (cast[name]) throw new TypeError(`duplicate beefwife name: ${name}`);
+			if (cast[name]) throw new TypeError(`cast: two descriptors are named ${JSON.stringify(name)}; names must be unique`);
 			cast[name] = entry.descriptor;
 			castWeights[name] = entry.weight;
 		}
@@ -3346,11 +3383,11 @@ pixi_js = __toESM(pixi_js, 1);
 		if (type === "string") return value;
 		if (type === "sources") return value.split(",").map((part) => part.trim()).filter(Boolean);
 		if (type === "boolean") {
-			if (!BOOLEAN.has(value)) throw new TypeError(`${name} must be true or false`);
+			if (!BOOLEAN.has(value)) throw new TypeError(`${name}: must be "true" or "false"`);
 			return value === "true";
 		}
 		const number = Number(value);
-		if (!Number.isFinite(number)) throw new TypeError(`${name} must be a finite number`);
+		if (!Number.isFinite(number)) throw new TypeError(`${name}: must be a finite number (got ${JSON.stringify(value)})`);
 		return number;
 	};
 	var attributesOf = (canvas) => {
@@ -3359,14 +3396,14 @@ pixi_js = __toESM(pixi_js, 1);
 			if (!attribute.name.startsWith("data-beefwife-")) continue;
 			if (attribute.name === "data-beefwife-canvas" || attribute.name === "data-beefwife-state" || attribute.name === "data-beefwife-pause-reason") continue;
 			const rule = ATTRIBUTES[attribute.name];
-			if (!rule) throw new TypeError(`${attribute.name} is unknown`);
+			if (!rule) throw new TypeError(`${attribute.name}: is not a known attribute`);
 			options[rule[0]] = parseAttribute(attribute.value, rule[1], attribute.name);
 		}
 		return options;
 	};
 	var optionsOf$1 = /* @__PURE__ */ __name((canvas, supplied) => {
-		if (supplied === null || typeof supplied !== "object" || Array.isArray(supplied)) throw new TypeError("options must be an object");
-		for (const key of Object.keys(supplied)) if (!OPTIONS[key]) throw new TypeError(`options.${key} is unknown`);
+		if (supplied === null || typeof supplied !== "object" || Array.isArray(supplied)) throw new TypeError("options: must be an object");
+		for (const key of Object.keys(supplied)) if (!OPTIONS[key]) throw new TypeError(`options.${key}: is not a known option`);
 		const options = {
 			...DEFAULTS,
 			...attributesOf(canvas),
@@ -3375,20 +3412,20 @@ pixi_js = __toESM(pixi_js, 1);
 		for (const [key, rule] of Object.entries(OPTIONS)) {
 			const value = options[key];
 			if (value === void 0) continue;
-			if (rule.type === "boolean" && typeof value !== "boolean") throw new TypeError(`${key} must be true or false`);
-			if (rule.type === "number" && !Number.isFinite(value)) throw new TypeError(`${key} must be a finite number`);
-			if (key === "avoid" && typeof value !== "string") throw new TypeError("avoid must be a selector string");
+			if (rule.type === "boolean" && typeof value !== "boolean") throw new TypeError(`${key}: must be true or false`);
+			if (rule.type === "number" && !Number.isFinite(value)) throw new TypeError(`${key}: must be a finite number`);
+			if (key === "avoid" && typeof value !== "string") throw new TypeError("avoid: must be a CSS selector string");
 		}
-		if (options.count !== void 0 && !Number.isInteger(options.count)) throw new TypeError("count must be an integer");
-		if (options.random !== void 0 && typeof options.random !== "function") throw new TypeError("random must be a function");
-		if (options.filters !== void 0 && !Array.isArray(options.filters)) throw new TypeError("filters must be an array");
-		if (!["auto", "pixelated"].includes(options.imageRendering)) throw new RangeError("imageRendering must be auto or pixelated");
+		if (options.count !== void 0 && !Number.isInteger(options.count)) throw new TypeError(`count: must be an integer (got ${options.count})`);
+		if (options.random !== void 0 && typeof options.random !== "function") throw new TypeError("random: must be a function");
+		if (options.filters !== void 0 && !Array.isArray(options.filters)) throw new TypeError("filters: must be an array");
+		if (!["auto", "pixelated"].includes(options.imageRendering)) throw new RangeError("imageRendering: must be \"auto\" or \"pixelated\"");
 		if (![
 			"none",
 			"click",
 			"move"
-		].includes(options.pointerInput)) throw new RangeError("pointerInput must be none, click, or move");
-		if (!["wander", "manual"].includes(options.targetMode)) throw new RangeError("targetMode must be wander or manual");
+		].includes(options.pointerInput)) throw new RangeError("pointerInput: must be \"none\", \"click\", or \"move\"");
+		if (!["wander", "manual"].includes(options.targetMode)) throw new RangeError("targetMode: must be \"wander\" or \"manual\"");
 		for (const key of [
 			"edgeMargin",
 			"escapeReplanSeconds",
@@ -3397,10 +3434,10 @@ pixi_js = __toESM(pixi_js, 1);
 			"obstaclePadding",
 			"stuckReplanSeconds",
 			"wanderDelay"
-		]) if (options[key] < 0) throw new RangeError(`${key} must be nonnegative`);
-		if (options.arrivalRadius !== void 0 && options.arrivalRadius <= 1) throw new RangeError("arrivalRadius must be greater than 1");
-		if (options.waypointRadius !== void 0 && options.waypointRadius <= 1) throw new RangeError("waypointRadius must be greater than 1");
-		if (options.throttleEase !== void 0 && options.throttleEase <= 0) throw new RangeError("throttleEase must be positive");
+		]) if (options[key] < 0) throw new RangeError(`${key}: must be 0 or more (got ${options[key]})`);
+		if (options.arrivalRadius !== void 0 && options.arrivalRadius <= 1) throw new RangeError(`arrivalRadius: must be greater than 1 (got ${options.arrivalRadius})`);
+		if (options.waypointRadius !== void 0 && options.waypointRadius <= 1) throw new RangeError(`waypointRadius: must be greater than 1 (got ${options.waypointRadius})`);
+		if (options.throttleEase !== void 0 && options.throttleEase <= 0) throw new RangeError(`throttleEase: must be greater than 0 (got ${options.throttleEase})`);
 		return options;
 	}, "optionsOf");
 	var ROAM_KEYS = {
@@ -3457,33 +3494,33 @@ pixi_js = __toESM(pixi_js, 1);
 		"viewport"
 	]);
 	var finite = (value, path) => {
-		if (typeof value !== "number" || !Number.isFinite(value)) throw new TypeError(`${path} must be a finite number`);
+		if (typeof value !== "number" || !Number.isFinite(value)) throw new TypeError(`${path}: must be a finite number`);
 		return value;
 	};
 	var point = (value, path) => {
-		if (!value || typeof value !== "object") throw new TypeError(`${path} must contain finite x and y coordinates`);
+		if (!value || typeof value !== "object") throw new TypeError(`${path}: must be an object with finite x and y`);
 		return {
 			x: finite(value.x, `${path}.x`),
 			y: finite(value.y, `${path}.y`)
 		};
 	};
 	var optionsOf = (supplied) => {
-		if (supplied === null || typeof supplied !== "object" || Array.isArray(supplied)) throw new TypeError("options must be an object");
-		for (const key of Object.keys(supplied)) if (!TERRAIN_OPTIONS.has(key)) throw new TypeError(`options.${key} is unknown`);
+		if (supplied === null || typeof supplied !== "object" || Array.isArray(supplied)) throw new TypeError("options: must be an object");
+		for (const key of Object.keys(supplied)) if (!TERRAIN_OPTIONS.has(key)) throw new TypeError(`options.${key}: is not a known option`);
 		const options = {
 			...TERRAIN_CONFIG,
 			...supplied
 		};
 		for (const key of ["edgeMargin", "obstaclePadding"]) {
 			finite(options[key], `options.${key}`);
-			if (options[key] < 0) throw new RangeError(`options.${key} must be nonnegative`);
+			if (options[key] < 0) throw new RangeError(`options.${key}: must be 0 or more (got ${options[key]})`);
 		}
-		if (typeof options.funnel !== "boolean") throw new TypeError("options.funnel must be true or false");
+		if (typeof options.funnel !== "boolean") throw new TypeError("options.funnel: must be true or false");
 		const avoidType = typeof options.avoid;
-		if (avoidType !== "string" && avoidType !== "function" && !options.avoid?.[Symbol.iterator]) throw new TypeError("options.avoid must be a selector, iterable, or function");
-		if (options.root !== void 0 && typeof options.root?.querySelectorAll !== "function") throw new TypeError("options.root must support querySelectorAll()");
+		if (avoidType !== "string" && avoidType !== "function" && !options.avoid?.[Symbol.iterator]) throw new TypeError("options.avoid: must be a CSS selector, an iterable of elements, or a function");
+		if (options.root !== void 0 && typeof options.root?.querySelectorAll !== "function") throw new TypeError("options.root: must have a querySelectorAll() method");
 		const viewportType = typeof options.viewport;
-		if (options.viewport !== void 0 && viewportType !== "function" && (options.viewport === null || viewportType !== "object")) throw new TypeError("options.viewport must be a rectangle or function");
+		if (options.viewport !== void 0 && viewportType !== "function" && (options.viewport === null || viewportType !== "object")) throw new TypeError("options.viewport: must be a rectangle or a function");
 		return Object.freeze(options);
 	};
 	/** Twice the signed area of a triangle. Its sign selects a side of ab. */
@@ -3553,12 +3590,12 @@ pixi_js = __toESM(pixi_js, 1);
 			const supplied = typeof source === "function";
 			if (supplied) source = source();
 			if (typeof source === "string") {
-				if (supplied) throw new TypeError("options.avoid() must return an iterable");
+				if (supplied) throw new TypeError("options.avoid: must return an iterable of elements");
 				const root = this.options.root || globalThis.document;
-				if (typeof root?.querySelectorAll !== "function") throw new Error("a document or options.root is required for a selector");
+				if (typeof root?.querySelectorAll !== "function") throw new Error("options.avoid: a selector needs options.root or a global document");
 				return Array.from(root.querySelectorAll(source));
 			}
-			if (!source?.[Symbol.iterator]) throw new TypeError("options.avoid() must return an iterable");
+			if (!source?.[Symbol.iterator]) throw new TypeError("options.avoid: must return an iterable of elements");
 			return Array.from(source);
 		}
 		nearest(x, y, result = {}) {
@@ -3570,7 +3607,7 @@ pixi_js = __toESM(pixi_js, 1);
 		_nearest(x, y, result, absolute, includeDistance = true) {
 			finite(x, "x");
 			finite(y, "y");
-			if (!result || typeof result !== "object") throw new TypeError("result must be an object");
+			if (!result || typeof result !== "object") throw new TypeError("result: must be an object");
 			if (!this.ready) return null;
 			if (x >= this.x0 && x <= this.x1 && y >= this.y0 && y <= this.y1 && !this._covered(x, y)) {
 				if (absolute) {
@@ -3630,13 +3667,13 @@ pixi_js = __toESM(pixi_js, 1);
 			const configured = this.options.viewport;
 			if (configured !== void 0) {
 				const viewport = typeof configured === "function" ? configured() : configured;
-				if (!viewport || typeof viewport !== "object") throw new TypeError("viewport must be a rectangle");
+				if (!viewport || typeof viewport !== "object") throw new TypeError("options.viewport: must be a rectangle or return one");
 				const { left = 0, top = 0, width, height } = viewport;
-				finite(left, "viewport.left");
-				finite(top, "viewport.top");
-				finite(width, "viewport.width");
-				finite(height, "viewport.height");
-				if (width < 0 || height < 0) throw new RangeError("viewport width and height must be nonnegative");
+				finite(left, "options.viewport.left");
+				finite(top, "options.viewport.top");
+				finite(width, "options.viewport.width");
+				finite(height, "options.viewport.height");
+				if (width < 0 || height < 0) throw new RangeError(`options.viewport: width and height must be 0 or more (got ${width} × ${height})`);
 				return {
 					left,
 					top,
@@ -3645,14 +3682,14 @@ pixi_js = __toESM(pixi_js, 1);
 				};
 			}
 			const view = globalThis.window;
-			if (!view) throw new Error("a window or options.viewport is required to build");
+			if (!view) throw new Error("options.viewport: is required when there is no global window");
 			const viewport = {
 				left: 0,
 				top: 0,
 				width: finite(view.innerWidth, "window.innerWidth"),
 				height: finite(view.innerHeight, "window.innerHeight")
 			};
-			if (viewport.width < 0 || viewport.height < 0) throw new RangeError("viewport width and height must be nonnegative");
+			if (viewport.width < 0 || viewport.height < 0) throw new RangeError(`window: innerWidth and innerHeight must be 0 or more (got ${viewport.width} × ${viewport.height})`);
 			return viewport;
 		}
 		_reset() {
@@ -3676,16 +3713,16 @@ pixi_js = __toESM(pixi_js, 1);
 			const padding = this.options.obstaclePadding;
 			const viewport = this.viewport;
 			[...new Set(this.avoidElements())].forEach((el, index) => {
-				if (typeof el?.getBoundingClientRect !== "function") throw new TypeError(`avoid[${index}] must support getBoundingClientRect()`);
+				if (typeof el?.getBoundingClientRect !== "function") throw new TypeError(`avoid[${index}]: must have a getBoundingClientRect() method`);
 				const r = el.getBoundingClientRect();
-				if (!r || typeof r !== "object") throw new TypeError(`avoid[${index}] returned an invalid rectangle`);
+				if (!r || typeof r !== "object") throw new TypeError(`avoid[${index}]: getBoundingClientRect() must return an object`);
 				for (const side of [
 					"left",
 					"top",
 					"right",
 					"bottom"
 				]) finite(r[side], `avoid[${index}].${side}`);
-				if (r.right < r.left || r.bottom < r.top) throw new RangeError(`avoid[${index}] rectangle is inverted`);
+				if (r.right < r.left || r.bottom < r.top) throw new RangeError(`avoid[${index}]: right must be at least left, and bottom at least top`);
 				const rect = {
 					left: r.left - viewport.left - padding,
 					top: r.top - viewport.top - padding,
@@ -4179,10 +4216,10 @@ pixi_js = __toESM(pixi_js, 1);
 	*/
 	var BeefwifeCanvasRouter = class {
 		constructor(terrain, viewportOf, options = {}) {
-			if (typeof viewportOf !== "function") throw new TypeError("viewportOf must be a function");
+			if (typeof viewportOf !== "function") throw new TypeError("viewportOf: must be a function");
 			const edgeMargin = options.edgeMargin ?? 0;
-			if (!Number.isFinite(edgeMargin) || edgeMargin < 0) throw new RangeError("edgeMargin must be nonnegative");
-			if (options.random !== void 0 && typeof options.random !== "function") throw new TypeError("random must be a function");
+			if (!Number.isFinite(edgeMargin) || edgeMargin < 0) throw new RangeError(`edgeMargin: must be 0 or more (got ${edgeMargin})`);
+			if (options.random !== void 0 && typeof options.random !== "function") throw new TypeError("random: must be a function");
 			this.terrain = terrain;
 			this.viewportOf = viewportOf;
 			this.edgeMargin = edgeMargin;
@@ -4193,7 +4230,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		viewport() {
 			const viewport = this.viewportOf();
-			if (!viewport || !Number.isFinite(viewport.width) || !Number.isFinite(viewport.height) || viewport.width < 0 || viewport.height < 0) throw new TypeError("viewport must have nonnegative finite dimensions");
+			if (!viewport || !Number.isFinite(viewport.width) || !Number.isFinite(viewport.height) || viewport.width < 0 || viewport.height < 0) throw new TypeError("viewportOf: must return a viewport whose width and height are finite and 0 or more");
 			return viewport;
 		}
 		/** Somewhere legal to stand, for a creature being put on the page. */
@@ -4206,7 +4243,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		planTo(head, target) {
 			if (!this.ready) return null;
-			if (!target || !Number.isFinite(target.x) || !Number.isFinite(target.y)) throw new TypeError("target must have finite x and y coordinates");
+			if (!target || !Number.isFinite(target.x) || !Number.isFinite(target.y)) throw new TypeError("target: x and y must be finite numbers");
 			const path = this.terrain.route(head, target);
 			if (!path) return null;
 			const lead = Math.hypot(path[0].x - head.x, path[0].y - head.y) < 1 ? 1 : 0;
@@ -4234,7 +4271,7 @@ pixi_js = __toESM(pixi_js, 1);
 	var BeefwifeCanvasActor = class BeefwifeCanvasActor {
 		static MAX_TIME_SCALE = 16;
 		static timeScaleOf(value) {
-			if (!Number.isFinite(value) || value < 0 || value > BeefwifeCanvasActor.MAX_TIME_SCALE) throw new RangeError(`timeScale must be from 0 to ${BeefwifeCanvasActor.MAX_TIME_SCALE}`);
+			if (!Number.isFinite(value) || value < 0 || value > BeefwifeCanvasActor.MAX_TIME_SCALE) throw new RangeError(`timeScale: must be from 0 to ${BeefwifeCanvasActor.MAX_TIME_SCALE} (got ${value})`);
 			return value;
 		}
 		constructor(terrain, router, spec, options = {}) {
@@ -4396,7 +4433,7 @@ pixi_js = __toESM(pixi_js, 1);
 			} : null;
 		}
 		update(dt, timeScale) {
-			if (!Number.isFinite(dt) || dt < 0) throw new RangeError("dt must be nonnegative seconds");
+			if (!Number.isFinite(dt) || dt < 0) throw new RangeError(`dt: must be 0 or more seconds (got ${dt})`);
 			BeefwifeCanvasActor.timeScaleOf(timeScale);
 			const scaledDt = dt * timeScale;
 			const pose = this.beefwife.getPose();
@@ -4433,7 +4470,7 @@ pixi_js = __toESM(pixi_js, 1);
 		DEFAULT_PHYSICS_FPS: 60
 	};
 	var countOf = (value) => {
-		if (!Number.isInteger(value) || value < 0 || value > config.MAX_COUNT) throw new RangeError(`count must be an integer from 0 to ${config.MAX_COUNT}`);
+		if (!Number.isInteger(value) || value < 0 || value > config.MAX_COUNT) throw new RangeError(`count: must be an integer from 0 to ${config.MAX_COUNT} (got ${value})`);
 		return value;
 	};
 	var timeScaleOf = BeefwifeCanvasActor.timeScaleOf;
@@ -4444,24 +4481,24 @@ pixi_js = __toESM(pixi_js, 1);
 			terrain: false
 		};
 		if (value === void 0) return result;
-		if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("debug must be an object");
+		if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("debug: must be an object");
 		for (const [key, enabled] of Object.entries(value)) {
-			if (!DEBUG_KEYS.has(key)) throw new TypeError(`debug.${key} is unknown`);
-			if (typeof enabled !== "boolean") throw new TypeError(`debug.${key} must be a boolean`);
+			if (!DEBUG_KEYS.has(key)) throw new TypeError(`debug.${key}: is not a known option`);
+			if (typeof enabled !== "boolean") throw new TypeError(`debug.${key}: must be true or false`);
 			result[key] = enabled;
 		}
 		return result;
 	};
 	var resolutionScaleOf = (value) => {
-		if (!Number.isFinite(value) || value < .125 || value > 1) throw new RangeError("resolutionScale must be from 0.125 to 1");
+		if (!Number.isFinite(value) || value < .125 || value > 1) throw new RangeError(`resolutionScale: must be from 0.125 to 1 (got ${value})`);
 		return value;
 	};
 	var imageRenderingOf = (value) => {
-		if (!["auto", "pixelated"].includes(value)) throw new RangeError("imageRendering must be auto or pixelated");
+		if (!["auto", "pixelated"].includes(value)) throw new RangeError("imageRendering: must be \"auto\" or \"pixelated\"");
 		return value;
 	};
 	var rateOf = (value, name) => {
-		if (!Number.isFinite(value) || value < 1 || value > 240) throw new RangeError(`${name} must be from 1 to 240`);
+		if (!Number.isFinite(value) || value < 1 || value > 240) throw new RangeError(`${name}: must be from 1 to 240 (got ${value})`);
 		return value;
 	};
 	var renderFpsOf = (value) => {
@@ -4472,10 +4509,10 @@ pixi_js = __toESM(pixi_js, 1);
 	var physicsFpsOf = (value) => value === void 0 ? config.DEFAULT_PHYSICS_FPS : rateOf(value, "physicsFps");
 	var chooseName = (cast, weights, random) => {
 		const names = Object.keys(cast);
-		if (!names.length) throw new Error("cast must contain at least one beefwife");
+		if (!names.length) throw new Error("cast: must contain at least one beefwife");
 		const weighted = names.map((name) => {
 			const weight = weights?.[name] ?? 1;
-			if (!Number.isFinite(weight) || weight <= 0) throw new RangeError(`weight for ${name} must be positive`);
+			if (!Number.isFinite(weight) || weight <= 0) throw new RangeError(`cast: the weight of ${JSON.stringify(name)} must be a finite number greater than 0 (got ${weight})`);
 			return {
 				name,
 				weight
@@ -4578,11 +4615,11 @@ pixi_js = __toESM(pixi_js, 1);
 			this.viewport = this.viewportRect(this.canvas);
 		}
 		async initialize() {
-			if (!available) throw new Error("PIXI must load first");
+			if (!available) throw new Error("Pixi is not loaded; load pixi.js before beefwife-canvas");
 			this._syncPixelResolution();
 			if (this.reusableApplication) {
 				this.application = this.reusableApplication;
-				if (this.application.canvas !== this.canvas) throw new Error("reusable Pixi application belongs to another canvas");
+				if (this.application.canvas !== this.canvas) throw new Error("the Pixi application belongs to a different canvas");
 				this._buildStage();
 				return this;
 			}
@@ -4625,7 +4662,7 @@ pixi_js = __toESM(pixi_js, 1);
 			this.application.stage.addChild(this.debugUnderlay, this.world, this.debugOverlay);
 		}
 		attach() {
-			if (!this.application) throw new Error("Pixi renderer is not ready");
+			if (!this.application) throw new Error("the Pixi renderer is not ready");
 			if (this.ownsCanvas) document.body.appendChild(this.canvas);
 		}
 		viewportRect(canvas = this.canvas) {
@@ -4705,22 +4742,22 @@ pixi_js = __toESM(pixi_js, 1);
 // src/targeting.mjs
 /** Destination ownership and satisfaction policy for routed runtime. */
 	var pointOf = (value, path = "target") => {
-		if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${path} must be an object`);
+		if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${path}: must be an object`);
 		const prototype = Object.getPrototypeOf(value);
-		if (prototype !== Object.prototype && prototype !== null) throw new TypeError(`${path} must be a plain object`);
-		for (const key of Object.keys(value)) if (key !== "x" && key !== "y") throw new TypeError(`${path}.${key} is unknown`);
-		if (!Number.isFinite(value.x) || !Number.isFinite(value.y)) throw new TypeError(`${path} must have finite x and y coordinates`);
+		if (prototype !== Object.prototype && prototype !== null) throw new TypeError(`${path}: must be a plain object`);
+		for (const key of Object.keys(value)) if (key !== "x" && key !== "y") throw new TypeError(`${path}.${key}: is not a known field`);
+		if (!Number.isFinite(value.x) || !Number.isFinite(value.y)) throw new TypeError(`${path}: x and y must be finite numbers`);
 		return {
 			x: value.x,
 			y: value.y
 		};
 	};
 	var targetModeOf = (value) => {
-		if (!["wander", "manual"].includes(value)) throw new RangeError("targetMode must be wander or manual");
+		if (!["wander", "manual"].includes(value)) throw new RangeError("targetMode: must be \"wander\" or \"manual\"");
 		return value;
 	};
 	var wanderDelayOf = (value) => {
-		if (!Number.isFinite(value) || value < 0) throw new RangeError("wanderDelay must be a nonnegative number");
+		if (!Number.isFinite(value) || value < 0) throw new RangeError(`wanderDelay: must be 0 or more (got ${value})`);
 		return value;
 	};
 	var BeefwifeCanvasTargetPolicy = class {
@@ -4782,8 +4819,8 @@ pixi_js = __toESM(pixi_js, 1);
 			this.pending = Array(count).fill(null);
 		}
 		add(name) {
-			if (name !== void 0 && typeof name !== "string") throw new TypeError("name must be a string");
-			if (this.actors.length + this.pending.length >= config.MAX_COUNT) throw new RangeError(`cannot add more than ${config.MAX_COUNT} beefwives`);
+			if (name !== void 0 && typeof name !== "string") throw new TypeError("name: must be a string");
+			if (this.actors.length + this.pending.length >= config.MAX_COUNT) throw new RangeError(`add: the canvas already holds the maximum of ${config.MAX_COUNT} beefwives`);
 			if (!this.router.ready || !this.cast) {
 				this.pending.push(name ?? null);
 				return null;
@@ -4793,7 +4830,7 @@ pixi_js = __toESM(pixi_js, 1);
 		_addNow(name) {
 			const selectedName = name || chooseName(this.cast, this.castWeights, this.random);
 			const spec = this.cast[selectedName];
-			if (!spec) throw new Error(`no creature named ${name}`);
+			if (!spec) throw new Error(`name: the cast has no beefwife named ${JSON.stringify(name)}`);
 			const planner = new BeefwifeCanvasTargetPolicy(this.router, this.targetMode, {
 				random: this.random,
 				wanderDelay: this.wanderDelay
@@ -4837,7 +4874,7 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		_targets(actor) {
 			if (!actor) return this.actors;
-			if (!this.targetPolicies.has(actor)) throw new Error("actor does not belong to this host");
+			if (!this.targetPolicies.has(actor)) throw new Error("actor: belongs to a different canvas");
 			return [actor];
 		}
 		setTarget(target, actor = null) {
@@ -4891,7 +4928,7 @@ pixi_js = __toESM(pixi_js, 1);
 		constructor(options = {}) {
 			this.onError = options.onError || null;
 			this.timeScale = timeScaleOf(options.timeScale ?? 1);
-			if (options.random !== void 0 && typeof options.random !== "function") throw new TypeError("random must be a function");
+			if (options.random !== void 0 && typeof options.random !== "function") throw new TypeError("random: must be a function");
 			const random = options.random || Math.random;
 			const resolutionScale = resolutionScaleOf(options.resolutionScale ?? 1);
 			const imageRendering = imageRenderingOf(options.imageRendering ?? "auto");
@@ -4901,7 +4938,7 @@ pixi_js = __toESM(pixi_js, 1);
 			this.renderInterval = 1e3 / this.renderFps;
 			this.physicsInterval = 1e3 / this.physicsFps;
 			const maxPixelRatio = options.maxPixelRatio ?? 1e400;
-			if (maxPixelRatio !== 1e400 && (!Number.isFinite(maxPixelRatio) || maxPixelRatio <= 0)) throw new RangeError("maxPixelRatio must be positive");
+			if (maxPixelRatio !== 1e400 && (!Number.isFinite(maxPixelRatio) || maxPixelRatio <= 0)) throw new RangeError(`maxPixelRatio: must be greater than 0 (got ${maxPixelRatio})`);
 			const roam = options.roam ? {
 				...BEEFWIFE_CANVAS_ROUTE_DEFAULTS,
 				...options.roam
@@ -4918,7 +4955,7 @@ pixi_js = __toESM(pixi_js, 1);
 					maxOffset: options.maxKneeOffset ?? 256
 				} : null
 			};
-			if (!["canvas", "viewport"].includes(kneeProjectionCenter)) throw new RangeError("kneeProjectionCenter must be canvas or viewport");
+			if (!["canvas", "viewport"].includes(kneeProjectionCenter)) throw new RangeError("kneeProjectionCenter: must be \"canvas\" or \"viewport\"");
 			this.scene = new BeefwifeCanvasScene({
 				antialias: options.antialias ?? false,
 				application: options.application || null,
@@ -5004,7 +5041,7 @@ pixi_js = __toESM(pixi_js, 1);
 			if (this.running) return this;
 			this.scene.attach();
 			this.scene.resize();
-			if (!this.population.cast) throw new Error("BeefwifeCanvas runtime needs a cast");
+			if (!this.population.cast) throw new Error("start: the runtime has no cast; set one before starting");
 			this.rebuild();
 			window.addEventListener("resize", this._onResize);
 			window.addEventListener("scroll", this._onScroll, { passive: true });
@@ -5185,7 +5222,7 @@ pixi_js = __toESM(pixi_js, 1);
 			});
 		}
 		_assertActive() {
-			if (this.destroyed) throw new Error("BeefwifeCanvasRuntime has been destroyed");
+			if (this.destroyed) throw new Error("BeefwifeCanvasRuntime: cannot be used after destroy()");
 		}
 		_resume() {
 			if (this.frameId !== null) return;
@@ -5314,7 +5351,7 @@ pixi_js = __toESM(pixi_js, 1);
 	var dispatch = (canvas, type, detail) => canvas.dispatchEvent(new CustomEvent(type, { detail }));
 	var Controller = class {
 		constructor(canvas, supplied, previousReady) {
-			if (!canvas || canvas.tagName !== "CANVAS") throw new TypeError("BeefwifeCanvas.mount needs a canvas element");
+			if (!canvas || canvas.tagName !== "CANVAS") throw new TypeError("BeefwifeCanvas.mount: needs a <canvas> element");
 			this.canvas = canvas;
 			this.supplied = supplied;
 			this.previousReady = previousReady;
@@ -5345,7 +5382,7 @@ pixi_js = __toESM(pixi_js, 1);
 			this.previousReady = null;
 			if (this.destroyed) return this;
 			try {
-				if (released.has(this.canvas)) throw new Error("canvas lost its renderer when it left the page; mount a new canvas");
+				if (released.has(this.canvas)) throw new Error("canvas: lost its renderer when it left the page; mount a new <canvas> element");
 				this.options = optionsOf$1(this.canvas, this.supplied);
 				this.supplied = null;
 				this.wantsToRun = this.options.autoStart;
@@ -5356,7 +5393,7 @@ pixi_js = __toESM(pixi_js, 1);
 				const count = this.options.count ?? Object.keys(cast).length;
 				this._pinUnstyledSize();
 				const reusable = renderers.get(this.canvas);
-				if (reusable && reusable.antialias !== this.options.antialias) throw new Error("antialias cannot change when remounting one canvas");
+				if (reusable && reusable.antialias !== this.options.antialias) throw new Error("antialias: cannot change on a canvas that was already mounted; use a new <canvas> element");
 				this.host = await BeefwifeCanvasRuntime.create({
 					antialias: this.options.antialias,
 					application: reusable?.application,
@@ -5455,7 +5492,7 @@ pixi_js = __toESM(pixi_js, 1);
 				"none",
 				"click",
 				"move"
-			].includes(pointerInput)) throw new RangeError("pointerInput must be none, click, or move");
+			].includes(pointerInput)) throw new RangeError("pointerInput: must be \"none\", \"click\", or \"move\"");
 			this.options.pointerInput = pointerInput;
 			return this;
 		}
@@ -5645,11 +5682,11 @@ pixi_js = __toESM(pixi_js, 1);
 		}
 		_host() {
 			this._assertActive();
-			if (!this.host) throw new Error("BeefwifeCanvas is not ready");
+			if (!this.host) throw new Error("BeefwifeCanvas: is not ready; wait for mount() to resolve");
 			return this.host;
 		}
 		_assertActive() {
-			if (this.destroyed) throw new Error("BeefwifeCanvas has been destroyed");
+			if (this.destroyed) throw new Error("BeefwifeCanvas: cannot be used after destroy()");
 		}
 		_state(state, pauseReason = null) {
 			this.state = state;
@@ -5731,7 +5768,7 @@ pixi_js = __toESM(pixi_js, 1);
 		return facade;
 	};
 	var mount = (canvas, options = {}) => {
-		if (controllers.has(canvas)) return Promise.reject(/* @__PURE__ */ new Error("canvas already has a BeefwifeCanvas"));
+		if (controllers.has(canvas)) return Promise.reject(/* @__PURE__ */ new Error("canvas: already has a BeefwifeCanvas; destroy it before mounting again"));
 		let controller;
 		try {
 			controller = new Controller(canvas, options, lastReady.get(canvas));

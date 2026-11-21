@@ -50,7 +50,7 @@ const dispatch = (canvas, type, detail) =>
 class Controller {
   constructor(canvas, supplied, previousReady) {
     if (!canvas || canvas.tagName !== "CANVAS")
-      throw new TypeError("BeefwifeCanvas.mount needs a canvas element");
+      throw new TypeError("BeefwifeCanvas.mount: needs a <canvas> element");
     this.canvas = canvas;
     this.supplied = supplied;
     this.previousReady = previousReady;
@@ -89,7 +89,7 @@ class Controller {
     try {
       if (released.has(this.canvas))
         throw new Error(
-          "canvas lost its renderer when it left the page; mount a new canvas",
+          "canvas: lost its renderer when it left the page; mount a new <canvas> element",
         );
       this.options = optionsOf(this.canvas, this.supplied);
       this.supplied = null;
@@ -105,7 +105,9 @@ class Controller {
       this._pinUnstyledSize();
       const reusable = renderers.get(this.canvas);
       if (reusable && reusable.antialias !== this.options.antialias)
-        throw new Error("antialias cannot change when remounting one canvas");
+        throw new Error(
+          "antialias: cannot change on a canvas that was already mounted; use a new <canvas> element",
+        );
       this.host = await BeefwifeCanvasRuntime.create({
         antialias: this.options.antialias,
         application: reusable?.application,
@@ -220,7 +222,7 @@ class Controller {
 
   setPointerInput(pointerInput) {
     if (!["none", "click", "move"].includes(pointerInput))
-      throw new RangeError("pointerInput must be none, click, or move");
+      throw new RangeError('pointerInput: must be "none", "click", or "move"');
     this.options.pointerInput = pointerInput;
     return this;
   }
@@ -443,12 +445,16 @@ class Controller {
 
   _host() {
     this._assertActive();
-    if (!this.host) throw new Error("BeefwifeCanvas is not ready");
+    if (!this.host)
+      throw new Error(
+        "BeefwifeCanvas: is not ready; wait for mount() to resolve",
+      );
     return this.host;
   }
 
   _assertActive() {
-    if (this.destroyed) throw new Error("BeefwifeCanvas has been destroyed");
+    if (this.destroyed)
+      throw new Error("BeefwifeCanvas: cannot be used after destroy()");
   }
 
   _state(state, pauseReason = null) {
@@ -536,7 +542,11 @@ const facadeOf = (controller) => {
 
 const mount = (canvas, options = {}) => {
   if (controllers.has(canvas))
-    return Promise.reject(new Error("canvas already has a BeefwifeCanvas"));
+    return Promise.reject(
+      new Error(
+        "canvas: already has a BeefwifeCanvas; destroy it before mounting again",
+      ),
+    );
   let controller;
   try {
     controller = new Controller(canvas, options, lastReady.get(canvas));

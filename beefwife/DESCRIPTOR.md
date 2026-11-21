@@ -177,8 +177,9 @@ per shape unit, and a place given by `at` and `repeat`.
 `at.section` limits the placement to one section; `null` means the whole
 chain. `from` is the end to count from, and `offset` counts chunks from that
 end, from 0. `repeat` places `count` copies, `step` chunks apart, moving away
-from that end. A `count` of `null` fills the rest of the section. A placement
-that runs past its section is an error.
+from that end. A `count` of `null` fills the rest of the section, or of the
+chain. A placement that runs past the end of its section, or of the chain, is an
+error.
 
 ### Ornaments
 

@@ -226,7 +226,7 @@ const particlesOf = (beefwife, label) =>
       assert.equal(errors.length, 0);
       await Promise.resolve();
       assert.equal(errors.length, 1);
-      assert.match(errors[0].message, /pixelResolution must be finite/);
+      assert.match(errors[0].message, /pixelResolution: must be a finite number/);
       await draw(creature);
       assert.equal(errors.length, 1);
       creature.off("error", listener);
@@ -244,7 +244,7 @@ const particlesOf = (beefwife, label) =>
     );
     policy.pixelResolution = NaN;
     creature.onRender(stubRenderer);
-    assert.match((await uncaught).message, /pixelResolution must be finite/);
+    assert.match((await uncaught).message, /pixelResolution: must be a finite number/);
     policy.pixelResolution = bounded;
     checks++;
     delete policy.pixelResolution;
@@ -264,14 +264,14 @@ const particlesOf = (beefwife, label) =>
 
   const invalidShape = copy(source);
   invalidShape.definitions.shapes.bodyPlate.path = "M 0 0 L 1e309 0 L 0 10 Z";
-  assert.throws(() => new Beefwife(invalidShape), /bounds must be finite/);
+  assert.throws(() => new Beefwife(invalidShape), /shapes\.bodyPlate\.path: has a coordinate too large to draw/);
   const unchanged = new Beefwife(copy(source), { random: () => 0.5 });
   await draw(unchanged);
   const originalDescriptor = unchanged.descriptor;
   const originalParts = [...partsOf(unchanged)];
   assert.throws(
     () => unchanged.setDescriptor(invalidShape),
-    /bounds must be finite/,
+    /shapes\.bodyPlate\.path: has a coordinate too large to draw/,
   );
   assert.equal(unchanged.descriptor, originalDescriptor);
   assert.deepEqual(partsOf(unchanged), originalParts);
@@ -752,10 +752,10 @@ const particlesOf = (beefwife, label) =>
   /* A destroyed beefwife has no scene to keep in step with, and setDescriptor
      would build a second one under the dead container. */
   for (const [act, reason] of [
-    [() => beefwife.step(1 / 60), /destroyed beefwife/],
-    [() => beefwife.setDescriptor(source), /destroyed beefwife/],
-    [() => beefwife.reset(), /destroyed beefwife/],
-    [() => beefwife.translate({ x: 1, y: 0 }), /destroyed beefwife/],
+    [() => beefwife.step(1 / 60), /cannot be called after destroy\(\)/],
+    [() => beefwife.setDescriptor(source), /cannot be called after destroy\(\)/],
+    [() => beefwife.reset(), /cannot be called after destroy\(\)/],
+    [() => beefwife.translate({ x: 1, y: 0 }), /cannot be called after destroy\(\)/],
   ]) {
     assert.throws(act, reason);
     checks++;

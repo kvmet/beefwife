@@ -334,7 +334,7 @@
               slider={[0, 0.02, 0.001]}
             />
             <ControlRow
-              label="Knee cap"
+              label="Max knee shift"
               tip="Largest shift the perspective may add to one knee."
               unit="px"
               digits={0}

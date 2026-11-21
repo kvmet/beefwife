@@ -13,12 +13,12 @@
 class BeefwifeCanvasRouter {
   constructor(terrain, viewportOf, options = {}) {
     if (typeof viewportOf !== "function")
-      throw new TypeError("viewportOf must be a function");
+      throw new TypeError("viewportOf: must be a function");
     const edgeMargin = options.edgeMargin ?? 0;
     if (!Number.isFinite(edgeMargin) || edgeMargin < 0)
-      throw new RangeError("edgeMargin must be nonnegative");
+      throw new RangeError(`edgeMargin: must be 0 or more (got ${edgeMargin})`);
     if (options.random !== undefined && typeof options.random !== "function")
-      throw new TypeError("random must be a function");
+      throw new TypeError("random: must be a function");
     this.terrain = terrain;
     this.viewportOf = viewportOf;
     this.edgeMargin = edgeMargin;
@@ -38,7 +38,9 @@ class BeefwifeCanvasRouter {
       viewport.width < 0 ||
       viewport.height < 0
     )
-      throw new TypeError("viewport must have nonnegative finite dimensions");
+      throw new TypeError(
+        "viewportOf: must return a viewport whose width and height are finite and 0 or more",
+      );
     return viewport;
   }
 
@@ -55,7 +57,7 @@ class BeefwifeCanvasRouter {
   planTo(head, target) {
     if (!this.ready) return null;
     if (!target || !Number.isFinite(target.x) || !Number.isFinite(target.y))
-      throw new TypeError("target must have finite x and y coordinates");
+      throw new TypeError("target: x and y must be finite numbers");
     const path = this.terrain.route(head, target);
     // Widgets can leave the page in separate regions, and nothing walks
     // between them.

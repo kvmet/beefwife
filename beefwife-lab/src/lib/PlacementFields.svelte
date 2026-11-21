@@ -109,7 +109,7 @@
   {#if advanced}
     <label>
       <Tooltip
-        label="What the offset counts along: the whole chain or one section. Copies never leave that scope."
+        label="What the offset counts along: the whole chain or one section. Copies stay inside the chain or section chosen here."
         ><span>Anchor</span></Tooltip
       >
       <select
@@ -169,7 +169,7 @@
   {/if}
   {#if advanced}
     <label>
-      <Tooltip label="Repeats through the rest of the anchor's scope."
+      <Tooltip label="Fills the rest of the chosen section, or of the whole chain."
         ><span>Fill to end</span></Tooltip
       >
       <div class="switch">

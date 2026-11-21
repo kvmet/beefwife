@@ -349,7 +349,7 @@
     {/if}
     <div class="rows">
       <ControlRow
-        label="Segment length"
+        label="Chunks"
         tip="Number of chunks in this section. Head and trunk hold at least one; the tail may be empty."
         digits={0}
         bind:value={$descriptor.chain.sections[name].chunks}
@@ -358,7 +358,7 @@
         slider={[SECTION_MINIMUMS[name], 64, 1]}
       />
       <ControlRow
-        label="Link distance"
+        label="Spacing"
         tip="Resting distance between two chunks of this section."
         unit="px"
         digits={1}
