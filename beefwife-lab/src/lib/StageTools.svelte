@@ -6,7 +6,7 @@
     antialias: false,
     pixelUpscale: true,
     roundVertices: true,
-    resolutionScale: 0.25,
+    resolutionScale: 0.75,
     simulationFps: 60,
     drawFps: 20,
     wanderDelay: 0,

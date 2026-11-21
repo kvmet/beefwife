@@ -258,7 +258,10 @@
         avoid: TERRAIN_SELECTOR,
         resolutionScale: Math.min(
           1,
-          Math.max(0.125, +options.resolutionScale || 0.5),
+          Math.max(
+            0.125,
+            +options.resolutionScale || DEFAULT_OPTIONS.resolutionScale,
+          ),
         ),
         imageRendering: options.pixelUpscale ? "pixelated" : "auto",
         roundVertices: options.roundVertices,
