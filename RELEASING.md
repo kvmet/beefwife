@@ -112,8 +112,8 @@ cd beefwife && npm publish
 
 The lab is served by GitHub Pages from the `gh-pages` branch. The branch
 holds the site root (`index.html`, `CNAME`, `.nojekyll`, `LICENSE`) and the
-built lab under `lab/`. The lab ships its own copy of `beefwife-canvas.js`, so
-publish it after any release of the canvas, and after any change to
+built lab under `lab/`. The lab build includes the repository's
+`beefwife-canvas.js`, so publish the lab after any change to that bundle or to
 `beefwife-lab/`.
 
 Build from the release commit, with a clean working tree, into an empty
