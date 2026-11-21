@@ -4478,10 +4478,10 @@ const renderFpsOf = (value) => {
 	return rateOf(value, "renderFps");
 };
 const physicsFpsOf = (value) => value === void 0 ? config.DEFAULT_PHYSICS_FPS : rateOf(value, "physicsFps");
-const chooseName = (cast, weights, random) => {
+const chooseName = (cast, weights, random, namesOnCanvas = /* @__PURE__ */ new Set()) => {
 	const names = Object.keys(cast);
 	if (!names.length) throw new Error("cast: must contain at least one beefwife");
-	const weighted = names.map((name) => {
+	const allWeighted = names.map((name) => {
 		const weight = weights?.[name] ?? 1;
 		if (!Number.isFinite(weight) || weight <= 0) throw new RangeError(`cast: the weight of ${JSON.stringify(name)} must be a finite number greater than 0 (got ${weight})`);
 		return {
@@ -4489,6 +4489,8 @@ const chooseName = (cast, weights, random) => {
 			weight
 		};
 	});
+	const missing = allWeighted.filter(({ name }) => !namesOnCanvas.has(name));
+	const weighted = missing.length ? missing : allWeighted;
 	const total = weighted.reduce((sum, entry) => sum + entry.weight, 0);
 	let sample = random() * total;
 	for (const entry of weighted) {
@@ -4795,7 +4797,7 @@ var BeefwifeCanvasPopulation = class {
 		return this._addNow(name);
 	}
 	_addNow(name) {
-		const selectedName = name || chooseName(this.cast, this.castWeights, this.random);
+		const selectedName = name || chooseName(this.cast, this.castWeights, this.random, new Set(this.actors.map((actor) => actor.name)));
 		const spec = this.cast[selectedName];
 		if (!spec) throw new Error(`name: the cast has no beefwife named ${JSON.stringify(name)}`);
 		const planner = new BeefwifeCanvasTargetPolicy(this.router, this.targetMode, {

@@ -2,7 +2,8 @@
  * Does each supplied target produce one finite route, and does an actor spend
  * it through the public Beefwife lifecycle? Real schema-v1 descriptors are the
  * control. Fails on invalid cast entries, repeated directed plans, early
- * wander plans, timing drift, or lost spawns.
+ * wander plans, timing drift, lost spawns, or a spawn that repeats a creature
+ * while another is missing.
  */
 
 const assert = require("node:assert/strict");
@@ -17,6 +18,9 @@ const {
 } = require("../../beefwife-canvas/src/steering.mjs");
 const { BeefwifeCanvasActor } = require("../../beefwife-canvas/src/actor.mjs");
 const { BeefwifeCanvasRouter } = require("../../beefwife-canvas/src/path.mjs");
+const {
+  BeefwifeCanvasPopulation,
+} = require("../../beefwife-canvas/src/population.mjs");
 const {
   BeefwifeCanvasTargetPolicy,
 } = require("../../beefwife-canvas/src/targeting.mjs");
@@ -241,6 +245,36 @@ longActor.spawn({ x: 1e6, y: 1e6 }, { x: 1, y: 0 });
 const strayBeefwife = longActor.beefwife;
 longActor.update(1 / 60, 1);
 assert.notEqual(longActor.beefwife, strayBeefwife);
+checks += 4;
+
+/* A random of 0 always lands on the first name in the draw, and "a" outweighs
+   the rest, so a draw that ignores the canvas would spawn only "a". */
+const castOf = (...names) =>
+  Object.fromEntries(names.map((name) => [name, { ...descriptor, name }]));
+const population = new BeefwifeCanvasPopulation(
+  terrain,
+  { ...router, ready: true },
+  {
+    cast: castOf("a", "b", "c"),
+    castWeights: { a: 100, b: 1, c: 1 },
+    count: 0,
+    random: () => 0,
+  },
+);
+const namesOf = () => population.actors.map((creature) => creature.name);
+population.setCount(3);
+assert.deepEqual(namesOf(), ["a", "b", "c"]);
+population.add();
+assert.deepEqual(namesOf(), ["a", "b", "c", "a"]);
+population.remove();
+population.remove();
+population.add();
+assert.deepEqual(namesOf(), ["a", "b", "c"]);
+population.clear();
+population.add("b");
+population.setCount(2);
+assert.deepEqual(namesOf(), ["b", "a"]);
+population.destroy();
 checks += 4;
 
 console.log(`BeefwifeCanvas routing: ${checks} route and actor checks passed`);

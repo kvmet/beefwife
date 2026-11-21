@@ -75,11 +75,13 @@ const physicsFpsOf = (value) =>
   value === undefined
     ? config.DEFAULT_PHYSICS_FPS
     : rateOf(value, "physicsFps");
-const chooseName = (cast, weights, random) => {
+/* Names with no creature on the canvas are drawn first, so the canvas holds one
+   of each before weights decide the rest. */
+const chooseName = (cast, weights, random, namesOnCanvas = new Set()) => {
   const names = Object.keys(cast);
   if (!names.length)
     throw new Error("cast: must contain at least one beefwife");
-  const weighted = names.map((name) => {
+  const allWeighted = names.map((name) => {
     const weight = weights?.[name] ?? 1;
     if (!Number.isFinite(weight) || weight <= 0)
       throw new RangeError(
@@ -87,6 +89,8 @@ const chooseName = (cast, weights, random) => {
       );
     return { name, weight };
   });
+  const missing = allWeighted.filter(({ name }) => !namesOnCanvas.has(name));
+  const weighted = missing.length ? missing : allWeighted;
   const total = weighted.reduce((sum, entry) => sum + entry.weight, 0);
   let sample = random() * total;
   for (const entry of weighted) {

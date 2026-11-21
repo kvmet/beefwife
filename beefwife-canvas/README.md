@@ -72,8 +72,10 @@ A manifest lists sources in one file:
 Relative URLs in a manifest resolve against the manifest's URL. Other URLs
 resolve against the page.
 
-`weight` defaults to 1 and sets how often a creature is picked when one
-spawns. It does not change what loads. `count` defaults to the number of
+A creature spawned without a name is one the canvas does not hold yet, until
+the canvas holds one of each. `weight` defaults to 1 and sets how often a
+creature is picked: among the ones missing, then among all once none are
+missing. It does not change what loads. `count` defaults to the number of
 descriptors. Each descriptor's `name` must be unique across all inputs, or the
 mount fails.
 

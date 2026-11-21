@@ -44,7 +44,13 @@ class BeefwifeCanvasPopulation {
 
   _addNow(name) {
     const selectedName =
-      name || chooseName(this.cast, this.castWeights, this.random);
+      name ||
+      chooseName(
+        this.cast,
+        this.castWeights,
+        this.random,
+        new Set(this.actors.map((actor) => actor.name)),
+      );
     const spec = this.cast[selectedName];
     if (!spec)
       throw new Error(
