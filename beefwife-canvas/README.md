@@ -47,9 +47,9 @@ WebGPU renderer can break another.
 ## Creatures
 
 A creature is a descriptor: one JSON file that defines its body, gait, and
-look. `@kvmet/beefwife` ships eight under `samples/`: `bounding`,
+look. `@kvmet/beefwife` ships nine under `samples/`: `bounding`,
 `chevron-guy`, `long-girl`, `peristaltic`, `raccoon`, `reticulating`,
-`slow-guy`, and `undulating`. The format is in
+`slow-guy`, `the-worm`, and `undulating`. The format is in
 [DESCRIPTOR.md](https://github.com/kvmet/beefwife/blob/main/beefwife/DESCRIPTOR.md).
 
 Three options supply descriptors. Use any mix; they add together.

@@ -52,9 +52,9 @@ classes, and `instanceof` fails between them. Use one form in a program.
 
 ### Samples
 
-Eight descriptors ship under `samples/`: `bounding`, `chevron-guy`,
-`long-girl`, `peristaltic`, `raccoon`, `reticulating`, `slow-guy`, and
-`undulating`.
+Nine descriptors ship under `samples/`: `bounding`, `chevron-guy`,
+`long-girl`, `peristaltic`, `raccoon`, `reticulating`, `slow-guy`,
+`the-worm`, and `undulating`.
 `beefwife.example.json` uses every field. A CDN serves them without an install:
 
 ```text

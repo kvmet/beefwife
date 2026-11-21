@@ -25,9 +25,9 @@ scripts:
 <script src="https://cdn.jsdelivr.net/npm/@kvmet/beefwife-canvas@0.2.1/beefwife-canvas.min.js"></script>
 ```
 
-That page works as written. `@kvmet/beefwife` ships eight samples: `bounding`,
+That page works as written. `@kvmet/beefwife` ships nine samples: `bounding`,
 `chevron-guy`, `long-girl`, `peristaltic`, `raccoon`, `reticulating`,
-`slow-guy`, and `undulating`.
+`slow-guy`, `the-worm`, and `undulating`.
 
 For a larger cast, or to draw one creature more often than another, point
 `data-beefwife-manifest` at a manifest instead:

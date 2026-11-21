@@ -77,6 +77,7 @@ try {
     "samples/raccoon.json",
     "samples/reticulating.json",
     "samples/slow-guy.json",
+    "samples/the-worm.json",
     "samples/undulating.json",
     "src/atlas.mjs",
     "src/beefwife.mjs",
