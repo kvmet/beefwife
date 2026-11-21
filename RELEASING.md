@@ -107,3 +107,45 @@ the package again before it packs:
 ```sh
 cd beefwife && npm publish
 ```
+
+## 9. Publish the lab
+
+The lab is served by GitHub Pages from the `gh-pages` branch. The branch
+holds the site root (`index.html`, `CNAME`, `.nojekyll`, `LICENSE`) and the
+built lab under `lab/`. The lab ships its own copy of `beefwife-canvas.js`, so
+publish it after any release of the canvas, and after any change to
+`beefwife-lab/`.
+
+Build from the release commit, with a clean working tree, into an empty
+`dist/`:
+
+```sh
+rm -rf beefwife-lab/dist
+npm --prefix beefwife-lab run build
+```
+
+Replace `lab/` on `gh-pages` with the build. These commands write the commit
+with temporary indexes, so the checkout stays on `main`:
+
+```sh
+git fetch origin gh-pages:gh-pages
+tmp=$(mktemp -d)
+GIT_INDEX_FILE=$tmp/dist git --work-tree=beefwife-lab/dist add -A .
+lab=$(GIT_INDEX_FILE=$tmp/dist git write-tree)
+GIT_INDEX_FILE=$tmp/pages git read-tree gh-pages
+GIT_INDEX_FILE=$tmp/pages git rm -r -q --cached lab
+GIT_INDEX_FILE=$tmp/pages git read-tree --prefix=lab/ "$lab"
+tree=$(GIT_INDEX_FILE=$tmp/pages git write-tree)
+commit=$(printf 'build(lab): publish the canvas 0.2.1 release\n\nSource: %s\n' \
+  "$(git rev-parse --short HEAD)" | git commit-tree "$tree" -p gh-pages)
+git update-ref refs/heads/gh-pages "$commit"
+rm -rf "$tmp"
+```
+
+`Source:` names the commit the lab was built from. Check that only `lab/`
+changed, then push:
+
+```sh
+git diff --stat gh-pages~1 gh-pages
+git push origin gh-pages
+```
