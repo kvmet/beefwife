@@ -17,6 +17,15 @@
         align-items: center;
         height: 100vh;
       }
+      canvas.beefwives {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+      }
+      div.beef-wife, a.lab {
+        position: relative;
+      }
       div.beef-wife {
         font-size: 150pt;
         text-align: center;
@@ -42,9 +51,18 @@
     </style>
   </head>
   <body>
+    <canvas
+      class="beefwives"
+      data-beefwife-canvas
+      data-beefwife-sources="samples/the-worm.json, samples/raccoon.json"
+      data-beefwife-resolution-scale="0.75"
+      data-beefwife-image-rendering="pixelated"
+    ></canvas>
     <div class="beef-wife">
       beef<br/>wife
     </div>
     <a class="lab" href="lab/">Enter the lab</a>
+    <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.23.0/dist/pixi.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@kvmet/beefwife-canvas@0.2.1/beefwife-canvas.min.js"></script>
   </body>
 </html>
