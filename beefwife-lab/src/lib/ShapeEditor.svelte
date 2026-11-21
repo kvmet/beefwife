@@ -70,6 +70,7 @@
 
 <script>
   import { descriptor } from "./descriptor.js";
+  import Tooltip from "./Tooltip.svelte";
 
   /** Id of the shape under edit in $.definitions.shapes. */
   export let id;
@@ -139,7 +140,11 @@
         out.push(round(t));
       return out;
     };
-    return { xs: lines(box.x, box.x + box.w), ys: lines(box.y, box.y + box.h) };
+    return {
+      step,
+      xs: lines(box.x, box.x + box.w),
+      ys: lines(box.y, box.y + box.h),
+    };
   }
 
   function toUnits(event) {
@@ -200,6 +205,42 @@
     fit(next);
   }
 
+  /* Whole-shape edits refit the view, as a released drag does. */
+  function transform(map) {
+    const next = points.map(map);
+    write(next);
+    fit(next);
+  }
+
+  /* Screen y points down, so a positive angle turns clockwise on screen.
+     Quarter turns swap coordinates exactly; other angles round like a drag. */
+  function rotate(degrees) {
+    if (degrees === 90) return transform((p) => ({ x: -p.y || 0, y: p.x }));
+    if (degrees === -90) return transform((p) => ({ x: p.y, y: -p.x || 0 }));
+    const radians = (degrees * Math.PI) / 180;
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+    transform((p) => ({
+      x: round(p.x * cos - p.y * sin),
+      y: round(p.x * sin + p.y * cos),
+    }));
+  }
+
+  function move(dx, dy) {
+    transform((p) => ({ x: round(p.x + dx), y: round(p.y + dy) }));
+  }
+
+  /* Puts the middle of the shape's extent on the origin, where a placement
+     attaches it. */
+  function center() {
+    const xs = points.map((p) => p.x);
+    const ys = points.map((p) => p.y);
+    move(
+      -round((Math.min(...xs) + Math.max(...xs)) / 2),
+      -round((Math.min(...ys) + Math.max(...ys)) / 2),
+    );
+  }
+
   function keydown(event) {
     if (event.key !== "Delete" && event.key !== "Backspace") return;
     if (selected < 0) return;
@@ -227,25 +268,27 @@
       onpointerdown={() => (selected = -1)}
     >
       {#each grid.xs as gx}
-        <line
-          class="grid"
-          class:axis={gx === 0}
-          x1={gx}
-          y1={view.y}
-          x2={gx}
-          y2={view.y + view.h}
-        />
+        <line class="grid" x1={gx} y1={view.y} x2={gx} y2={view.y + view.h} />
       {/each}
       {#each grid.ys as gy}
-        <line
-          class="grid"
-          class:axis={gy === 0}
-          x1={view.x}
-          y1={gy}
-          x2={view.x + view.w}
-          y2={gy}
-        />
+        <line class="grid" x1={view.x} y1={gy} x2={view.x + view.w} y2={gy} />
       {/each}
+      <line class="axis" x1={view.x} y1="0" x2={view.x + view.w} y2="0" />
+      <line class="axis" x1="0" y1={view.y} x2="0" y2={view.y + view.h} />
+      <circle class="origin" r={3 / scale} />
+      <text
+        class="axis-label"
+        x={view.x + view.w - 6 / scale}
+        y={-5 / scale}
+        font-size={10 / scale}
+        text-anchor="end">+x forward →</text
+      >
+      <text
+        class="axis-label"
+        x={6 / scale}
+        y={view.y + view.h - 6 / scale}
+        font-size={10 / scale}>+y outward ↓</text
+      >
       <path class="outline" d={path} />
       {#each edges as edge, i}
         <!-- svelte-ignore a11y_no_static_element_interactions (Pointer-only handle; the keyboard path goes through the surface.) -->
@@ -276,9 +319,47 @@
       {/each}
     </svg>
   </div>
+  <div class="tools">
+    <Tooltip label="Turn the shape counterclockwise around the origin.">
+      <button onclick={() => rotate(-90)}>⟲ 90°</button>
+    </Tooltip>
+    <Tooltip label="Turn the shape clockwise around the origin.">
+      <button onclick={() => rotate(90)}>⟳ 90°</button>
+    </Tooltip>
+    <Tooltip label="Turn the shape counterclockwise around the origin.">
+      <button onclick={() => rotate(-15)}>⟲ 15°</button>
+    </Tooltip>
+    <Tooltip label="Turn the shape clockwise around the origin.">
+      <button onclick={() => rotate(15)}>⟳ 15°</button>
+    </Tooltip>
+    <span class="gap"></span>
+    <Tooltip label="Move the shape back, by one grid step.">
+      <button aria-label="Move back" onclick={() => move(-grid.step, 0)}
+        >←</button
+      >
+    </Tooltip>
+    <Tooltip label="Move the shape forward, by one grid step.">
+      <button aria-label="Move forward" onclick={() => move(grid.step, 0)}
+        >→</button
+      >
+    </Tooltip>
+    <Tooltip label="Move the shape inward, by one grid step.">
+      <button aria-label="Move inward" onclick={() => move(0, -grid.step)}
+        >↑</button
+      >
+    </Tooltip>
+    <Tooltip label="Move the shape outward, by one grid step.">
+      <button aria-label="Move outward" onclick={() => move(0, grid.step)}
+        >↓</button
+      >
+    </Tooltip>
+    <Tooltip label="Move the middle of the shape onto the origin.">
+      <button onclick={center}>Center</button>
+    </Tooltip>
+  </div>
   <p class="hint">
     Drag points to move · press a hollow dot to add · double-click a point to
-    remove
+    remove · the origin is where a placement attaches the shape
   </p>
 {:else}
   <p class="hint">This path is not a simple polygon, so it edits as text.</p>
@@ -314,8 +395,32 @@
     vector-effect: non-scaling-stroke;
   }
 
-  line.grid.axis {
-    stroke: var(--screen-axis);
+  line.axis {
+    stroke: var(--screen-muted);
+    stroke-width: 1.5;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .origin {
+    fill: var(--screen-muted);
+  }
+
+  .axis-label {
+    fill: var(--screen-muted);
+    font-family: var(--font-mono);
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+  }
+
+  .tools .gap {
+    width: 8px;
   }
 
   .outline {
