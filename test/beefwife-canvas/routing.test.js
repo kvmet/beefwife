@@ -3,7 +3,7 @@
  * it through the public Beefwife lifecycle? Real schema-v1 descriptors are the
  * control. Fails on invalid cast entries, repeated directed plans, early
  * wander plans, timing drift, lost spawns, or a spawn that repeats a creature
- * while another is missing.
+ * while a guaranteed one is missing.
  */
 
 const assert = require("node:assert/strict");
@@ -276,5 +276,26 @@ population.setCount(2);
 assert.deepEqual(namesOf(), ["b", "a"]);
 population.destroy();
 checks += 4;
+
+/* "r" comes first and outweighs the rest, so only its guarantee being off
+   keeps it from taking the first spawn. */
+const optional = new BeefwifeCanvasPopulation(
+  terrain,
+  { ...router, ready: true },
+  {
+    cast: castOf("r", "a", "b"),
+    castWeights: { r: 100, a: 1, b: 1 },
+    castGuaranteed: { r: false },
+    count: 0,
+    random: () => 0,
+  },
+);
+optional.setCount(3);
+assert.deepEqual(
+  optional.actors.map((creature) => creature.name),
+  ["a", "b", "r"],
+);
+optional.destroy();
+checks += 1;
 
 console.log(`BeefwifeCanvas routing: ${checks} route and actor checks passed`);

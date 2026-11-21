@@ -16,6 +16,7 @@ class BeefwifeCanvasPopulation {
     this.router = router;
     this.cast = options.cast || null;
     this.castWeights = options.castWeights || null;
+    this.castGuaranteed = options.castGuaranteed || null;
     this.random = options.random || Math.random;
     this.renderOptions = options.renderOptions || null;
     this.roam = options.roam;
@@ -48,6 +49,7 @@ class BeefwifeCanvasPopulation {
       chooseName(
         this.cast,
         this.castWeights,
+        this.castGuaranteed,
         this.random,
         new Set(this.actors.map((actor) => actor.name)),
       );

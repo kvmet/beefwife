@@ -75,9 +75,16 @@ const physicsFpsOf = (value) =>
   value === undefined
     ? config.DEFAULT_PHYSICS_FPS
     : rateOf(value, "physicsFps");
-/* Names with no creature on the canvas are drawn first, so the canvas holds one
-   of each before weights decide the rest. */
-const chooseName = (cast, weights, random, namesOnCanvas = new Set()) => {
+/* Guaranteed names with no creature on the canvas are drawn first, so the
+   canvas holds one of each before weights decide the rest. A name missing from
+   `guaranteed` is guaranteed. */
+const chooseName = (
+  cast,
+  weights,
+  guaranteed,
+  random,
+  namesOnCanvas = new Set(),
+) => {
   const names = Object.keys(cast);
   if (!names.length)
     throw new Error("cast: must contain at least one beefwife");
@@ -89,7 +96,9 @@ const chooseName = (cast, weights, random, namesOnCanvas = new Set()) => {
       );
     return { name, weight };
   });
-  const missing = allWeighted.filter(({ name }) => !namesOnCanvas.has(name));
+  const missing = allWeighted.filter(
+    ({ name }) => guaranteed?.[name] !== false && !namesOnCanvas.has(name),
+  );
   const weighted = missing.length ? missing : allWeighted;
   const total = weighted.reduce((sum, entry) => sum + entry.weight, 0);
   let sample = random() * total;

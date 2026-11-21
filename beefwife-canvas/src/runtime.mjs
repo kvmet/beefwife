@@ -129,6 +129,7 @@ class BeefwifeCanvasRuntime {
       {
         cast: options.cast || null,
         castWeights: options.castWeights || null,
+        castGuaranteed: options.castGuaranteed || null,
         count: options.count,
         random,
         renderOptions: this.scene.renderOptions,

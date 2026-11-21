@@ -56,26 +56,32 @@ Three options supply descriptors. Use any mix; they add together.
 
 | Option | Accepts |
 | --- | --- |
-| `sources` | A descriptor URL, a `{ src, weight }` entry, or an array of either. The attribute takes a comma-separated list of URLs. |
+| `sources` | A descriptor URL, a `{ src, weight, guaranteed }` entry, or an array of either. The attribute takes a comma-separated list of URLs. |
 | `manifest` | The URL of a manifest. From JavaScript, also the parsed manifest object. |
-| `descriptors` | JavaScript only. A parsed descriptor, a `{ descriptor, weight }` entry, or an array of either. |
+| `descriptors` | JavaScript only. A parsed descriptor, a `{ descriptor, weight, guaranteed }` entry, or an array of either. |
 
 A manifest lists sources in one file:
 
 ```json
 {
   "schemaVersion": 1,
-  "sources": ["slow-guy.json", { "src": "long-girl.json", "weight": 3 }]
+  "sources": [
+    "slow-guy.json",
+    { "src": "long-girl.json", "weight": 3 },
+    { "src": "raccoon.json", "weight": 0.2, "guaranteed": false }
+  ]
 }
 ```
 
 Relative URLs in a manifest resolve against the manifest's URL. Other URLs
 resolve against the page.
 
-A creature spawned without a name is one the canvas does not hold yet, until
-the canvas holds one of each. `weight` defaults to 1 and sets how often a
-creature is picked: among the ones missing, then among all once none are
-missing. It does not change what loads. `count` defaults to the number of
+A creature spawned without a name is a guaranteed one the canvas does not
+hold yet, until the canvas holds one of each. `guaranteed` defaults to `true`;
+set it to `false` for a creature that appears only by chance. `weight`
+defaults to 1 and sets how often a creature is picked: among the guaranteed
+ones missing, then among all once none are missing. Neither changes what
+loads. `count` defaults to the number of
 descriptors. Each descriptor's `name` must be unique across all inputs, or the
 mount fails.
 

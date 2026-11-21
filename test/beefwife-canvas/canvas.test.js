@@ -621,7 +621,11 @@ const namedDescriptor = (name) => parseInContext(descriptorJson(name));
       schemaVersion: 1,
       sources: [{ src: "https://example.test/cast/a.json", weight: 2 }],
     },
-    sources: { src: "https://example.test/cast/b.json", weight: 3 },
+    sources: {
+      src: "https://example.test/cast/b.json",
+      weight: 3,
+      guaranteed: false,
+    },
     descriptors: {
       descriptor: namedDescriptor("c"),
       weight: 4,
@@ -633,8 +637,19 @@ const namedDescriptor = (name) => parseInContext(descriptorJson(name));
     JSON.stringify(additiveOptions.castWeights),
     '{"c":4,"a":2,"b":3}',
   );
+  assert.equal(
+    JSON.stringify(additiveOptions.castGuaranteed),
+    '{"c":true,"a":true,"b":false}',
+  );
   additive.destroy();
-  checks += 2;
+  await assert.rejects(
+    context.BeefwifeCanvas.mount(new Canvas(), {
+      autoStart: false,
+      descriptors: { descriptor: namedDescriptor("d"), guaranteed: "no" },
+    }),
+    /options\.descriptors\[0\]\.guaranteed: must be true or false/,
+  );
+  checks += 4;
 
   /* Pixi's own listeners keep a parked renderer, and so its canvas, alive.
      A canvas that leaves the page gives it up, and releasing loses the

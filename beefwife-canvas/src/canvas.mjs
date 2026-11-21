@@ -95,7 +95,7 @@ class Controller {
       this.supplied = null;
       this.wantsToRun = this.options.autoStart;
       this._connectCanvas();
-      const { cast, castWeights } = await loadCast(
+      const { cast, castWeights, castGuaranteed } = await loadCast(
         this.options,
         this.abortController.signal,
       );
@@ -114,6 +114,7 @@ class Controller {
         canvas: this.canvas,
         cast,
         castWeights,
+        castGuaranteed,
         count,
         debug: {
           routes: this.options.debugRoutes,
