@@ -7,7 +7,7 @@
   import TargetMarker from "./TargetMarker.svelte";
   import TerrainBoxes from "./TerrainBoxes.svelte";
   import { defaultBeefwife } from "./defaultBeefwife.js";
-  import { applyError, descriptor } from "./descriptor.js";
+  import { applyError, applyWarnings, descriptor } from "./descriptor.js";
 
   /* The selector the runtime measures its terrain with. Its own default,
      `.beefwife-avoid`, belongs to a hosting page; the lab draws its own. */
@@ -51,18 +51,22 @@
   $: applyCount(options.count);
   $: pollStats(showStats);
 
-  /* The runtime validates on apply; a rejected document leaves the actor on
-     its last good state, so the error is reported instead of thrown. The
-     library freezes what it is handed and compiles one model per object, so
-     the panels keep editing their own copy and each apply sends a new one. */
+  /* The preview draws the repaired document, so an edit that only costs a
+     part still shows; what was repaired is reported as warnings. A rejected
+     document leaves the actor on its last good state, so the error is
+     reported instead of thrown. The library freezes what it is handed and
+     compiles one model per object, so each apply sends a new one. */
   function applyDescriptor(value) {
     if (!runtime) return;
     try {
-      const handed = structuredClone(value);
+      const { descriptor: handed, warnings } =
+        window.BeefwifeCanvas.Descriptor.repair(value);
       for (const actor of runtime.getActors()) actor.setDescriptor(handed);
       applyError.set(null);
+      applyWarnings.set(warnings);
     } catch (error) {
       applyError.set(error.message);
+      applyWarnings.set([]);
     }
   }
 

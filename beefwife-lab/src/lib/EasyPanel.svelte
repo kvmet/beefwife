@@ -1,7 +1,7 @@
 <script>
+  import ApplyNotices from "./ApplyNotices.svelte";
   import Tooltip from "./Tooltip.svelte";
   import {
-    applyError,
     canonicalDocument,
     copyText,
     descriptor,
@@ -117,9 +117,7 @@
   }
 </script>
 
-{#if $applyError}
-  <p class="apply-error" role="alert">{$applyError}</p>
-{/if}
+<ApplyNotices />
 
 {#if pending}
   <div class="confirm" role="alert">

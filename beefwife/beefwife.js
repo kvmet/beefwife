@@ -328,6 +328,7 @@ pixi_js = __toESM(pixi_js, 1);
 		bounds: () => bounds,
 		parse: () => parse,
 		read: () => read,
+		repair: () => repair,
 		scale: () => scale,
 		stringify: () => stringify
 	});
@@ -427,10 +428,12 @@ pixi_js = __toESM(pixi_js, 1);
 			ancestors.delete(value);
 		}
 	};
+	var undefinedIn = (definitions, table, id) => Object.hasOwn(definitions[table], id) ? null : `${shown(id)} is not defined in $.definitions.${table}`;
 	var reference = (definitions, table, id, path) => {
-		if (!Object.hasOwn(definitions[table], id)) fail(path, `${shown(id)} is not defined in $.definitions.${table}`);
+		const problem = undefinedIn(definitions, table, id);
+		if (problem) fail(path, problem);
 	};
-	var resolvedChunks = (descriptor, placement, path) => {
+	var resolvedChunks = (descriptor, placement, path, flag) => {
 		const sections = descriptor.chain.sections;
 		const offsets = {
 			head: 0,
@@ -439,24 +442,33 @@ pixi_js = __toESM(pixi_js, 1);
 		};
 		const section = placement.at.section;
 		const length = section ? sections[section].chunks : SECTIONS.reduce((sum, name) => sum + sections[name].chunks, 0);
-		if (!length) fail(`${path}.at.section`, `${shown(section)} has no chunks`);
+		if (!length) {
+			flag(`${path}.at.section`, `${shown(section)} has no chunks`, NOT_DRAWN);
+			return null;
+		}
 		const area = section ? `the ${section}` : "the chain";
 		const offset = placement.at.offset;
-		if (offset >= length) fail(`${path}.at.offset`, `must be at most ${length - 1}, the last chunk of ${area} (got ${offset})`);
+		if (offset >= length) {
+			flag(`${path}.at.offset`, `must be at most ${length - 1}, the last chunk of ${area} (got ${offset})`, NOT_DRAWN);
+			return null;
+		}
 		const direction = placement.at.from === "head" ? 1 : -1;
 		const localStart = direction > 0 ? offset : length - 1 - offset;
 		const step = placement.repeat.step;
 		const available = Math.floor((length - 1 - offset) / step) + 1;
-		const count = placement.repeat.count ?? available;
+		let count = placement.repeat.count ?? available;
 		if (count > available) {
 			const copies = available === 1 ? "copy" : "copies";
 			const spacing = step === 1 ? "in a row" : `${step} chunks apart`;
-			fail(`${path}.repeat.count`, `must be at most ${available} (got ${count}); from offset ${offset}, ${area} fits ${available} ${copies} ${spacing}`);
+			flag(`${path}.repeat.count`, `must be at most ${available} (got ${count}); from offset ${offset}, ${area} fits ${available} ${copies} ${spacing}`, `Drawn with ${available} ${copies}.`);
+			count = available;
+			placement.repeat.count = count;
 		}
 		const base = section ? offsets[section] : 0;
-		return Array.from({ length: count }, (_, i) => base + localStart + direction * i * placement.repeat.step);
+		return Array.from({ length: count }, (_, i) => base + localStart + direction * i * step);
 	};
-	var validate = (descriptor) => {
+	var NOT_DRAWN = "Not drawn.";
+	var validate = (descriptor, flag) => {
 		const { definitions, chain, gait, legs } = descriptor;
 		const sections = chain.sections;
 		const total = SECTIONS.reduce((sum, name) => sum + sections[name].chunks, 0);
@@ -491,30 +503,52 @@ pixi_js = __toESM(pixi_js, 1);
 			]
 		].forEach((args) => reference(definitions, ...args));
 		const placementIds = /* @__PURE__ */ new Set();
-		const uniqueId = (entry, path) => {
-			if (placementIds.has(entry.id)) fail(`${path}.id`, `${shown(entry.id)} is already used by another plate or ornament`);
-			placementIds.add(entry.id);
+		const placed = (entry, path) => {
+			if (placementIds.has(entry.id)) {
+				flag(`${path}.id`, `${shown(entry.id)} is already used by another plate or ornament`, NOT_DRAWN);
+				return null;
+			}
+			for (const table of ["shapes", "paints"]) {
+				const key = table.slice(0, -1);
+				const problem = undefinedIn(definitions, table, entry[key]);
+				if (problem) {
+					flag(`${path}.${key}`, problem, NOT_DRAWN);
+					return null;
+				}
+			}
+			const chunks = resolvedChunks(descriptor, entry, path, flag);
+			if (chunks) placementIds.add(entry.id);
+			return chunks;
 		};
 		const occupied = /* @__PURE__ */ new Map();
-		chain.skin.plates.forEach((entry, i) => {
+		chain.skin.plates = chain.skin.plates.filter((entry, i) => {
 			const path = `$.chain.skin.plates[${i}]`;
-			uniqueId(entry, path);
-			reference(definitions, "shapes", entry.shape, `${path}.shape`);
-			reference(definitions, "paints", entry.paint, `${path}.paint`);
-			resolvedChunks(descriptor, entry, path).forEach((chunk) => {
-				if (occupied.has(chunk)) fail(`${path}.at`, `must not overlap plate ${shown(occupied.get(chunk))}; both cover chunk ${chunk}`);
-				occupied.set(chunk, entry.id);
+			const chunks = placed(entry, path);
+			if (!chunks) return false;
+			const taken = chunks.find((chunk) => occupied.has(chunk));
+			if (taken !== void 0) {
+				flag(`${path}.at`, `must not overlap plate ${shown(occupied.get(taken))}; both cover chunk ${taken}`, NOT_DRAWN);
+				placementIds.delete(entry.id);
+				return false;
+			}
+			chunks.forEach((chunk) => occupied.set(chunk, entry.id));
+			return true;
+		});
+		const kept = [];
+		chain.skin.ornaments.forEach((entry, i) => {
+			const chunks = placed(entry, `$.chain.skin.ornaments[${i}]`);
+			if (chunks) kept.push({
+				entry,
+				count: chunks.length * (entry.side === "both" ? 2 : 1)
 			});
 		});
-		let ornamentCount = 0;
-		chain.skin.ornaments.forEach((entry, i) => {
-			const path = `$.chain.skin.ornaments[${i}]`;
-			uniqueId(entry, path);
-			reference(definitions, "shapes", entry.shape, `${path}.shape`);
-			reference(definitions, "paints", entry.paint, `${path}.paint`);
-			ornamentCount += resolvedChunks(descriptor, entry, path).length * (entry.side === "both" ? 2 : 1);
-		});
-		if (ornamentCount > LIMITS.instances) fail("$.chain.skin.ornaments", `must place at most ${LIMITS.instances} ornaments, counting repeats and both sides (got ${ornamentCount})`);
+		const ornamentCount = kept.reduce((sum, { count }) => sum + count, 0);
+		if (ornamentCount > LIMITS.instances) {
+			flag("$.chain.skin.ornaments", `must place at most ${LIMITS.instances} ornaments, counting repeats and both sides (got ${ornamentCount})`, "Ornaments past the limit are not drawn.");
+			let running = 0;
+			kept.length = kept.findIndex(({ count }) => (running += count) > LIMITS.instances);
+		}
+		chain.skin.ornaments = kept.map(({ entry }) => entry);
 		[
 			"bend",
 			"thrust",
@@ -524,7 +558,10 @@ pixi_js = __toESM(pixi_js, 1);
 			const harmonic = gait[channel].harmonic;
 			if (gait.cyclesPerSecond * harmonic > 15) fail(`$.gait.${channel}.harmonic`, `harmonic × gait.cyclesPerSecond must be at most ${bound(15)} (got ${product(harmonic, gait.cyclesPerSecond)})`);
 		});
-		if (legs.pairs && !sections[legs.section].chunks) fail("$.legs.section", `${shown(legs.section)} has no chunks to carry legs`);
+		if (legs.pairs && !sections[legs.section].chunks) {
+			flag("$.legs.section", `${shown(legs.section)} has no chunks to carry legs`, "Legs are not drawn.");
+			legs.pairs = 0;
+		}
 		Object.entries(definitions.paints).forEach(([name, entry]) => {
 			if (entry.fill !== null && !entry.fill.trim()) fail(`$.definitions.paints.${name}.fill`, "must not be blank");
 			if (entry.stroke !== null && !entry.stroke.colour.trim()) fail(`$.definitions.paints.${name}.stroke.colour`, "must not be blank");
@@ -538,7 +575,18 @@ pixi_js = __toESM(pixi_js, 1);
 		if (pathTotal > LIMITS.pathTotal) fail("$.definitions.shapes", `paths must total at most ${LIMITS.pathTotal} characters (got ${pathTotal})`);
 		return descriptor;
 	};
-	var read = (value) => validate(readNode(schema, value, "$", /* @__PURE__ */ new WeakSet()));
+	var read = (value) => validate(readNode(schema, value, "$", /* @__PURE__ */ new WeakSet()), fail);
+	var repair = (value) => {
+		const warnings = [];
+		return {
+			descriptor: validate(readNode(schema, value, "$", /* @__PURE__ */ new WeakSet()), (path, rule, repaired) => warnings.push(Object.freeze({
+				path,
+				rule,
+				repaired
+			}))),
+			warnings: Object.freeze(warnings)
+		};
+	};
 	var resolve = (segments) => {
 		let node = schema;
 		for (const segment of segments) {
@@ -1618,13 +1666,28 @@ pixi_js = __toESM(pixi_js, 1);
 			this.body = body;
 			this.gait = gait;
 			const anchors = this._anchors();
-			this.legs.forEach((leg) => leg.anchor = anchors[leg.pair]);
+			this.legs.forEach((leg) => {
+				leg.anchor = anchors[leg.pair];
+				this._scale(leg);
+			});
 		}
 		_signedRandom() {
 			return this.random() * 2 - 1;
 		}
-		_vary(amount) {
-			return 1 + amount * this._signedRandom();
+		_scale(leg) {
+			const { jitter, liftThreshold, reach, spread } = this.model.legs;
+			const { stance, step, character } = leg.draws;
+			leg.reachScale = 1 + jitter * .28 * stance.reach;
+			leg.spreadScale = 1 + jitter * .3 * stance.spread;
+			leg.leadScale = 1 + jitter * .45 * stance.lead;
+			leg.dragScale = (1 + jitter * .4 * step.drag) * (1 + jitter * .35 * character);
+			leg.swingScale = 1 + jitter * .3 * step.swing;
+			leg.liftAt = clamp(liftThreshold + jitter * .2 * character, 0, 1);
+			const scatterRadius = Math.max(reach, spread) * jitter * .1;
+			leg.scatter = {
+				x: scatterRadius * step.scatterX,
+				y: scatterRadius * step.scatterY
+			};
 		}
 		_anchors() {
 			const { pairs, start, end } = this.model.legs;
@@ -1640,7 +1703,6 @@ pixi_js = __toESM(pixi_js, 1);
 			});
 		}
 		_build() {
-			const options = this.model.legs;
 			this._anchors().forEach((anchor, pair) => {
 				[["left", -1], ["right", 1]].forEach(([side, sideSign]) => {
 					const leg = {
@@ -1648,13 +1710,21 @@ pixi_js = __toESM(pixi_js, 1);
 						anchor,
 						side,
 						sideSign,
-						character: this._signedRandom(),
-						reachScale: this._vary(options.jitter * .28),
-						spreadScale: this._vary(options.jitter * .3),
-						leadScale: this._vary(options.jitter * .45),
+						draws: {
+							character: this._signedRandom(),
+							stance: {
+								reach: this._signedRandom(),
+								spread: this._signedRandom(),
+								lead: this._signedRandom()
+							},
+							step: null
+						},
+						reachScale: 1,
+						spreadScale: 1,
+						leadScale: 1,
 						dragScale: 1,
 						swingScale: 1,
-						liftAt: options.liftThreshold,
+						liftAt: 0,
 						scatter: {
 							x: 0,
 							y: 0
@@ -1686,15 +1756,13 @@ pixi_js = __toESM(pixi_js, 1);
 			});
 		}
 		_rollStep(leg) {
-			const jitter = this.model.legs.jitter;
-			leg.dragScale = this._vary(jitter * .4) * (1 + jitter * .35 * leg.character);
-			leg.swingScale = this._vary(jitter * .3);
-			leg.liftAt = clamp(this.model.legs.liftThreshold + jitter * .2 * leg.character, 0, 1);
-			const scatterRadius = Math.max(this.model.legs.reach, this.model.legs.spread) * jitter * .1;
-			leg.scatter = {
-				x: scatterRadius * this._signedRandom(),
-				y: scatterRadius * this._signedRandom()
+			leg.draws.step = {
+				drag: this._signedRandom(),
+				swing: this._signedRandom(),
+				scatterX: this._signedRandom(),
+				scatterY: this._signedRandom()
 			};
+			this._scale(leg);
 		}
 		_plantAt(leg) {
 			const options = this.model.legs;

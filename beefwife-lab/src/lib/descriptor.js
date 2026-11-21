@@ -50,7 +50,9 @@ function restore() {
 
 /* The descriptor under edit, which the panels write in place. Stage sends a
    copy to the live actor, because the library freezes what it is handed. */
-export const descriptor = writable(restore() ?? structuredClone(defaultBeefwife));
+export const descriptor = writable(
+  restore() ?? structuredClone(defaultBeefwife),
+);
 
 /** Whether the document carries edits made since it was last replaced. */
 export const dirty = writable(false);
@@ -146,6 +148,9 @@ export function copyText(text) {
 
 /** Message from the last rejected apply, or null while the canvas accepts. */
 export const applyError = writable(null);
+
+/** What the preview repaired to draw the document: { path, rule, repaired }. */
+export const applyWarnings = writable([]);
 
 /** The chain's sections, head to tail. */
 export const SECTION_NAMES = ["head", "trunk", "tail"];

@@ -1,15 +1,11 @@
 <script>
+  import ApplyNotices from "./ApplyNotices.svelte";
   import ControlRow from "./ControlRow.svelte";
   import StepperRow from "./StepperRow.svelte";
   import PlacementFields, { ORNAMENT_PRESET } from "./PlacementFields.svelte";
   import { thumbBox } from "./ShapeEditor.svelte";
   import Tooltip from "./Tooltip.svelte";
-  import {
-    applyError,
-    descriptor,
-    placementChunks,
-    SECTION_NAMES,
-  } from "./descriptor.js";
+  import { descriptor, placementChunks, SECTION_NAMES } from "./descriptor.js";
 
   export let selection = null;
   export let onselect;
@@ -133,9 +129,7 @@
   {/if}
 {/snippet}
 
-{#if $applyError}
-  <p class="apply-error" role="alert">{$applyError}</p>
-{/if}
+<ApplyNotices />
 
 <details open>
   <summary>Body</summary>

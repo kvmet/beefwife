@@ -1,13 +1,9 @@
 <script>
+  import ApplyNotices from "./ApplyNotices.svelte";
   import ControlRow from "./ControlRow.svelte";
   import ShapeEditor, { thumbBox } from "./ShapeEditor.svelte";
   import Tooltip from "./Tooltip.svelte";
-  import {
-    applyError,
-    descriptor,
-    idPattern,
-    SECTION_NAMES,
-  } from "./descriptor.js";
+  import { descriptor, idPattern, SECTION_NAMES } from "./descriptor.js";
 
   /* Which definition is under edit: { kind, id } or null. */
   export let selection = null;
@@ -221,9 +217,7 @@
   </div>
 {/snippet}
 
-{#if $applyError}
-  <p class="apply-error" role="alert">{$applyError}</p>
-{/if}
+<ApplyNotices />
 
 <details open bind:this={sections.shape}>
   <summary>Shapes</summary>

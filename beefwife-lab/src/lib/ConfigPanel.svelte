@@ -1,7 +1,8 @@
 <script>
+  import ApplyNotices from "./ApplyNotices.svelte";
   import JsonPanel from "./JsonPanel.svelte";
   import Tooltip from "./Tooltip.svelte";
-  import { applyError, descriptor, namePattern } from "./descriptor.js";
+  import { descriptor, namePattern } from "./descriptor.js";
 
   export let advanced = false;
 
@@ -12,9 +13,7 @@
   }
 </script>
 
-{#if $applyError}
-  <p class="apply-error" role="alert">{$applyError}</p>
-{/if}
+<ApplyNotices />
 
 <details open>
   <summary>Identity</summary>

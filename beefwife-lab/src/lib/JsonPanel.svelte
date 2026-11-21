@@ -1,6 +1,7 @@
 <script>
   import {
     applyError,
+    applyWarnings,
     copyText,
     descriptor,
     downloadDocument,
@@ -88,6 +89,8 @@
     <span>Schema {$descriptor.schemaVersion} · live document</span>
     {#if problem}
       <span class="valid-status invalid"><i></i>Invalid</span>
+    {:else if $applyWarnings.length}
+      <span class="valid-status warned"><i></i>Draws with warnings</span>
     {:else}
       <span class="valid-status"><i></i>Valid</span>
     {/if}
@@ -100,6 +103,12 @@
 </label>
 {#if problem}
   <p class="problem" role="alert">{problem}</p>
+{:else}
+  {#each $applyWarnings as warning}
+    <p class="problem warned">
+      {warning.path}: {warning.rule}. {warning.repaired}
+    </p>
+  {/each}
 {/if}
 
 <style>
@@ -150,6 +159,12 @@
   .valid-status.invalid i {
     background: var(--danger);
   }
+  .valid-status.warned {
+    color: var(--warning);
+  }
+  .valid-status.warned i {
+    background: var(--warning);
+  }
 
   .export-button {
     margin-left: auto;
@@ -193,5 +208,9 @@
     padding: 0 14px 20px;
     color: var(--danger);
     font-size: 11px;
+  }
+  .problem.warned {
+    padding-bottom: 8px;
+    color: var(--warning);
   }
 </style>

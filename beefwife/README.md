@@ -173,6 +173,7 @@ greater than 0`. The format is in
 | --- | --- |
 | `parse(text)` | Parses JSON text and checks it. Returns a new descriptor. |
 | `read(value)` | Checks a parsed value. Returns a new plain copy with keys in canonical order. |
+| `repair(value)` | Like `read`, but drops or trims plates, ornaments, and legs that cannot be placed instead of throwing. Returns `{ descriptor, warnings }`, where each warning is `{ path, rule, repaired }`. For an editor's live preview: the input stays invalid, and `read` still rejects it. |
 | `stringify(value, space = 2)` | Checks a descriptor and returns canonical JSON text. |
 | `scale(descriptor, factor)` | Returns a copy resized by `factor`, with the same timing and feel. A field the result pushes out of range is an error. |
 | `bounds(path)` | What the schema allows for one field. |

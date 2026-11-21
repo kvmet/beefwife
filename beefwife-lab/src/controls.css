@@ -312,6 +312,16 @@
   font-size: 11px;
 }
 
+/* What the preview repaired to draw the document. */
+.controls .apply-warning {
+  margin: 0;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--chassis-line);
+  background: var(--warning-dim);
+  color: var(--warning);
+  font-size: 11px;
+}
+
 /* The unit sits in a ruled gutter of its own so digits always end at the
    same x, which is what makes a column of values scannable. */
 .controls .unit {

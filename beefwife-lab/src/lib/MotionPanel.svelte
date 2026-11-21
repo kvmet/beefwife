@@ -1,13 +1,9 @@
 <script>
+  import ApplyNotices from "./ApplyNotices.svelte";
   import ControlRow from "./ControlRow.svelte";
   import StepperRow from "./StepperRow.svelte";
   import Tooltip from "./Tooltip.svelte";
-  import {
-    applyError,
-    descriptor,
-    SECTION_MINIMUMS,
-    SECTION_NAMES,
-  } from "./descriptor.js";
+  import { descriptor, SECTION_MINIMUMS, SECTION_NAMES } from "./descriptor.js";
 
   export let advanced = false;
   /* Jump to a definition's editor on the Parts tab: (kind, id). */
@@ -106,9 +102,7 @@
   }
 </script>
 
-{#if $applyError}
-  <p class="apply-error" role="alert">{$applyError}</p>
-{/if}
+<ApplyNotices />
 
 <!-- Basic mode opens every panel so the short list reads as one page;
      advanced mode adds enough rows that open panels bury the summaries, so

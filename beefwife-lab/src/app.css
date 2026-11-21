@@ -24,6 +24,7 @@
   --select: #2f6f66;
   --measure: #a8501f;
   --danger: #8c2f2f;
+  --warning: #75570f;
   --bevel-face: #efe9dd;
   --bevel-face-screen: #59636f;
   --bevel-light: #ffffffa0;
@@ -44,6 +45,7 @@
   --select-line: color-mix(in oklch, var(--select) 50%, var(--chassis));
   --select-text: color-mix(in oklch, var(--select) 75%, var(--text));
   --danger-dim: color-mix(in oklch, var(--danger) 15%, var(--chassis));
+  --warning-dim: color-mix(in oklch, var(--warning) 15%, var(--chassis));
 
   /* Screen: the recessed display surface, invariant across themes. */
   --screen: #101318;
@@ -74,6 +76,7 @@
   --select: #76d6bc;
   --measure: #e1b86c;
   --danger: #e68b90;
+  --warning: #e1b86c;
   --bevel-face: #676f7b;
   --bevel-face-screen: #59636f;
   --bevel-light: #ffffff28;

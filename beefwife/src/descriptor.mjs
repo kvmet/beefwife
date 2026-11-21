@@ -166,12 +166,19 @@ const readNode = (node, value, path, ancestors) => {
   }
 };
 
+const undefinedIn = (definitions, table, id) =>
+  Object.hasOwn(definitions[table], id)
+    ? null
+    : `${shown(id)} is not defined in $.definitions.${table}`;
+
 const reference = (definitions, table, id, path) => {
-  if (!Object.hasOwn(definitions[table], id))
-    fail(path, `${shown(id)} is not defined in $.definitions.${table}`);
+  const problem = undefinedIn(definitions, table, id);
+  if (problem) fail(path, problem);
 };
 
-const resolvedChunks = (descriptor, placement, path) => {
+/* Chunks a placement covers, or null when `flag` dropped it. A count that
+   overruns is trimmed to the copies that fit. */
+const resolvedChunks = (descriptor, placement, path, flag) => {
   const sections = descriptor.chain.sections;
   const offsets = {
     head: 0,
@@ -182,35 +189,48 @@ const resolvedChunks = (descriptor, placement, path) => {
   const length = section
     ? sections[section].chunks
     : SECTIONS.reduce((sum, name) => sum + sections[name].chunks, 0);
-  if (!length) fail(`${path}.at.section`, `${shown(section)} has no chunks`);
+  if (!length) {
+    flag(`${path}.at.section`, `${shown(section)} has no chunks`, NOT_DRAWN);
+    return null;
+  }
   const area = section ? `the ${section}` : "the chain";
   const offset = placement.at.offset;
-  if (offset >= length)
-    fail(
+  if (offset >= length) {
+    flag(
       `${path}.at.offset`,
       `must be at most ${length - 1}, the last chunk of ${area} (got ${offset})`,
+      NOT_DRAWN,
     );
+    return null;
+  }
   const direction = placement.at.from === "head" ? 1 : -1;
   const localStart = direction > 0 ? offset : length - 1 - offset;
   const step = placement.repeat.step;
   const available = Math.floor((length - 1 - offset) / step) + 1;
-  const count = placement.repeat.count ?? available;
+  let count = placement.repeat.count ?? available;
   if (count > available) {
     const copies = available === 1 ? "copy" : "copies";
     const spacing = step === 1 ? "in a row" : `${step} chunks apart`;
-    fail(
+    flag(
       `${path}.repeat.count`,
       `must be at most ${available} (got ${count}); from offset ${offset}, ${area} fits ${available} ${copies} ${spacing}`,
+      `Drawn with ${available} ${copies}.`,
     );
+    count = available;
+    placement.repeat.count = count;
   }
   const base = section ? offsets[section] : 0;
   return Array.from(
     { length: count },
-    (_, i) => base + localStart + direction * i * placement.repeat.step,
+    (_, i) => base + localStart + direction * i * step,
   );
 };
 
-const validate = (descriptor) => {
+const NOT_DRAWN = "Not drawn.";
+
+/* `flag` reports a problem the creature can still be drawn without: `read`
+   throws on it, and `repair` records it and applies the repair it names. */
+const validate = (descriptor, flag) => {
   const { definitions, chain, gait, legs } = descriptor;
   const sections = chain.sections;
   const total = SECTIONS.reduce((sum, name) => sum + sections[name].chunks, 0);
@@ -250,45 +270,71 @@ const validate = (descriptor) => {
   references.forEach((args) => reference(definitions, ...args));
 
   const placementIds = new Set();
-  const uniqueId = (entry, path) => {
-    if (placementIds.has(entry.id))
-      fail(
+  /* Chunks a kept placement covers, or null when it is dropped. */
+  const placed = (entry, path) => {
+    if (placementIds.has(entry.id)) {
+      flag(
         `${path}.id`,
         `${shown(entry.id)} is already used by another plate or ornament`,
+        NOT_DRAWN,
       );
-    placementIds.add(entry.id);
+      return null;
+    }
+    for (const table of ["shapes", "paints"]) {
+      const key = table.slice(0, -1);
+      const problem = undefinedIn(definitions, table, entry[key]);
+      if (problem) {
+        flag(`${path}.${key}`, problem, NOT_DRAWN);
+        return null;
+      }
+    }
+    const chunks = resolvedChunks(descriptor, entry, path, flag);
+    if (chunks) placementIds.add(entry.id);
+    return chunks;
   };
+
   const occupied = new Map();
-  chain.skin.plates.forEach((entry, i) => {
+  chain.skin.plates = chain.skin.plates.filter((entry, i) => {
     const path = `$.chain.skin.plates[${i}]`;
-    uniqueId(entry, path);
-    reference(definitions, "shapes", entry.shape, `${path}.shape`);
-    reference(definitions, "paints", entry.paint, `${path}.paint`);
-    resolvedChunks(descriptor, entry, path).forEach((chunk) => {
-      if (occupied.has(chunk))
-        fail(
-          `${path}.at`,
-          `must not overlap plate ${shown(occupied.get(chunk))}; both cover chunk ${chunk}`,
-        );
-      occupied.set(chunk, entry.id);
-    });
+    const chunks = placed(entry, path);
+    if (!chunks) return false;
+    const taken = chunks.find((chunk) => occupied.has(chunk));
+    if (taken !== undefined) {
+      flag(
+        `${path}.at`,
+        `must not overlap plate ${shown(occupied.get(taken))}; both cover chunk ${taken}`,
+        NOT_DRAWN,
+      );
+      placementIds.delete(entry.id);
+      return false;
+    }
+    chunks.forEach((chunk) => occupied.set(chunk, entry.id));
+    return true;
   });
 
-  let ornamentCount = 0;
+  const kept = [];
   chain.skin.ornaments.forEach((entry, i) => {
-    const path = `$.chain.skin.ornaments[${i}]`;
-    uniqueId(entry, path);
-    reference(definitions, "shapes", entry.shape, `${path}.shape`);
-    reference(definitions, "paints", entry.paint, `${path}.paint`);
-    ornamentCount +=
-      resolvedChunks(descriptor, entry, path).length *
-      (entry.side === "both" ? 2 : 1);
+    const chunks = placed(entry, `$.chain.skin.ornaments[${i}]`);
+    if (chunks)
+      kept.push({
+        entry,
+        count: chunks.length * (entry.side === "both" ? 2 : 1),
+      });
   });
-  if (ornamentCount > LIMITS.instances)
-    fail(
+  const ornamentCount = kept.reduce((sum, { count }) => sum + count, 0);
+  if (ornamentCount > LIMITS.instances) {
+    flag(
       "$.chain.skin.ornaments",
       `must place at most ${LIMITS.instances} ornaments, counting repeats and both sides (got ${ornamentCount})`,
+      "Ornaments past the limit are not drawn.",
     );
+    let running = 0;
+    const within = kept.findIndex(
+      ({ count }) => (running += count) > LIMITS.instances,
+    );
+    kept.length = within;
+  }
+  chain.skin.ornaments = kept.map(({ entry }) => entry);
 
   ["bend", "thrust", "gather", "contact"].forEach((channel) => {
     const harmonic = gait[channel].harmonic;
@@ -299,11 +345,14 @@ const validate = (descriptor) => {
       );
   });
 
-  if (legs.pairs && !sections[legs.section].chunks)
-    fail(
+  if (legs.pairs && !sections[legs.section].chunks) {
+    flag(
       "$.legs.section",
       `${shown(legs.section)} has no chunks to carry legs`,
+      "Legs are not drawn.",
     );
+    legs.pairs = 0;
+  }
 
   Object.entries(definitions.paints).forEach(([name, entry]) => {
     if (entry.fill !== null && !entry.fill.trim())
@@ -330,7 +379,21 @@ const validate = (descriptor) => {
   return descriptor;
 };
 
-const read = (value) => validate(readNode(schema, value, "$", new WeakSet()));
+const read = (value) =>
+  validate(readNode(schema, value, "$", new WeakSet()), fail);
+
+/* For an editor's live preview: problems that only cost drawing are
+   repaired instead of thrown, so a half-finished edit still draws. The file
+   stays invalid until they are fixed, and `read` still rejects it. */
+const repair = (value) => {
+  const warnings = [];
+  const descriptor = validate(
+    readNode(schema, value, "$", new WeakSet()),
+    (path, rule, repaired) =>
+      warnings.push(Object.freeze({ path, rule, repaired })),
+  );
+  return { descriptor, warnings: Object.freeze(warnings) };
+};
 
 /* Field constraints for editors, so a caller reads one field's range from
    the schema that enforces it rather than keeping a second copy. Paths name
@@ -482,6 +545,7 @@ export {
   ID_PATTERN,
   NAME_PATTERN,
   read,
+  repair,
   parse,
   stringify,
   scale,

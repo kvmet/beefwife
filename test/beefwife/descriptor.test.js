@@ -524,6 +524,66 @@ assert.throws(
 );
 checks += 3;
 
+/* repair keeps drawing what it can: each problem below only costs a part,
+   and the repaired document must pass the strict reader on its own. */
+const broken = copy(source);
+broken.chain.sections.tail.chunks = 0;
+broken.chain.skin.plates.push({
+  ...copy(broken.chain.skin.plates[0]),
+  id: "second-head-shell",
+});
+broken.chain.skin.ornaments[0].repeat.count = 5;
+broken.chain.skin.ornaments.push(
+  { ...copy(broken.chain.skin.ornaments[0]), id: "ghost", shape: "missing" },
+  {
+    ...copy(broken.chain.skin.ornaments[0]),
+    id: "tail-tuft",
+    at: { section: "tail", from: "tail", offset: 0 },
+  },
+);
+broken.legs.section = "tail";
+broken.legs.pairs = 2;
+rejected("document repair would draw", broken, /must not overlap plate/);
+const repaired = Descriptor.repair(broken);
+assert.deepEqual(
+  repaired.warnings.map(({ path, repaired }) => [path, repaired]),
+  [
+    ["$.chain.skin.plates[2].at", "Not drawn."],
+    ["$.chain.skin.ornaments[0].repeat.count", "Drawn with 1 copy."],
+    ["$.chain.skin.ornaments[1].shape", "Not drawn."],
+    ["$.chain.skin.ornaments[2].at.section", "Not drawn."],
+    ["$.legs.section", "Legs are not drawn."],
+  ],
+);
+assert.deepEqual(
+  repaired.descriptor.chain.skin.plates.map(({ id }) => id),
+  ["head-shell", "body-shell"],
+);
+assert.deepEqual(
+  repaired.descriptor.chain.skin.ornaments.map(({ id, repeat }) => [
+    id,
+    repeat.count,
+  ]),
+  [["eyes", 1]],
+);
+assert.equal(repaired.descriptor.legs.pairs, 0);
+accepted("repaired document", repaired.descriptor);
+assert.equal(broken.legs.pairs, 2, "repair changed its input");
+checks += 5;
+
+const trimmed = Descriptor.repair(tooManyOrnaments);
+assert.deepEqual(
+  trimmed.warnings.map(({ path }) => path),
+  ["$.chain.skin.ornaments"],
+);
+accepted("trimmed ornaments", trimmed.descriptor);
+assert.deepEqual(Descriptor.repair(source), {
+  descriptor: Descriptor.read(source),
+  warnings: [],
+});
+assert.throws(() => Descriptor.repair(collapsedGather), /must be less than 1/);
+checks += 3;
+
 const withAppearance = copy(source);
 withAppearance.appearance = { scale: 2.1 };
 rejected("appearance key", withAppearance, /appearance: is not a known field/);

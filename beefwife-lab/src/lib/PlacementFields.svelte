@@ -169,7 +169,8 @@
   {/if}
   {#if advanced}
     <label>
-      <Tooltip label="Fills the rest of the chosen section, or of the whole chain."
+      <Tooltip
+        label="Fills the rest of the chosen section, or of the whole chain."
         ><span>Fill to end</span></Tooltip
       >
       <div class="switch">
