@@ -202,6 +202,40 @@ swungWhole.legs.legs.forEach((leg, index) => {
 });
 checks += 2;
 
+/* Jitter edited on a live creature reaches every leg at once, not only legs
+   built afterward, and a round trip back restores the same character. */
+const jittered = copy(source);
+jittered.legs.jitter = 1;
+const steady = copy(source);
+steady.legs.jitter = 0;
+const retuned = build(jittered, seeded(9));
+const scalesOf = (legs) =>
+  legs.legs.map(
+    ({ reachScale, spreadScale, leadScale, dragScale, swingScale, liftAt }) => [
+      reachScale,
+      spreadScale,
+      leadScale,
+      dragScale,
+      swingScale,
+      liftAt,
+    ],
+  );
+const jitteredScales = scalesOf(retuned.legs);
+const steadyModel = Model.compile(steady);
+retuned.legs.reconfigure(steadyModel, retuned.body, retuned.gait);
+const lift = steadyModel.legs.liftThreshold;
+assert.deepEqual(
+  scalesOf(retuned.legs),
+  retuned.legs.legs.map(() => [1, 1, 1, 1, 1, lift]),
+  "jitter 0 left per-leg variation in place",
+);
+retuned.legs.legs.forEach(({ scatter }) =>
+  assert.ok(scatter.x === 0 && scatter.y === 0, "jitter 0 left scatter"),
+);
+retuned.legs.reconfigure(Model.compile(jittered), retuned.body, retuned.gait);
+assert.deepEqual(scalesOf(retuned.legs), jitteredScales);
+checks += 3;
+
 assert.throws(
   () => new Beefwife(source, { random: () => 1 }),
   /from 0 up to but not including 1/,
